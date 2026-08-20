@@ -1,0 +1,76 @@
+{
+	"name": "gjemmekontor",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync && husky",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"lint": "eslint .",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"test:unit": "vitest run --passWithNoTests",
+		"test": "npm run test:unit && npm run test:e2e",
+		"test:e2e": "playwright test",
+		"validate": "npm run format:check && npm run lint && npm run check && npm run test:unit"
+	},
+	"lint-staged": {
+		"*.{js,mjs,cjs,ts,svelte}": [
+			"prettier --write",
+			"eslint --fix"
+		],
+		"*.{json,css,md,yml,yaml}": "prettier --write"
+	},
+	"devDependencies": {
+		"@commitlint/cli": "^21.2.2",
+		"@commitlint/config-conventional": "^21.2.2",
+		"@eslint/js": "^10.0.1",
+		"@playwright/test": "^1.60.0",
+		"@sveltejs/adapter-node": "^5.5.4",
+		"@sveltejs/kit": "^2.63.0",
+		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"@tailwindcss/vite": "^4.3.0",
+		"@types/better-sqlite3": "^9.6.0",
+		"@types/node": "^24",
+		"@types/sanitize-html": "^2.16.1",
+		"eslint": "^10.4.1",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-simple-import-sort": "^14.0.0",
+		"eslint-plugin-svelte": "^3.19.0",
+		"fake-indexeddb": "^6.2.5",
+		"globals": "^17.6.0",
+		"husky": "^9.1.7",
+		"lint-staged": "^17.3.0",
+		"prettier": "^3.8.3",
+		"prettier-plugin-svelte": "^4.1.0",
+		"prettier-plugin-tailwindcss": "^0.8.0",
+		"svelte": "^5.56.1",
+		"svelte-check": "^4.6.0",
+		"tailwindcss": "^4.3.0",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.60.1",
+		"vite": "^8.0.16",
+		"vitest": "^4.1.8"
+	},
+	"dependencies": {
+		"@fontsource-variable/fraunces": "^5.3.0",
+		"@fontsource-variable/instrument-sans": "^5.3.0",
+		"@lucide/svelte": "^1.33.0",
+		"@node-rs/argon2": "^2.1.0",
+		"@protomaps/basemaps": "^5.7.2",
+		"better-sqlite3": "^13.0.3",
+		"daisyui": "^5.7.19",
+		"fast-xml-parser": "^5.11.0",
+		"idb": "^8.0.3",
+		"maplibre-gl": "^6.4.1",
+		"pmtiles": "^4.5.0",
+		"sanitize-html": "^2.17.7",
+		"zod": "^4.4.3"
+	},
+	"allowScripts": {
+		"better-sqlite3@13.0.3": true
+	}
+}

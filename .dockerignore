@@ -1,0 +1,10 @@
+.git
+.github
+.kb
+.svelte-kit
+build
+data
+node_modules
+test-results
+.env*
+!.env.example

@@ -1,0 +1,56 @@
+@import '@fontsource-variable/fraunces';
+@import '@fontsource-variable/instrument-sans';
+@import 'tailwindcss';
+@plugin 'daisyui' {
+	themes: false;
+}
+
+@plugin 'daisyui/theme' {
+	name: 'gjemmekontor';
+	default: true;
+	color-scheme: light;
+	--color-base-100: oklch(98% 0.01 87);
+	--color-base-200: oklch(95% 0.015 170);
+	--color-base-300: oklch(89% 0.025 170);
+	--color-base-content: oklch(28% 0.035 205);
+	--color-primary: oklch(46% 0.08 195);
+	--color-primary-content: oklch(98% 0.01 87);
+	--color-secondary: oklch(67% 0.14 37);
+	--color-secondary-content: oklch(98% 0.01 87);
+	--color-accent: oklch(76% 0.16 78);
+	--color-accent-content: oklch(28% 0.035 205);
+	--color-neutral: oklch(30% 0.055 220);
+	--color-neutral-content: oklch(97% 0.01 190);
+	--color-info: oklch(63% 0.11 225);
+	--color-success: oklch(63% 0.12 155);
+	--color-warning: oklch(77% 0.15 78);
+	--color-error: oklch(58% 0.17 28);
+	--radius-selector: 0.35rem;
+	--radius-field: 0.35rem;
+	--radius-box: 0.5rem;
+	--border: 1px;
+}
+
+html,
+body {
+	background: var(--color-base-200);
+	font-family: 'Instrument Sans', 'Avenir Next', sans-serif;
+}
+
+body {
+	min-width: 320px;
+	min-height: 100dvh;
+	margin: 0;
+	letter-spacing: 0;
+}
+
+button,
+input,
+select,
+textarea {
+	letter-spacing: 0;
+}
+
+.font-display {
+	font-family: 'Fraunces', Georgia, serif;
+}
