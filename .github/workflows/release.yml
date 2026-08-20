@@ -1,0 +1,62 @@
+name: Release container
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-container
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out release
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Verify release
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if ! printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "Release tag must use stable SemVer format vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          version="${RELEASE_TAG#v}"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+
+      - name: Build image
+        env:
+          IMAGE: ghcr.io/haavardnk/gjemmekontor:${{ steps.release.outputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: docker build --platform linux/amd64 --build-arg "APP_VERSION=$VERSION" --tag "$IMAGE" .
+
+      - name: Smoke-test image
+        env:
+          IMAGE: ghcr.io/haavardnk/gjemmekontor:${{ steps.release.outputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: sh scripts/container-smoke.sh "$IMAGE" "$VERSION"
+
+      - name: Publish image
+        env:
+          IMAGE: ghcr.io/haavardnk/gjemmekontor
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE:$VERSION"
+          docker tag "$IMAGE:$VERSION" "$IMAGE:latest"
+          docker push "$IMAGE:latest"

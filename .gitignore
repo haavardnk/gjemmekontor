@@ -7,6 +7,7 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+/data
 
 # OS
 .DS_Store
@@ -31,4 +32,7 @@ test-results
 .kb/
 
 # Local agent configuration
-.github/
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/*.yml

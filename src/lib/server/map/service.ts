@@ -3,17 +3,32 @@ import { getRuntimeConfig } from '$lib/server/env';
 
 import { createMapService, mapCachePaths, MapServiceError } from './google';
 
-const config = getRuntimeConfig();
-const service = createMapService({
-	mapId: config.googleMyMapsId,
-	paths: mapCachePaths(config.dataDir)
-});
+type MapService = ReturnType<typeof createMapService>;
 
-async function response(operation: () => ReturnType<typeof service.get>): Promise<Response> {
+let configuredService: { service: MapService; mapId: string } | undefined;
+
+function getConfiguredService(): { service: MapService; mapId: string } {
+	if (!configuredService) {
+		const config = getRuntimeConfig();
+		configuredService = {
+			service: createMapService({
+				mapId: config.googleMyMapsId,
+				paths: mapCachePaths(config.dataDir)
+			}),
+			mapId: config.googleMyMapsId
+		};
+	}
+	return configuredService;
+}
+
+async function response(
+	operation: (service: MapService) => ReturnType<MapService['get']>
+): Promise<Response> {
 	try {
+		const configured = getConfiguredService();
 		return apiSuccess({
-			...(await operation()),
-			sourceMapId: config.googleMyMapsId
+			...(await operation(configured.service)),
+			sourceMapId: configured.mapId
 		});
 	} catch (error) {
 		if (error instanceof MapServiceError) {
@@ -24,9 +39,9 @@ async function response(operation: () => ReturnType<typeof service.get>): Promis
 }
 
 export function handleGetMap(): Promise<Response> {
-	return response(service.get);
+	return response((service) => service.get());
 }
 
 export function handleRefreshMap(): Promise<Response> {
-	return response(service.refresh);
+	return response((service) => service.refresh());
 }

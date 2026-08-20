@@ -1,6 +1,8 @@
 # Gjemmekontor
 
-A shared mobile-first travel app for a sailing trip in Croatia.
+![Monsieur Bintang](static/monsieur-bintang-readme.png)
+
+A shared, offline-first travel app for a sailing trip in Croatia.
 
 ## Features
 
@@ -14,41 +16,22 @@ A shared mobile-first travel app for a sailing trip in Croatia.
 
 ## Local development
 
-Install dependencies:
-
 ```sh
 npm install
-```
-
-Copy `.env.example` to `.env`, configure the values, and start the development server:
-
-```sh
+cp .env.example .env
 npm run dev
 ```
 
-Run the complete local validation gate:
-
 ```sh
 npm run validate
-```
-
-Run end-to-end tests separately:
-
-```sh
 npx playwright install
 npm run test:e2e
 ```
 
-See `.env.example` for required runtime configuration.
+Configure the required runtime values in `.env` before starting the app.
 
 ## Deployment
 
-The application is designed to run as a single Docker container with a persistent data volume.
-
-Original GPX files are stored byte-for-byte in the SQLite database under `DATA_DIR`. Include `gjemmekontor.sqlite` and its WAL files in backups, or stop the application before copying the database.
-
-Set adapter-node's `BODY_SIZE_LIMIT` to at least `6M`. The application accepts GPX files up to 5 MB and rejects larger uploads itself.
-
-Optional offline packages are read from `DATA_DIR/map/offline/`. Name the files `normal.pmtiles`, `nautical.pmtiles`, and `satellite.pmtiles`. The app lists each available package with its size and lets users download or remove it on their device.
-
-Only use archives you may redistribute for offline use. Public web tile services usually forbid bulk downloads.
+Run the app as one Docker container with a persistent `/data` volume. See
+[Deployment](docs/deployment.md) for setup and upgrades, and
+[Backup and restore](docs/backup-and-restore.md) before upgrading.
