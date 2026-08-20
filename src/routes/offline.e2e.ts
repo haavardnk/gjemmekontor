@@ -22,16 +22,18 @@ test('loads the authenticated app shell without a network connection', async ({
 	});
 
 	await page.goto('/shots?mode=record');
-	await expect(page.getByRole('heading', { name: 'Dagens åtte' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Dagens scener' })).toBeVisible();
 	await context.setOffline(true);
 	await page.reload();
 
-	await expect(page.getByRole('heading', { name: 'Dagens åtte' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Dagens scener' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Kart' })).toBeVisible();
 	await expect(page.getByRole('status')).toHaveText(
 		/Frakoblet|Synkronisert|Kunne ikke synkronisere/
 	);
-	const firstShot = page.getByRole('button', { name: /Morgen/ }).first();
+	const firstScene = page.locator('main details').first();
+	await firstScene.locator('summary').click();
+	const firstShot = firstScene.getByRole('button').first();
 	await expect(firstShot).toBeEnabled();
 	await firstShot.click();
 	await expect(firstShot).toHaveAttribute('aria-pressed', 'true');

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CirclePlus, Pencil, Trash2 } from '@lucide/svelte';
+	import { CirclePlus, FileCheck2, FileUp, Pencil, RefreshCw, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
 	import { sharedState } from '$lib/client/state.svelte';
@@ -7,9 +7,11 @@
 	import type { MapApiResponse, MapFeature, MapPointSymbol, MapSnapshot } from '$lib/map/types';
 
 	import type { TripDay } from './days';
+	import { extractGpxXml, gpxMaximumBytes } from './gpx';
 	import LocationInput from './LocationInput.svelte';
 	import {
 		type LocationReference,
+		type LogbookGpx,
 		type LogbookLeg,
 		logbookLegKey,
 		logbookLegs,
@@ -26,6 +28,7 @@
 	let snapshot = $state<MapSnapshot>();
 	let locationsReady = $state(false);
 	let addingLeg = $state(false);
+	let fileInput = $state<HTMLInputElement>();
 	let editingKey = $state<string>();
 	let editingCreatedAt = $state('');
 	let editingCreatedBy = $state('');
@@ -38,6 +41,9 @@
 	let engineMinutes = $state(0);
 	let mooring = $state<(typeof mooringChoices)[number]['value']>('anchor');
 	let customMooring = $state('');
+	let gpx = $state<LogbookGpx>();
+	let gpxFile = $state<File>();
+	let readingGpx = $state(false);
 	let formError = $state('');
 
 	const legs = $derived(logbookLegs(sharedState.values, day.index));
@@ -46,6 +52,7 @@
 	const weatherKey = $derived(`logbook:d${day.index}:weather`);
 	const notesKey = $derived(`logbook:d${day.index}:notes`);
 	const destination = $derived(parseLocation(sharedState.values[destinationKey]));
+	const gpxDateMismatch = $derived(gpx !== undefined && localDate(gpx.departureAt) !== day.date);
 	const points = $derived(
 		(snapshot?.features ?? []).filter(
 			(
@@ -80,7 +87,8 @@
 			nauticalMiles >= 0 &&
 			sailingMinutes >= 0 &&
 			engineMinutes >= 0 &&
-			(mooring !== 'other' || customMooring.trim().length > 0)
+			(mooring !== 'other' || customMooring.trim().length > 0) &&
+			(editingKey !== undefined || gpx !== undefined)
 	);
 
 	function textValue(key: string): string {
@@ -130,6 +138,9 @@
 		engineMinutes = 0;
 		mooring = 'anchor';
 		customMooring = '';
+		gpx = undefined;
+		gpxFile = undefined;
+		readingGpx = false;
 		formError = '';
 	}
 
@@ -147,7 +158,74 @@
 		engineMinutes = leg.engineMinutes;
 		mooring = leg.mooring;
 		customMooring = leg.customMooring;
+		gpx = leg.gpx;
+		gpxFile = undefined;
+		readingGpx = false;
 		formError = '';
+	}
+
+	function localTime(value: string): string {
+		return new Intl.DateTimeFormat('nb-NO', {
+			timeZone: 'Europe/Zagreb',
+			hour: '2-digit',
+			minute: '2-digit',
+			hourCycle: 'h23'
+		}).format(new Date(value));
+	}
+
+	function localDate(value: string): string {
+		return new Intl.DateTimeFormat('en-CA', {
+			timeZone: 'Europe/Zagreb',
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit'
+		}).format(new Date(value));
+	}
+
+	async function checksum(file: File): Promise<string> {
+		const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+		return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
+			''
+		);
+	}
+
+	function gpxError(error: unknown): string {
+		const code = error instanceof Error ? error.message : '';
+		if (code === 'GPX_TOO_LARGE') return 'GPX-filen er for stor.';
+		if (code === 'GPX_MOVEMENT_REQUIRED') return 'Filen inneholder ingen registrert etappe.';
+		if (code === 'GPX_TIMESTAMPS_REQUIRED') return 'GPX-filen mangler tidspunkt.';
+		return 'Kunne ikke lese GPX-filen. Velg en GPX-fil eksportert fra Orca.';
+	}
+
+	async function importGpx(event: Event): Promise<void> {
+		const input = event.currentTarget;
+		if (!(input instanceof HTMLInputElement)) return;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		readingGpx = true;
+		formError = '';
+		try {
+			if (file.size > gpxMaximumBytes) throw new Error('GPX_TOO_LARGE');
+			const extraction = extractGpxXml(await file.text(), (xml) =>
+				new DOMParser().parseFromString(xml, 'text/xml')
+			);
+			gpx = {
+				id: crypto.randomUUID(),
+				filename: file.name,
+				checksum: await checksum(file),
+				byteSize: file.size,
+				...extraction
+			};
+			gpxFile = file;
+			departure = localTime(extraction.departureAt);
+			arrival = localTime(extraction.arrivalAt);
+			nauticalMiles = Number(extraction.nauticalMiles.toFixed(1));
+		} catch (error) {
+			formError = gpxError(error);
+		} finally {
+			readingGpx = false;
+		}
 	}
 
 	async function addLeg(): Promise<void> {
@@ -167,6 +245,7 @@
 			engineMinutes,
 			mooring,
 			customMooring: mooring === 'other' ? customMooring.trim() : '',
+			gpx,
 			createdAt: editingCreatedAt || new Date().toISOString(),
 			createdBy: editingCreatedBy || (await sharedState.clientId()),
 			tombstone: false
@@ -176,7 +255,36 @@
 			return;
 		}
 		const key = editingKey ?? logbookLegKey(day.index, crypto.randomUUID());
-		await sharedState.set(key, serializeLogbookLeg(parsed.data));
+		const parsedGpx = parsed.data.gpx;
+		if (gpxFile && parsedGpx) {
+			await sharedState.setWithGpx(key, serializeLogbookLeg(parsed.data), {
+				id: parsedGpx.id,
+				legKey: key,
+				filename: parsedGpx.filename,
+				contentType: 'application/gpx+xml',
+				checksum: parsedGpx.checksum,
+				data: gpxFile,
+				createdAt: Date.now(),
+				parserVersion: parsedGpx.version,
+				extraction: {
+					version: parsedGpx.version,
+					name: parsedGpx.name,
+					departureAt: parsedGpx.departureAt,
+					arrivalAt: parsedGpx.arrivalAt,
+					nauticalMiles: parsedGpx.nauticalMiles,
+					activeSeconds: parsedGpx.activeSeconds,
+					elapsedSeconds: parsedGpx.elapsedSeconds,
+					stationarySeconds: parsedGpx.stationarySeconds,
+					originalPointCount: parsedGpx.originalPointCount,
+					routePointCount: parsedGpx.routePointCount,
+					segments: parsedGpx.segments,
+					stationaryBlocks: parsedGpx.stationaryBlocks,
+					recordingGaps: parsedGpx.recordingGaps
+				}
+			});
+		} else {
+			await sharedState.set(key, serializeLogbookLeg(parsed.data));
+		}
 		addingLeg = false;
 	}
 
@@ -193,6 +301,10 @@
 		const hours = Math.floor(minutes / 60);
 		const rest = minutes % 60;
 		return hours > 0 ? `${hours} t ${rest} min` : `${rest} min`;
+	}
+
+	function durationSeconds(seconds: number): string {
+		return duration(Math.round(seconds / 60));
 	}
 
 	function mooringLabel(leg: LogbookLeg): string {
@@ -339,6 +451,21 @@
 							>Motor {duration(leg.engineMinutes)}</span
 						>
 					</div>
+					{#if leg.gpx}
+						<div
+							class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/55"
+						>
+							<span class="flex items-center gap-1.5"
+								><FileCheck2 size={14} />{leg.gpx.filename}</span
+							>
+							<span>Aktiv {durationSeconds(leg.gpx.activeSeconds)}</span>
+							<span
+								>{sharedState.isGpxUploadPending(leg.gpx.id)
+									? 'Venter på opplasting'
+									: 'GPX lagret'}</span
+							>
+						</div>
+					{/if}
 				</article>
 			{:else}<p
 					class="rounded-lg border border-dashed border-base-300 p-5 text-center text-sm text-base-content/55"
@@ -355,68 +482,129 @@
 			<h2 id="add-leg-title" class="font-display text-2xl font-bold">
 				{editingKey ? 'Rediger etappe' : 'Ny etappe'}
 			</h2>
-			<div class="mt-4 grid gap-4 sm:grid-cols-2">
-				<LocationInput label="Fra" bind:value={from} suggestions={locationSuggestions} />
-				<LocationInput label="Til" bind:value={to} suggestions={locationSuggestions} />
-				<label class="block"
-					><span class="mb-1 block font-semibold">Avgang</span><input
-						class="input w-full"
-						type="time"
-						bind:value={departure}
-					/></label
-				>
-				<label class="block"
-					><span class="mb-1 block font-semibold">Ankomst</span><input
-						class="input w-full"
-						type="time"
-						bind:value={arrival}
-					/></label
-				>
-				<label class="block"
-					><span class="mb-1 block font-semibold">Nautiske mil</span><input
-						class="input w-full"
-						type="number"
-						min="0"
-						max="500"
-						step="0.1"
-						bind:value={nauticalMiles}
-					/></label
-				>
-				<label class="block"
-					><span class="mb-1 block font-semibold">Fortøyning</span><select
-						class="select w-full"
-						bind:value={mooring}
-						>{#each mooringChoices as choice (choice.value)}<option value={choice.value}
-								>{choice.label}</option
-							>{/each}</select
-					></label
-				>
-				<label class="block"
-					><span class="mb-1 block font-semibold">Seiling, minutter</span><input
-						class="input w-full"
-						type="number"
-						min="0"
-						max="1440"
-						bind:value={sailingMinutes}
-					/></label
-				>
-				<label class="block"
-					><span class="mb-1 block font-semibold">Motor, minutter</span><input
-						class="input w-full"
-						type="number"
-						min="0"
-						max="1440"
-						bind:value={engineMinutes}
-					/></label
-				>
-				{#if mooring === 'other'}<label class="block sm:col-span-2"
-						><span class="mb-1 block font-semibold">Fortøyningstype</span><input
+			<input
+				class="hidden"
+				type="file"
+				accept=".gpx,application/gpx+xml"
+				bind:this={fileInput}
+				onchange={importGpx}
+			/>
+			<section class="mt-4 rounded-lg border border-base-300 bg-base-200 p-4">
+				{#if gpx}
+					<div class="flex items-start gap-3">
+						<FileCheck2 class="mt-0.5 shrink-0 text-success" size={21} />
+						<div class="min-w-0 flex-1">
+							<p class="truncate font-semibold">{gpx.filename}</p>
+							<p class="mt-1 text-sm text-base-content/65">
+								{localTime(gpx.departureAt)}–{localTime(gpx.arrivalAt)} · {gpx.nauticalMiles.toLocaleString(
+									'nb-NO',
+									{ maximumFractionDigits: 1 }
+								)} nm
+							</p>
+							<p class="mt-1 text-xs text-base-content/55">
+								Aktiv {durationSeconds(gpx.activeSeconds)} · Totalt {durationSeconds(
+									gpx.elapsedSeconds
+								)} · {durationSeconds(gpx.stationarySeconds)} uten bevegelse fjernet
+							</p>
+						</div>
+						<button
+							class="btn btn-square btn-ghost btn-sm"
+							type="button"
+							disabled={readingGpx}
+							onclick={() => fileInput?.click()}
+							aria-label="Bytt GPX-fil"
+							title="Bytt GPX-fil"><RefreshCw size={17} /></button
+						>
+					</div>
+					{#if gpxDateMismatch}
+						<p class="mt-3 text-sm text-warning" role="alert">
+							Datoen i GPX-filen er en annen enn valgt dag. Kontroller at etappen ligger riktig.
+						</p>
+					{/if}
+				{:else}
+					<div class="text-center">
+						<FileUp class="mx-auto text-primary" size={28} />
+						<p class="mt-2 font-semibold">Legg til GPX fra Orca</p>
+						<p class="mt-1 text-sm text-base-content/60">
+							Etappen, tidene og distansen hentes fra filen.
+						</p>
+						<button
+							class="btn mt-3 btn-primary btn-sm"
+							type="button"
+							disabled={readingGpx}
+							onclick={() => fileInput?.click()}
+							><FileUp size={16} />{readingGpx ? 'Leser GPX …' : 'Velg GPX-fil'}</button
+						>
+					</div>
+				{/if}
+			</section>
+			{#if gpx || editingKey}
+				<div class="mt-4 grid gap-4 sm:grid-cols-2">
+					<LocationInput label="Fra" bind:value={from} suggestions={locationSuggestions} />
+					<LocationInput label="Til" bind:value={to} suggestions={locationSuggestions} />
+					<label class="block"
+						><span class="mb-1 block font-semibold">Avgang</span><input
 							class="input w-full"
-							bind:value={customMooring}
-							maxlength="100"
+							type="time"
+							readonly={gpx !== undefined}
+							bind:value={departure}
 						/></label
-					>{/if}
-			</div>
+					>
+					<label class="block"
+						><span class="mb-1 block font-semibold">Ankomst</span><input
+							class="input w-full"
+							type="time"
+							readonly={gpx !== undefined}
+							bind:value={arrival}
+						/></label
+					>
+					<label class="block"
+						><span class="mb-1 block font-semibold">Nautiske mil</span><input
+							class="input w-full"
+							type="number"
+							min="0"
+							max="500"
+							step="0.1"
+							readonly={gpx !== undefined}
+							bind:value={nauticalMiles}
+						/></label
+					>
+					<label class="block"
+						><span class="mb-1 block font-semibold">Fortøyning</span><select
+							class="select w-full"
+							bind:value={mooring}
+							>{#each mooringChoices as choice (choice.value)}<option value={choice.value}
+									>{choice.label}</option
+								>{/each}</select
+						></label
+					>
+					<label class="block"
+						><span class="mb-1 block font-semibold">Seiling, minutter</span><input
+							class="input w-full"
+							type="number"
+							min="0"
+							max="1440"
+							bind:value={sailingMinutes}
+						/></label
+					>
+					<label class="block"
+						><span class="mb-1 block font-semibold">Motor, minutter</span><input
+							class="input w-full"
+							type="number"
+							min="0"
+							max="1440"
+							bind:value={engineMinutes}
+						/></label
+					>
+					{#if mooring === 'other'}<label class="block sm:col-span-2"
+							><span class="mb-1 block font-semibold">Fortøyningstype</span><input
+								class="input w-full"
+								bind:value={customMooring}
+								maxlength="100"
+							/></label
+						>{/if}
+				</div>
+			{/if}
 			{#if formError}<p class="mt-3 text-sm text-error" role="alert">{formError}</p>{/if}
 			<div class="modal-action">
 				<button class="btn" type="button" onclick={() => (addingLeg = false)}>Avbryt</button><button

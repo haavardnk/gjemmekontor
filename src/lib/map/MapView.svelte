@@ -22,6 +22,7 @@
 	import { onMount } from 'svelte';
 
 	import type { OfflineMapRecord } from '$lib/client/database';
+	import type { ActualRouteFeature } from '$lib/map/trip-routes';
 
 	import type { MapFeature, MapMode, MapPointSymbol, MapSnapshot, Position } from './types';
 
@@ -32,6 +33,8 @@
 		selectedId,
 		mode,
 		offlineMap,
+		actualRoutes,
+		hiddenRouteIds,
 		onselect
 	}: {
 		snapshot: MapSnapshot;
@@ -40,6 +43,8 @@
 		selectedId: string | undefined;
 		mode: MapMode;
 		offlineMap: OfflineMapRecord | undefined;
+		actualRoutes: ActualRouteFeature[];
+		hiddenRouteIds: Set<string>;
 		onselect: (id: string) => void;
 	} = $props();
 
@@ -239,6 +244,7 @@
 		return {
 			type: 'FeatureCollection',
 			features: snapshot.features
+				.filter((feature) => kind !== 'lines' || !hiddenRouteIds.has(feature.id))
 				.filter(
 					(feature) => visibleLayerIds.size === 0 || visibleLayerIds.has(feature.properties.layerId)
 				)
@@ -493,6 +499,10 @@
 			clusterRadius: 28
 		});
 		map.addSource('lines', { type: 'geojson', data: featureCollection('lines') });
+		map.addSource('actual-routes', {
+			type: 'geojson',
+			data: { type: 'FeatureCollection', features: actualRoutes }
+		});
 		map.addSource('location', {
 			type: 'geojson',
 			data: { type: 'FeatureCollection', features: [] }
@@ -502,6 +512,23 @@
 			type: 'line',
 			source: 'lines',
 			paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': 0.85 }
+		});
+		map.addLayer({
+			id: 'actual-route-casing',
+			type: 'line',
+			source: 'actual-routes',
+			paint: { 'line-color': '#ffffff', 'line-width': 4, 'line-opacity': 0.38 }
+		});
+		map.addLayer({
+			id: 'actual-routes',
+			type: 'line',
+			source: 'actual-routes',
+			paint: {
+				'line-color': '#3f7278',
+				'line-width': 2,
+				'line-opacity': 0.72,
+				'line-dasharray': [1.5, 2.5]
+			}
 		});
 		map.addLayer({
 			id: 'clusters',
@@ -601,14 +628,19 @@
 	$effect((): void => {
 		const points = featureCollection('points');
 		const lines = featureCollection('lines');
+		const routes = { type: 'FeatureCollection' as const, features: actualRoutes };
 		ensureMarkerImages();
 		const pointSource = map?.getSource('points');
 		const lineSource = map?.getSource('lines');
+		const routeSource = map?.getSource('actual-routes');
 		if (isGeoJsonSource(pointSource)) {
 			pointSource.setData(points);
 		}
 		if (isGeoJsonSource(lineSource)) {
 			lineSource.setData(lines);
+		}
+		if (isGeoJsonSource(routeSource)) {
+			routeSource.setData(routes);
 		}
 	});
 
@@ -698,6 +730,9 @@
 <div
 	class="relative size-full overflow-hidden bg-base-200"
 	data-map-ready={mapReady}
+	data-actual-route-count={actualRoutes.length}
+	data-actual-route-ids={actualRoutes.map((route) => route.properties.gpxId).join(',')}
+	data-hidden-route-count={hiddenRouteIds.size}
 	data-position-marker="monsieur-bintang"
 >
 	<div bind:this={container} class="size-full" aria-label="Reisekart"></div>

@@ -6,6 +6,7 @@ import {
 	type LogbookLeg,
 	logbookLegKey,
 	logbookLegs,
+	logbookLegSchema,
 	logbookTotals,
 	parseLocation,
 	serializeLocation,
@@ -35,6 +36,39 @@ describe('Logbook', (): void => {
 
 	test('uses independent UUID leg keys', (): void => {
 		expect(logbookLegKey(3, 'row-a')).toBe('logbook:d3:leg:row-a');
+	});
+
+	test('round-trips GPX metadata while retaining legacy legs', (): void => {
+		const gpxLeg: LogbookLeg = {
+			...leg,
+			gpx: {
+				id: '019d0d25-8ea0-7000-8000-000000000001',
+				filename: 'orca.gpx',
+				checksum: 'a'.repeat(64),
+				byteSize: 100,
+				version: 1,
+				name: 'Tur',
+				departureAt: '2026-09-05T08:00:00.000Z',
+				arrivalAt: '2026-09-05T09:00:00.000Z',
+				nauticalMiles: 4.2,
+				activeSeconds: 3_000,
+				elapsedSeconds: 3_600,
+				stationarySeconds: 600,
+				originalPointCount: 100,
+				routePointCount: 20,
+				segments: [
+					[
+						[16, 43],
+						[16.1, 43.1]
+					]
+				],
+				stationaryBlocks: [],
+				recordingGaps: []
+			}
+		};
+
+		expect(logbookLegSchema.parse(serializeLogbookLeg(gpxLeg))).toEqual(gpxLeg);
+		expect(logbookLegSchema.parse(serializeLogbookLeg(leg))).toEqual(leg);
 	});
 
 	test('sorts by departure and hides tombstones and invalid rows', (): void => {

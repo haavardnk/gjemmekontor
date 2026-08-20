@@ -1,5 +1,5 @@
 import type { IDBPDatabase } from 'idb';
-import { SvelteDate, SvelteSet } from 'svelte/reactivity';
+import { SvelteDate, SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 import { z } from 'zod';
 
 import {
@@ -7,6 +7,7 @@ import {
 	type GjemmekontorDatabase,
 	type JsonValue,
 	openClientDatabase,
+	type PendingGpxUpload,
 	type PendingMutation
 } from './database';
 
@@ -29,6 +30,12 @@ const stateResponseSchema = z.object({
 	)
 });
 
+const gpxUploadResponseSchema = z.object({
+	checksum: z.string(),
+	parserVersion: z.number().int().positive(),
+	extraction: z.json()
+});
+
 export type SyncPhase = 'idle' | 'saving' | 'synced' | 'offline' | 'error';
 
 export type SyncStatus = {
@@ -46,6 +53,7 @@ type SharedStateOptions = {
 export class SharedState {
 	values = $state<Record<string, JsonValue>>({});
 	status = $state<SyncStatus>({ phase: 'idle', pending: 0 });
+	pendingGpxUploadIds = $state<string[]>([]);
 	ready = $state(false);
 
 	private readonly databaseName: string | undefined;
@@ -55,8 +63,10 @@ export class SharedState {
 	private databasePromise: Promise<IDBPDatabase<GjemmekontorDatabase>> | undefined;
 	private initializePromise: Promise<void> | undefined;
 	private syncPromise: Promise<void> | undefined;
+	private syncRequested = false;
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private started = false;
+	private closing = false;
 
 	constructor(options: SharedStateOptions = {}) {
 		this.databaseName = options.databaseName;
@@ -102,6 +112,7 @@ export class SharedState {
 		const db = await this.database();
 		const entries = await db.getAll('state');
 		const pending = await db.count('mutations');
+		this.pendingGpxUploadIds = (await db.getAllKeys('pendingGpxUploads')).map(String);
 		this.values = Object.fromEntries(entries.map((entry) => [entry.key, entry.value]));
 		this.status = { phase: this.isOnline() ? 'idle' : 'offline', pending };
 		this.ready = true;
@@ -115,17 +126,21 @@ export class SharedState {
 		await this.initialize();
 		const db = await this.database();
 		const clientId = await getClientId(db);
+		const clientTimestamp = this.now();
+		const transaction = db.transaction(['state', 'mutations', 'meta'], 'readwrite', {
+			durability: 'strict'
+		});
+		const sequenceRecord = await transaction.objectStore('meta').get('mutationSequence');
+		const sequence = (typeof sequenceRecord?.value === 'number' ? sequenceRecord.value : 0) + 1;
 		const mutation: PendingMutation = {
 			mutationId: this.randomId(),
 			clientId,
 			key,
 			value,
-			clientTimestamp: this.now()
+			clientTimestamp,
+			sequence
 		};
 		this.status = { phase: 'saving', pending: this.status.pending + 1 };
-		const transaction = db.transaction(['state', 'mutations'], 'readwrite', {
-			durability: 'strict'
-		});
 		const existing = await transaction.objectStore('state').get(key);
 		await transaction.objectStore('state').put({
 			key,
@@ -136,6 +151,7 @@ export class SharedState {
 			updatedAt: new SvelteDate(mutation.clientTimestamp).toISOString()
 		});
 		await transaction.objectStore('mutations').put(mutation);
+		await transaction.objectStore('meta').put({ key: 'mutationSequence', value: sequence });
 		await transaction.done;
 		this.values = { ...this.values, [key]: value };
 		this.status = {
@@ -147,8 +163,64 @@ export class SharedState {
 		}
 	}
 
+	async setWithGpx(
+		key: string,
+		value: JsonValue,
+		upload: Omit<PendingGpxUpload, 'clientId'>
+	): Promise<void> {
+		await this.initialize();
+		const db = await this.database();
+		const clientId = await getClientId(db);
+		const clientTimestamp = this.now();
+		const transaction = db.transaction(
+			['state', 'mutations', 'pendingGpxUploads', 'meta'],
+			'readwrite',
+			{ durability: 'strict' }
+		);
+		const sequenceRecord = await transaction.objectStore('meta').get('mutationSequence');
+		const sequence = (typeof sequenceRecord?.value === 'number' ? sequenceRecord.value : 0) + 1;
+		const mutation: PendingMutation = {
+			mutationId: this.randomId(),
+			clientId,
+			key,
+			value,
+			clientTimestamp,
+			sequence
+		};
+		this.status = { phase: 'saving', pending: this.status.pending + 1 };
+		const existing = await transaction.objectStore('state').get(key);
+		await transaction.objectStore('state').put({
+			key,
+			value,
+			revision: existing?.revision ?? 0,
+			clientId,
+			mutationId: mutation.mutationId,
+			updatedAt: new SvelteDate(mutation.clientTimestamp).toISOString()
+		});
+		await transaction.objectStore('mutations').put(mutation);
+		await transaction.objectStore('pendingGpxUploads').put({ ...upload, clientId });
+		await transaction.objectStore('meta').put({ key: 'mutationSequence', value: sequence });
+		await transaction.done;
+		this.values = { ...this.values, [key]: value };
+		if (!this.pendingGpxUploadIds.includes(upload.id)) {
+			this.pendingGpxUploadIds = [...this.pendingGpxUploadIds, upload.id];
+		}
+		this.status = {
+			phase: this.isOnline() ? 'saving' : 'offline',
+			pending: await db.count('mutations')
+		};
+		if (this.isOnline()) {
+			void this.sync();
+		}
+	}
+
+	isGpxUploadPending(id: string): boolean {
+		return this.pendingGpxUploadIds.includes(id);
+	}
+
 	async sync(): Promise<void> {
 		if (this.syncPromise) {
+			this.syncRequested = true;
 			return this.syncPromise;
 		}
 		if (!this.isOnline()) {
@@ -157,7 +229,12 @@ export class SharedState {
 			return;
 		}
 
-		this.syncPromise = this.performSync().finally((): void => {
+		this.syncPromise = (async (): Promise<void> => {
+			do {
+				this.syncRequested = false;
+				await this.performSync();
+			} while (this.syncRequested && !this.closing);
+		})().finally((): void => {
 			this.syncPromise = undefined;
 		});
 		return this.syncPromise;
@@ -166,13 +243,66 @@ export class SharedState {
 	private async performSync(): Promise<void> {
 		const db = await this.database();
 		try {
-			const pending = await db.getAll('mutations');
+			const uploads = (await db.getAll('pendingGpxUploads')).sort(
+				(left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id)
+			);
+			for (const upload of uploads) {
+				const params = new SvelteURLSearchParams({
+					legKey: upload.legKey,
+					filename: upload.filename,
+					clientId: upload.clientId
+				});
+				const uploadResponse = await this.fetcher(
+					`/api/logbook/gpx/${encodeURIComponent(upload.id)}?${params}`,
+					{
+						method: 'PUT',
+						headers: { 'content-type': upload.contentType },
+						body: upload.data
+					}
+				);
+				if (!uploadResponse.ok) {
+					throw new Error('GPX_UPLOAD_FAILED');
+				}
+				const body = gpxUploadResponseSchema.parse(await uploadResponse.json());
+				if (
+					body.checksum !== upload.checksum ||
+					body.parserVersion !== upload.parserVersion ||
+					JSON.stringify(body.extraction) !== JSON.stringify(upload.extraction)
+				) {
+					throw new Error('GPX_ARCHIVE_MISMATCH');
+				}
+				await db.delete('pendingGpxUploads', upload.id);
+				this.pendingGpxUploadIds = this.pendingGpxUploadIds.filter((id) => id !== upload.id);
+			}
+			const queueTransaction = db.transaction(['mutations', 'pendingGpxUploads'], 'readonly');
+			const [queuedMutations, queuedUploads] = await Promise.all([
+				queueTransaction.objectStore('mutations').getAll(),
+				queueTransaction.objectStore('pendingGpxUploads').getAll()
+			]);
+			await queueTransaction.done;
+			const blockedLegKeys = new SvelteSet(queuedUploads.map((upload) => upload.legKey));
+			const pending = queuedMutations
+				.filter((mutation) => !blockedLegKeys.has(mutation.key))
+				.sort(
+					(left, right) =>
+						(left.sequence ?? left.clientTimestamp) - (right.sequence ?? right.clientTimestamp) ||
+						left.clientTimestamp - right.clientTimestamp ||
+						left.mutationId.localeCompare(right.mutationId)
+				);
 			if (pending.length > 0) {
 				this.status = { phase: 'saving', pending: pending.length };
 				const pushResponse = await this.fetcher('/api/state/sync', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ mutations: pending })
+					body: JSON.stringify({
+						mutations: pending.map((mutation) => ({
+							mutationId: mutation.mutationId,
+							clientId: mutation.clientId,
+							key: mutation.key,
+							value: mutation.value,
+							clientTimestamp: mutation.clientTimestamp
+						}))
+					})
 				});
 				if (!pushResponse.ok) {
 					throw new Error('SYNC_PUSH_FAILED');
@@ -214,6 +344,9 @@ export class SharedState {
 				pending: remaining.length
 			};
 		} catch {
+			if (this.closing) {
+				return;
+			}
 			this.status = { phase: 'error', pending: await db.count('mutations') };
 		}
 	}
@@ -254,6 +387,7 @@ export class SharedState {
 	}
 
 	async close(): Promise<void> {
+		this.closing = true;
 		this.stop();
 		if (this.databasePromise) {
 			const db = await this.databasePromise;

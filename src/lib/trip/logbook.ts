@@ -22,6 +22,34 @@ const locationSchema = z.discriminatedUnion('kind', [
 
 const timeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 
+const gpxPositionSchema = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
+
+const gpxBlockSchema = z.object({
+	startedAt: z.iso.datetime(),
+	endedAt: z.iso.datetime(),
+	durationSeconds: z.number().int().nonnegative()
+});
+
+export const logbookGpxSchema = z.object({
+	id: z.uuid(),
+	filename: z.string().min(1).max(200),
+	checksum: z.string().regex(/^[a-f0-9]{64}$/),
+	byteSize: z.number().int().positive().max(5_000_000),
+	version: z.literal(1),
+	name: z.string().min(1).max(200),
+	departureAt: z.iso.datetime(),
+	arrivalAt: z.iso.datetime(),
+	nauticalMiles: z.number().positive().max(500),
+	activeSeconds: z.number().int().nonnegative(),
+	elapsedSeconds: z.number().int().nonnegative(),
+	stationarySeconds: z.number().int().nonnegative(),
+	originalPointCount: z.number().int().positive(),
+	routePointCount: z.number().int().positive(),
+	segments: z.array(z.array(gpxPositionSchema).min(2)).min(1),
+	stationaryBlocks: z.array(gpxBlockSchema),
+	recordingGaps: z.array(gpxBlockSchema)
+});
+
 export const logbookLegSchema = z.object({
 	from: locationSchema,
 	to: locationSchema,
@@ -32,6 +60,7 @@ export const logbookLegSchema = z.object({
 	engineMinutes: z.number().int().min(0).max(1440),
 	mooring: z.enum(['anchor', 'mooring-ball', 'quay', 'marina', 'other']),
 	customMooring: z.string().max(100),
+	gpx: logbookGpxSchema.optional(),
 	createdAt: z.string(),
 	createdBy: z.string().min(1),
 	tombstone: z.boolean()
@@ -39,6 +68,7 @@ export const logbookLegSchema = z.object({
 
 export type LocationReference = z.infer<typeof locationSchema>;
 export type LogbookLeg = z.infer<typeof logbookLegSchema>;
+export type LogbookGpx = z.infer<typeof logbookGpxSchema>;
 export type KeyedLogbookLeg = LogbookLeg & { key: string };
 
 export function logbookLegKey(dayIndex: number, id: string): string {
@@ -111,6 +141,7 @@ export function serializeLogbookLeg(leg: LogbookLeg): JsonValue {
 		engineMinutes: leg.engineMinutes,
 		mooring: leg.mooring,
 		customMooring: leg.customMooring,
+		...(leg.gpx ? { gpx: leg.gpx } : {}),
 		createdAt: leg.createdAt,
 		createdBy: leg.createdBy,
 		tombstone: leg.tombstone

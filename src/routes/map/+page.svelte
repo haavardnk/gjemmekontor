@@ -17,6 +17,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 
 	import type { OfflineMapRecord } from '$lib/client/database';
+	import { sharedState } from '$lib/client/state.svelte';
 	import MapSymbol from '$lib/map/MapSymbol.svelte';
 	import MapView from '$lib/map/MapView.svelte';
 	import {
@@ -27,6 +28,14 @@
 		storeMapSnapshot
 	} from '$lib/map/offline';
 	import PoiSheet from '$lib/map/PoiSheet.svelte';
+	import {
+		actualRouteFeatures,
+		completedDayNumbers,
+		hiddenPlannedRouteIds,
+		layerDayNumbers,
+		loggedNauticalMiles,
+		visibleActualRoutes
+	} from '$lib/map/trip-routes';
 	import type {
 		MapApiResponse,
 		MapFeature,
@@ -45,6 +54,15 @@
 	let selectedId = $state<string>();
 	let query = $state('');
 	let filterOpen = $state(false);
+	let routeScope = $state<'all' | 'current'>('all');
+	const allActualRoutes = $derived(actualRouteFeatures(sharedState.values));
+	const actualRoutes = $derived(
+		visibleActualRoutes(allActualRoutes, tripDayState.selectedIndex, routeScope === 'current')
+	);
+	const hiddenRouteIds = $derived(
+		hiddenPlannedRouteIds(snapshot?.features ?? [], completedDayNumbers(allActualRoutes))
+	);
+	const totalNauticalMiles = $derived(loggedNauticalMiles(sharedState.values));
 	let mode = $state<MapMode>('normal');
 	let online = $state(true);
 	let offlinePackages = $state<OfflineMapPackage[]>([]);
@@ -109,7 +127,7 @@
 	);
 	const currentMapLayers = $derived(
 		(snapshot?.layers ?? []).filter((layer) =>
-			layerDays(layer.name).includes(tripDayState.selectedIndex + 1)
+			layerDayNumbers(layer.name).includes(tripDayState.selectedIndex + 1)
 		)
 	);
 	const currentTripDay = $derived(tripDays[tripDayState.selectedIndex]);
@@ -184,17 +202,8 @@
 	function resetFilters(): void {
 		visibleSourceStyleKeys.clear();
 		visibleLayerIds.clear();
+		routeScope = 'all';
 		selectedId = undefined;
-	}
-
-	function layerDays(name: string): number[] {
-		const match = name.match(/^Dag (\d+)(?: og (\d+))?/);
-		if (!match) {
-			return [];
-		}
-		const first = Number(match[1]);
-		const last = match[2] ? Number(match[2]) : first;
-		return Array.from({ length: last - first + 1 }, (_value, index) => first + index);
 	}
 
 	function showCurrentMapItems(): void {
@@ -202,11 +211,13 @@
 		for (const layer of currentMapLayers) {
 			visibleLayerIds.add(layer.id);
 		}
+		routeScope = 'current';
 		selectedId = undefined;
 	}
 
 	function showAllMapItems(): void {
 		visibleLayerIds.clear();
+		routeScope = 'all';
 	}
 
 	function selectFeature(feature: MapFeature): void {
@@ -312,6 +323,8 @@
 			{visibleSourceStyleKeys}
 			{selectedId}
 			{mode}
+			{actualRoutes}
+			{hiddenRouteIds}
 			offlineMap={activeOfflineMap}
 			onselect={(id) => (selectedId = id)}
 		/>
@@ -400,7 +413,13 @@
 
 	<div class="absolute bottom-3 left-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-col-reverse gap-2">
 		<p class="w-fit rounded bg-base-100/95 px-3 py-1.5 text-xs font-medium shadow" role="status">
-			{statusMessage}
+			{statusMessage}{#if totalNauticalMiles > 0}
+				<span class="font-normal text-base-content/45" data-trip-nautical-miles>
+					<span class="mx-1.5">·</span>{totalNauticalMiles.toLocaleString('nb-NO', {
+						maximumFractionDigits: 1
+					})} nm
+				</span>
+			{/if}
 		</p>
 		{#if errorMessage}<p
 				class="w-fit max-w-sm rounded bg-error px-3 py-2 text-sm text-error-content shadow"

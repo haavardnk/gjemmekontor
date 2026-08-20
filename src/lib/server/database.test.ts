@@ -25,12 +25,12 @@ describe('database migration', (): void => {
 			.all()
 			.map((row) => (row as { name: string }).name);
 
-		expect(tables).toEqual(['meta', 'sessions', 'state_entries']);
+		expect(tables).toEqual(['gpx_uploads', 'meta', 'sessions', 'state_entries']);
 		expect(first.pragma('journal_mode', { simple: true })).toBe('wal');
 		expect(first.pragma('foreign_keys', { simple: true })).toBe(1);
 		expect(first.pragma('busy_timeout', { simple: true })).toBe(5000);
 		expect(first.pragma('synchronous', { simple: true })).toBe(1);
-		expect(first.pragma('user_version', { simple: true })).toBe(1);
+		expect(first.pragma('user_version', { simple: true })).toBe(2);
 		first.close();
 
 		const second = createDatabase(dataDir);
@@ -38,7 +38,7 @@ describe('database migration', (): void => {
 			.prepare("SELECT value FROM meta WHERE key = 'global_revision'")
 			.get() as { value: string };
 		expect(revision.value).toBe('0');
-		expect(second.pragma('user_version', { simple: true })).toBe(1);
+		expect(second.pragma('user_version', { simple: true })).toBe(2);
 		second.close();
 	});
 });

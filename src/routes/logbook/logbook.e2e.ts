@@ -9,6 +9,17 @@ async function login(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+const gpx = `<?xml version="1.0"?><gpx creator="Orca App" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Testetappe</name><trkseg><trkpt lat="43" lon="16"><time>2026-09-05T08:00:00Z</time></trkpt><trkpt lat="43" lon="16"><time>2026-09-05T08:01:00Z</time></trkpt><trkpt lat="43" lon="16"><time>2026-09-05T08:02:00Z</time></trkpt><trkpt lat="43" lon="16"><time>2026-09-05T08:03:00Z</time></trkpt><trkpt lat="43.01" lon="16"><time>2026-09-05T08:03:20Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2026-09-05T08:03:40Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2026-09-05T08:04:40Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2026-09-05T08:05:40Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2026-09-05T08:06:40Z</time></trkpt></trkseg></trk></gpx>`;
+
+function largeGpx(pointCount: number): string {
+	const points = Array.from({ length: pointCount }, (_value, index) => {
+		const longitude = 16 + index * 0.0001;
+		const time = new Date(Date.UTC(2026, 8, 5, 8, 0, index * 20)).toISOString();
+		return `<trkpt lat="43" lon="${longitude}"><time>${time}</time></trkpt>`;
+	}).join('');
+	return `<?xml version="1.0"?><gpx creator="Orca App" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Stor etappe</name><trkseg>${points}</trkseg></trk></gpx>`;
+}
+
 test('persists daily details and manages journey legs without mobile overflow', async ({
 	page
 }) => {
@@ -34,11 +45,21 @@ test('persists daily details and manages journey legs without mobile overflow', 
 	const arrival = `Havn ${crypto.randomUUID()}`;
 	await addButton.click();
 	const dialog = page.getByRole('dialog');
+	await expect(dialog.getByRole('combobox', { name: 'Fra' })).toHaveCount(0);
+	await dialog.locator('input[type="file"]').setInputFiles({
+		name: 'orca-etappe.gpx',
+		mimeType: 'application/gpx+xml',
+		buffer: Buffer.from(gpx)
+	});
+	await expect(dialog.getByRole('combobox', { name: 'Fra' })).toBeVisible();
 	await dialog.getByRole('combobox', { name: 'Fra' }).fill('Split');
 	await dialog.getByRole('combobox', { name: 'Til' }).fill(arrival);
-	await dialog.getByRole('textbox', { name: 'Avgang' }).fill('08:30');
-	await dialog.getByRole('textbox', { name: 'Ankomst' }).fill('12:15');
-	await dialog.getByRole('spinbutton', { name: 'Nautiske mil' }).fill('18.5');
+	await expect(dialog.getByRole('textbox', { name: 'Avgang' })).toHaveAttribute('readonly', '');
+	await expect(dialog.getByRole('textbox', { name: 'Ankomst' })).toHaveAttribute('readonly', '');
+	await expect(dialog.getByRole('spinbutton', { name: 'Nautiske mil' })).toHaveAttribute(
+		'readonly',
+		''
+	);
 	await dialog.getByRole('spinbutton', { name: 'Seiling, minutter' }).fill('150');
 	await dialog.getByRole('spinbutton', { name: 'Motor, minutter' }).fill('60');
 	await dialog.getByRole('combobox', { name: 'Fortøyning' }).selectOption('marina');
@@ -46,14 +67,16 @@ test('persists daily details and manages journey legs without mobile overflow', 
 
 	const row = page.locator('article', { hasText: arrival });
 	await expect(row).toBeVisible();
-	await expect(page.getByText('18,5', { exact: true })).toBeVisible();
-	await expect(page.getByText('2 t 30 min', { exact: true })).toBeVisible();
+	await expect(row.getByText('orca-etappe.gpx')).toBeVisible();
+	await expect(row.getByText(/GPX lagret|Venter på opplasting/)).toBeVisible();
+	await expect(page.getByRole('button', { name: /last ned/i })).toHaveCount(0);
+	await expect(row.getByText('Seil 2 t 30 min')).toBeVisible();
 	await row.getByRole('button', { name: 'Rediger etappe' }).click();
 	const editDialog = page.getByRole('dialog');
 	await expect(editDialog.getByRole('heading', { name: 'Rediger etappe' })).toBeVisible();
-	await editDialog.getByRole('spinbutton', { name: 'Nautiske mil' }).fill('19.5');
+	await editDialog.getByRole('spinbutton', { name: 'Motor, minutter' }).fill('75');
 	await editDialog.getByRole('button', { name: 'Lagre endringer' }).click();
-	await expect(page.getByText('19,5', { exact: true })).toBeVisible();
+	await expect(row.getByText('Motor 1 t 15 min')).toBeVisible();
 	await page.getByRole('button', { name: `Bruk ${arrival} som dagens destinasjon` }).click();
 	await expect(page.getByRole('combobox', { name: 'Dagens destinasjon' })).toHaveValue(arrival);
 
@@ -186,4 +209,31 @@ test('offers every nautical map point as a destination', async ({ page }) => {
 		.filter({ hasText: /^Fortøyning 10$/ })
 		.click();
 	await expect(destination).toHaveValue('Fortøyning 10');
+});
+
+test('archives GPX files above the adapter default byte limit', async ({ page }) => {
+	await login(page);
+	const body = largeGpx(7_500);
+	expect(Buffer.byteLength(body)).toBeGreaterThan(512 * 1_024);
+	const id = crypto.randomUUID();
+	const result = await page.evaluate(
+		async ({ uploadId, xml }): Promise<{ status: number; retrieved: string }> => {
+			const params = new URLSearchParams({
+				legKey: 'logbook:d0:leg:large-adapter-test',
+				filename: 'large-orca.gpx',
+				clientId: 'adapter-test'
+			});
+			const uploaded = await fetch(`/api/logbook/gpx/${uploadId}?${params}`, {
+				method: 'PUT',
+				headers: { 'content-type': 'application/gpx+xml' },
+				body: xml
+			});
+			const retrieved = await fetch(`/api/logbook/gpx/${uploadId}`);
+			return { status: uploaded.status, retrieved: await retrieved.text() };
+		},
+		{ uploadId: id, xml: body }
+	);
+
+	expect(result.status).toBe(201);
+	expect(result.retrieved).toBe(body);
 });

@@ -210,6 +210,45 @@ async function login(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+const actualLeg = {
+	from: { kind: 'text', name: 'Split' },
+	to: { kind: 'text', name: 'Hvar' },
+	departure: '10:00',
+	arrival: '11:00',
+	nauticalMiles: 4,
+	sailingMinutes: 30,
+	engineMinutes: 30,
+	mooring: 'anchor',
+	customMooring: '',
+	gpx: {
+		id: '019d0d25-8ea0-7000-8000-000000000001',
+		filename: 'orca.gpx',
+		checksum: 'a'.repeat(64),
+		byteSize: 100,
+		version: 1,
+		name: 'Tur',
+		departureAt: '2026-09-05T08:00:00.000Z',
+		arrivalAt: '2026-09-05T09:00:00.000Z',
+		nauticalMiles: 4,
+		activeSeconds: 3_000,
+		elapsedSeconds: 3_600,
+		stationarySeconds: 600,
+		originalPointCount: 100,
+		routePointCount: 2,
+		segments: [
+			[
+				[16.21, 43.21],
+				[16.29, 43.29]
+			]
+		],
+		stationaryBlocks: [],
+		recordingGaps: []
+	},
+	createdAt: '2026-09-05T10:00:00.000Z',
+	createdBy: 'map-test',
+	tombstone: false
+};
+
 test('searches, filters, refreshes, and opens point details without mobile overflow', async ({
 	page
 }) => {
@@ -355,6 +394,46 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	expect(marineProfileRequests.length).toBeGreaterThan(0);
 	expect(harbourRequests.length).toBeGreaterThan(0);
 	expect(pageErrors).toEqual([]);
+});
+
+test('replaces a planned day route with the accumulated GPX track', async ({ page }) => {
+	await mockMap(page);
+	await login(page);
+	const gpxId = crypto.randomUUID();
+	await page.evaluate(
+		async ({ leg, id }) => {
+			leg.gpx.id = id;
+			const response = await fetch('/api/state/sync', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					mutations: [
+						{
+							mutationId: crypto.randomUUID(),
+							clientId: 'map-test',
+							key: `logbook:d0:leg:${crypto.randomUUID()}`,
+							value: leg,
+							clientTimestamp: Date.now()
+						}
+					]
+				})
+			});
+			if (!response.ok) throw new Error('STATE_SETUP_FAILED');
+		},
+		{ leg: actualLeg, id: gpxId }
+	);
+	await page.reload();
+
+	await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready', 'true');
+	await expect(page.locator('[data-actual-route-ids]')).toHaveAttribute(
+		'data-actual-route-ids',
+		new RegExp(gpxId)
+	);
+	await expect(page.locator('[data-hidden-route-count]')).toHaveAttribute(
+		'data-hidden-route-count',
+		'1'
+	);
+	await expect(page.locator('[data-trip-nautical-miles]')).toContainText('nm');
 });
 test('starts explicit geolocation and follows the device position', async ({ page, context }) => {
 	await context.grantPermissions(['geolocation']);
