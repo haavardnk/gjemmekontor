@@ -46,12 +46,14 @@ type SharedStateOptions = {
 export class SharedState {
 	values = $state<Record<string, JsonValue>>({});
 	status = $state<SyncStatus>({ phase: 'idle', pending: 0 });
+	ready = $state(false);
 
 	private readonly databaseName: string | undefined;
 	private readonly fetcher: typeof fetch;
 	private readonly now: () => number;
 	private readonly randomId: () => string;
 	private databasePromise: Promise<IDBPDatabase<GjemmekontorDatabase>> | undefined;
+	private initializePromise: Promise<void> | undefined;
 	private syncPromise: Promise<void> | undefined;
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private started = false;
@@ -60,7 +62,7 @@ export class SharedState {
 		this.databaseName = options.databaseName;
 		this.fetcher = options.fetcher ?? fetch;
 		this.now = options.now ?? Date.now;
-		this.randomId = options.randomId ?? crypto.randomUUID;
+		this.randomId = options.randomId ?? (() => crypto.randomUUID());
 	}
 
 	private database(): Promise<IDBPDatabase<GjemmekontorDatabase>> {
@@ -85,14 +87,32 @@ export class SharedState {
 	};
 
 	async initialize(): Promise<void> {
+		if (this.ready) {
+			return;
+		}
+		if (!this.initializePromise) {
+			this.initializePromise = this.performInitialize().finally((): void => {
+				this.initializePromise = undefined;
+			});
+		}
+		return this.initializePromise;
+	}
+
+	private async performInitialize(): Promise<void> {
 		const db = await this.database();
 		const entries = await db.getAll('state');
 		const pending = await db.count('mutations');
 		this.values = Object.fromEntries(entries.map((entry) => [entry.key, entry.value]));
 		this.status = { phase: this.isOnline() ? 'idle' : 'offline', pending };
+		this.ready = true;
+	}
+
+	async clientId(): Promise<string> {
+		return getClientId(await this.database());
 	}
 
 	async set(key: string, value: JsonValue): Promise<void> {
+		await this.initialize();
 		const db = await this.database();
 		const clientId = await getClientId(db);
 		const mutation: PendingMutation = {
@@ -240,6 +260,7 @@ export class SharedState {
 			db.close();
 			this.databasePromise = undefined;
 		}
+		this.ready = false;
 	}
 }
 

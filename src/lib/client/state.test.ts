@@ -55,6 +55,51 @@ describe('client state', (): void => {
 		expect(state.values['day:one']).toEqual({ complete: true });
 	});
 
+	test('preserves an edit started while initialization is running', async (): Promise<void> => {
+		const name = databaseName();
+		const state = new SharedState({
+			databaseName: name,
+			fetcher: vi.fn(() => new Promise<Response>(() => undefined)),
+			randomId: (): string => 'mutation-race'
+		});
+
+		const initializing = state.initialize();
+		const writing = state.set('day:race', 'kept');
+		await Promise.all([initializing, writing]);
+
+		expect(state.ready).toBe(true);
+		expect(state.values['day:race']).toBe('kept');
+		await state.close();
+	});
+
+	test('returns one persistent client ID', async (): Promise<void> => {
+		const state = new SharedState({ databaseName: databaseName() });
+
+		const first = await state.clientId();
+		const second = await state.clientId();
+		await state.close();
+
+		expect(second).toBe(first);
+		expect(first).toMatch(/^[0-9a-f-]{36}$/);
+	});
+
+	test('writes with the default mutation ID generator', async (): Promise<void> => {
+		const name = databaseName();
+		const state = new SharedState({
+			databaseName: name,
+			fetcher: vi.fn(() => new Promise<Response>(() => undefined))
+		});
+
+		await state.set('default:id', true);
+		const database = await openClientDatabase(name);
+		const mutations = await database.getAll('mutations');
+		database.close();
+		await state.close();
+
+		expect(mutations).toHaveLength(1);
+		expect(mutations[0]?.mutationId).toMatch(/^[0-9a-f-]{36}$/);
+	});
+
 	test('pushes pending mutations before pulling state', async (): Promise<void> => {
 		const name = databaseName();
 		const calls: string[] = [];

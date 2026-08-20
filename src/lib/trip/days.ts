@@ -16,128 +16,24 @@ const dayDefinitions = [
 		'2026-09-05',
 		'Lørdag 5. september',
 		'Reisedag, Bad Buoy og første avgang',
-		'Båtdag 1',
-		['overtakelse', 'avreise', 'mat'],
-		'boat',
+		'Reisedag · Båtdag 1',
+		['utreise', 'overtakelse', 'avreise'],
+		'travel',
 		false
 	],
-	[
-		'2026-09-06',
-		'Søndag 6. september',
-		'Dag om bord',
-		'Båtdag 2',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-07',
-		'Mandag 7. september',
-		'Dag om bord',
-		'Båtdag 3',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-08',
-		'Tirsdag 8. september',
-		'Dag om bord',
-		'Båtdag 4',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-09',
-		'Onsdag 9. september',
-		'Dag om bord',
-		'Båtdag 5',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-10',
-		'Torsdag 10. september',
-		'Dag om bord',
-		'Båtdag 6',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-11',
-		'Fredag 11. september',
-		'Dag om bord',
-		'Båtdag 7',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-12',
-		'Lørdag 12. september',
-		'Dag om bord',
-		'Båtdag 8',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-13',
-		'Søndag 13. september',
-		'Dag om bord',
-		'Båtdag 9',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-14',
-		'Mandag 14. september',
-		'Dag om bord',
-		'Båtdag 10',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-15',
-		'Tirsdag 15. september',
-		'Dag om bord',
-		'Båtdag 11',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-16',
-		'Onsdag 16. september',
-		'Dag om bord',
-		'Båtdag 12',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-17',
-		'Torsdag 17. september',
-		'Dag om bord',
-		'Båtdag 13',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
-	[
-		'2026-09-18',
-		'Fredag 18. september',
-		'Siste hele dag om bord',
-		'Båtdag 14',
-		['dagstype', 'hovedscene', 'dagenssted'],
-		'boat',
-		true
-	],
+	['2026-09-06', 'Søndag 6. september', 'Dag om bord', 'Båtdag 2', [], 'boat', true],
+	['2026-09-07', 'Mandag 7. september', 'Dag om bord', 'Båtdag 3', [], 'boat', true],
+	['2026-09-08', 'Tirsdag 8. september', 'Dag om bord', 'Båtdag 4', [], 'boat', true],
+	['2026-09-09', 'Onsdag 9. september', 'Dag om bord', 'Båtdag 5', [], 'boat', true],
+	['2026-09-10', 'Torsdag 10. september', 'Dag om bord', 'Båtdag 6', [], 'boat', true],
+	['2026-09-11', 'Fredag 11. september', 'Dag om bord', 'Båtdag 7', [], 'boat', true],
+	['2026-09-12', 'Lørdag 12. september', 'Dag om bord', 'Båtdag 8', [], 'boat', true],
+	['2026-09-13', 'Søndag 13. september', 'Dag om bord', 'Båtdag 9', [], 'boat', true],
+	['2026-09-14', 'Mandag 14. september', 'Dag om bord', 'Båtdag 10', [], 'boat', true],
+	['2026-09-15', 'Tirsdag 15. september', 'Dag om bord', 'Båtdag 11', [], 'boat', true],
+	['2026-09-16', 'Onsdag 16. september', 'Dag om bord', 'Båtdag 12', [], 'boat', true],
+	['2026-09-17', 'Torsdag 17. september', 'Dag om bord', 'Båtdag 13', [], 'boat', true],
+	['2026-09-18', 'Fredag 18. september', 'Siste hele dag om bord', 'Båtdag 14', [], 'boat', true],
 	[
 		'2026-09-19',
 		'Lørdag 19. september',
@@ -147,42 +43,18 @@ const dayDefinitions = [
 		'boat',
 		false
 	],
-	[
-		'2026-09-20',
-		'Søndag 20. september',
-		'Første dag i villaen',
-		'Villadag 1',
-		['basseng', 'mat', 'ro'],
-		'villa',
-		false
-	],
-	[
-		'2026-09-21',
-		'Mandag 21. september',
-		'En dag ved bassenget',
-		'Villadag 2',
-		['basseng', 'babyring', 'mat'],
-		'villa',
-		false
-	],
+	['2026-09-20', 'Søndag 20. september', 'Første dag i villaen', 'Villadag 1', [], 'villa', false],
+	['2026-09-21', 'Mandag 21. september', 'En dag ved bassenget', 'Villadag 2', [], 'villa', false],
 	[
 		'2026-09-22',
 		'Tirsdag 22. september',
 		'Siste hele feriedag',
 		'Villadag 3',
-		['basseng', 'mat', 'finale'],
+		['finale'],
 		'villa',
 		false
 	],
-	[
-		'2026-09-23',
-		'Onsdag 23. september',
-		'Hjemreise',
-		'Hjemreise',
-		['pakking', 'hjemreise', 'finale'],
-		'travel',
-		false
-	]
+	['2026-09-23', 'Onsdag 23. september', 'Hjemreise', 'Hjemreise', ['hjemreise'], 'travel', false]
 ] as const;
 
 export const tripDays: TripDay[] = dayDefinitions.map(
