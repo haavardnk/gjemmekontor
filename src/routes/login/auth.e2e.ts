@@ -7,7 +7,10 @@ test('requires the configured shared password', async ({ page }) => {
 
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/login$/);
-	await expect(page.getByRole('heading', { name: 'Velkommen om bord' })).toBeVisible();
+	await expect(page.getByRole('img', { name: 'Gjemmekontor' })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: 'Velkommen om bord på S/Y Bad Buoy' })
+	).toBeVisible();
 
 	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('wrong-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
@@ -16,6 +19,7 @@ test('requires the configured shared password', async ({ page }) => {
 	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
+	await expect(page.getByRole('link', { name: 'Gjemmekontor' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Kart' })).toHaveAttribute('aria-current', 'page');
 
 	await page.getByRole('button', { name: 'Logg ut' }).click();

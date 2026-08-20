@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { Eye, EyeOff, LogIn } from '@lucide/svelte';
 
+	import BrandLogo from '$lib/ui/BrandLogo.svelte';
+	import ThemeToggle from '$lib/ui/ThemeToggle.svelte';
+
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
@@ -48,13 +51,16 @@
 </svelte:head>
 
 <main class="grid min-h-dvh place-items-center px-5 py-10">
+	<ThemeToggle class="fixed top-4 right-4" />
 	<section class="w-full max-w-sm">
 		<div class="mb-8 text-center">
-			<img class="mx-auto mb-5 size-24" src="/gjemmekontor-logo.png" alt="Gjemmekontor-logo" />
+			<BrandLogo class="mx-auto mb-6 size-32 text-primary" />
 			<p class="mb-2 text-xs font-semibold tracking-wide text-primary uppercase">
-				Bad Buoy · Kroatia 2026
+				Gjemmekontor · Kroatia 2026
 			</p>
-			<h1 class="font-display text-4xl font-bold text-neutral">Velkommen om bord</h1>
+			<h1 class="font-display text-4xl leading-tight font-bold text-neutral">
+				Velkommen om bord på <span class="block text-primary">S/Y Bad Buoy</span>
+			</h1>
 			<p class="mt-3 text-sm text-base-content/70">Skriv inn det delte reisepassordet.</p>
 		</div>
 

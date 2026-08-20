@@ -1,11 +1,19 @@
 <script lang="ts">
 	import '../app.css';
 
+	import { onMount } from 'svelte';
+
 	import { page } from '$app/state';
+	import { themeState } from '$lib/client/theme.svelte';
 	import AppShell from '$lib/ui/AppShell.svelte';
 
 	let { children } = $props();
 	const showShell = $derived(page.url.pathname !== '/login');
+
+	onMount(() => {
+		themeState.start();
+		return (): void => themeState.stop();
+	});
 </script>
 
 <svelte:head>
