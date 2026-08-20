@@ -1,0 +1,26 @@
+{
+	"name": "Gjemmekontor",
+	"short_name": "Gjemmekontor",
+	"description": "Felles reiseapp for Gjemmekontor i Kroatia",
+	"lang": "nb",
+	"start_url": "/map",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "any",
+	"background_color": "#f6f5ed",
+	"theme_color": "#087f8c",
+	"icons": [
+		{
+			"src": "/monsieur-bintang-pwa-192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any maskable"
+		},
+		{
+			"src": "/monsieur-bintang-pwa-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any maskable"
+		}
+	]
+}

@@ -5,6 +5,7 @@
 
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { warmAppShell } from '$lib/client/pwa';
 	import { sharedState } from '$lib/client/state.svelte';
 	import { tripDayState } from '$lib/trip/day.svelte';
 
@@ -33,6 +34,7 @@
 	onMount(() => {
 		void sharedState.start();
 		void tripDayState.start();
+		void warmAppShell();
 		return (): void => {
 			sharedState.stop();
 			tripDayState.stop();
