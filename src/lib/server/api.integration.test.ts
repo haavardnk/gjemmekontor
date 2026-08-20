@@ -14,6 +14,7 @@ const config: RuntimeConfig = {
 	appPassword: 'correct-password',
 	sessionSecret: '0123456789abcdef0123456789abcdef',
 	dataDir: '',
+	googleMyMapsId: 'map-id',
 	origin: 'https://gjemmekontor.example.com'
 };
 

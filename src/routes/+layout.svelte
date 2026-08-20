@@ -1,7 +1,11 @@
 <script lang="ts">
 	import '../app.css';
 
+	import { page } from '$app/state';
+	import AppShell from '$lib/ui/AppShell.svelte';
+
 	let { children } = $props();
+	const showShell = $derived(page.url.pathname !== '/login');
 </script>
 
 <svelte:head>
@@ -10,4 +14,8 @@
 	<title>Gjemmekontor</title>
 </svelte:head>
 
-{@render children()}
+{#if showShell}
+	<AppShell>{@render children()}</AppShell>
+{:else}
+	{@render children()}
+{/if}

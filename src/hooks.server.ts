@@ -20,7 +20,12 @@ function applySecurityHeaders(response: Response, pathname: string): void {
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'no-referrer');
 	response.headers.set('X-Frame-Options', 'DENY');
-	if (/^\/api\/(auth|state|map)(\/|$)/.test(pathname)) {
+	if (
+		/^\/api\/(auth|state|map)(\/|$)/.test(pathname) &&
+		!/^\/api\/map\/(offline\/(normal|nautical|satellite)|(depth-contours|marine-profile)\/\d+\/\d+\/\d+|harbours)$/.test(
+			pathname
+		)
+	) {
 		response.headers.set('Cache-Control', 'no-store');
 	}
 }

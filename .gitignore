@@ -24,6 +24,9 @@ vite.config.ts.timestamp-*
 # Playwright
 test-results
 
+# Offline maps
+*.pmtiles
+
 # Local knowledge base
 .kb/
 

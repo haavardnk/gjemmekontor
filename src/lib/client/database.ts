@@ -1,5 +1,7 @@
 import { type DBSchema, type IDBPDatabase, openDB } from 'idb';
 
+import type { MapMode, MapSnapshot } from '$lib/map/types';
+
 export type JsonValue =
 	null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
@@ -22,12 +24,12 @@ export type PendingMutation = {
 
 export type MapSnapshotRecord = {
 	id: 'current';
-	value: JsonValue;
+	value: MapSnapshot;
 	updatedAt: number;
 };
 
 export type OfflineMapRecord = {
-	id: string;
+	id: MapMode;
 	data: Blob;
 	version: string;
 	size: number;

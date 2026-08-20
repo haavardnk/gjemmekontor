@@ -4,6 +4,9 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+	optimizeDeps: {
+		exclude: ['maplibre-gl']
+	},
 	plugins: [
 		tailwindcss(),
 		sveltekit({
@@ -16,15 +19,28 @@ export default defineConfig({
 				mode: 'nonce',
 				directives: {
 					'base-uri': ['self'],
-					'connect-src': ['self'],
+					'connect-src': [
+						'self',
+						'https://tiles.openfreemap.org',
+						'https://tiles.openseamap.org',
+						'https://tiles.maps.eox.at'
+					],
 					'default-src': ['self'],
 					'font-src': ['self'],
 					'form-action': ['self'],
 					'frame-ancestors': ['none'],
-					'img-src': ['self', 'data:', 'blob:'],
+					'img-src': [
+						'self',
+						'data:',
+						'blob:',
+						'https://tiles.openfreemap.org',
+						'https://tiles.openseamap.org',
+						'https://tiles.maps.eox.at'
+					],
 					'object-src': ['none'],
 					'script-src': ['self'],
 					'style-src': ['self'],
+					'style-src-attr': ['unsafe-inline'],
 					'worker-src': ['self', 'blob:']
 				}
 			}

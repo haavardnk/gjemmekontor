@@ -10,6 +10,8 @@ const runtimeEnvironmentSchema = z.object({
 		.optional(),
 	SESSION_SECRET: z.string().min(32),
 	DATA_DIR: z.string().min(1),
+	BUNDLED_OFFLINE_MAP_DIR: z.string().min(1).optional(),
+	GOOGLE_MY_MAPS_ID: z.string().min(1),
 	ORIGIN: z.url()
 });
 
@@ -18,6 +20,8 @@ export type RuntimeConfig = {
 	appVersion?: string;
 	sessionSecret: string;
 	dataDir: string;
+	bundledOfflineMapDir?: string;
+	googleMyMapsId: string;
 	origin: string;
 };
 
@@ -35,6 +39,10 @@ export function parseRuntimeConfig(environment: Record<string, string | undefine
 			: {}),
 		sessionSecret: result.data.SESSION_SECRET,
 		dataDir: result.data.DATA_DIR,
+		...(result.data.BUNDLED_OFFLINE_MAP_DIR
+			? { bundledOfflineMapDir: result.data.BUNDLED_OFFLINE_MAP_DIR }
+			: {}),
+		googleMyMapsId: result.data.GOOGLE_MY_MAPS_ID,
 		origin: result.data.ORIGIN
 	};
 }

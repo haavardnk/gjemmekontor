@@ -15,8 +15,8 @@ test('requires the configured shared password', async ({ page }) => {
 
 	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
-	await expect(page).toHaveURL(/\/$/);
-	await expect(page.getByText('Du er logget inn. Reiseappen er under bygging.')).toBeVisible();
+	await expect(page).toHaveURL(/\/map$/);
+	await expect(page.getByRole('link', { name: 'Kart' })).toHaveAttribute('aria-current', 'page');
 
 	await page.getByRole('button', { name: 'Logg ut' }).click();
 	await expect(page).toHaveURL(/\/login$/);

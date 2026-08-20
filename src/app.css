@@ -54,3 +54,19 @@ textarea {
 .font-display {
 	font-family: 'Fraunces', Georgia, serif;
 }
+
+.map-rich-text p,
+.map-rich-text ul,
+.map-rich-text ol {
+	margin-block: 0.5rem;
+}
+
+.map-rich-text ul,
+.map-rich-text ol {
+	padding-left: 1.25rem;
+}
+
+.map-rich-text a {
+	color: var(--color-primary);
+	text-decoration: underline;
+}
