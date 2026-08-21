@@ -52,6 +52,16 @@ test('persists daily shots and manages Digest rows without mobile overflow', asy
 	await expect(page.locator('[data-scenario-id="brollBat"]')).toBeVisible();
 	await expect(page.locator('[data-scenario-id="brollBaby"]')).toBeVisible();
 	await expect(page.locator('[data-scenario-id="brollVilla"]')).toBeVisible();
+	const boatBroll = page.locator('[data-scenario-id="brollBat"]');
+	await boatBroll.locator('summary').click();
+	const syncResponse = page.waitForResponse(
+		(response) => new URL(response.url()).pathname === '/api/state'
+	);
+	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await syncResponse;
+	await expect(bRollGroup).toHaveAttribute('open', '');
+	await expect(boatBroll).toHaveAttribute('open', '');
+	await boatBroll.locator('summary').click();
 	await bRollGroup.locator(':scope > summary').click();
 	await expect(page.locator('[data-scene-group][open]')).toHaveCount(0);
 	await page.getByRole('searchbox', { name: 'Finn scene' }).fill('Catan');

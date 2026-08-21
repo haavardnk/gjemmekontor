@@ -8,6 +8,7 @@
 
 	let { day }: { day: TripDay } = $props();
 	let scenarioQuery = $state('');
+	let expandedGroups = $state<Record<string, boolean>>({});
 
 	const selectedModuleIds = $derived(
 		activityModuleIds.filter((id) => checked(fieldKey(`scenario:${id}`)))
@@ -56,6 +57,20 @@
 
 	function removeScenario(id: string): void {
 		void sharedState.set(fieldKey(`scenario:${id}`), false);
+	}
+
+	function groupOpen(title: string): boolean {
+		return Boolean(normalizedScenarioQuery) || expandedGroups[title] === true;
+	}
+
+	function updateGroupOpen(title: string, event: Event): void {
+		if (normalizedScenarioQuery) {
+			return;
+		}
+		const details = event.currentTarget;
+		if (details instanceof HTMLDetailsElement) {
+			expandedGroups[title] = details.open;
+		}
 	}
 
 	function roll(moduleId: string, index: number): 'A-roll' | 'B-roll' {
@@ -161,10 +176,11 @@
 				</label>
 			</div>
 			<div class="space-y-4">
-				{#each availableGroups as group (`${group.title}-${normalizedScenarioQuery ? 'search' : 'browse'}`)}
+				{#each availableGroups as group (group.title)}
 					<details
 						class="group rounded-lg border border-base-300 bg-base-200/40"
-						open={Boolean(normalizedScenarioQuery)}
+						open={groupOpen(group.title)}
+						ontoggle={(event) => updateGroupOpen(group.title, event)}
 						data-scene-group={group.title}
 					>
 						<summary class="flex cursor-pointer list-none items-center justify-between px-3 py-2.5">
