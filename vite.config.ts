@@ -21,6 +21,7 @@ export default defineConfig({
 					'base-uri': ['self'],
 					'connect-src': [
 						'self',
+						'https://server.arcgisonline.com',
 						'https://tiles.openfreemap.org',
 						'https://tiles.openseamap.org',
 						'https://tiles.maps.eox.at'
@@ -33,6 +34,7 @@ export default defineConfig({
 						'self',
 						'data:',
 						'blob:',
+						'https://server.arcgisonline.com',
 						'https://tiles.openfreemap.org',
 						'https://tiles.openseamap.org',
 						'https://tiles.maps.eox.at'

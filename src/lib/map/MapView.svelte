@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { LocateFixed, Navigation } from '@lucide/svelte';
+	import { LocateFixed, Navigation, Navigation2 } from '@lucide/svelte';
 	import { layers, namedFlavor } from '@protomaps/basemaps';
 	import {
 		Anchor,
@@ -54,6 +54,7 @@
 		'idle'
 	);
 	let following = $state(false);
+	let bearing = $state(0);
 	let mapReady = $state(false);
 	let watchId: number | undefined;
 	let lastPosition: GeolocationPosition | undefined;
@@ -237,6 +238,14 @@
 		});
 	}
 
+	function updateBearing(): void {
+		bearing = map?.getBearing() ?? 0;
+	}
+
+	function resetBearing(): void {
+		map?.resetNorth({ duration: 300 });
+	}
+
 	function featureCollection(kind: 'points' | 'lines'): {
 		type: 'FeatureCollection';
 		features: MapFeature[];
@@ -340,24 +349,30 @@
 				satellite: {
 					type: 'raster',
 					tiles: [
-						'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/{z}/{y}/{x}.jpg'
+						'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 					],
 					tileSize: 256,
-					maxzoom: 14,
+					maxzoom: 18,
 					attribution:
-						'<a href="https://cloudless.eox.at/">Sentinel-2 cloudless 2025</a> · Contains modified Copernicus Sentinel data · Rendering © EOX'
+						'Imagery © <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9">Esri</a>, Vantor, Earthstar Geographics, and the GIS User Community'
 				},
 				satelliteLabels: {
 					type: 'raster',
 					tiles: ['https://tiles.maps.eox.at/wmts/1.0.0/overlay_3857/default/g/{z}/{y}/{x}.png'],
 					tileSize: 256,
+					maxzoom: 14,
 					attribution:
 						'Data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Rendering © EOX'
 				}
 			},
 			layers: [
 				{ id: 'satellite', type: 'raster', source: 'satellite' },
-				{ id: 'satellite-labels', type: 'raster', source: 'satelliteLabels' }
+				{
+					id: 'satellite-labels',
+					type: 'raster',
+					source: 'satelliteLabels',
+					maxzoom: 15
+				}
 			]
 		};
 	}
@@ -714,6 +729,7 @@
 			map.on('dragstart', (): void => {
 				following = false;
 			});
+			map.on('rotate', updateBearing);
 			map.on('moveend', updateHarbours);
 		})();
 		return (): void => {
@@ -741,6 +757,22 @@
 			<p class="max-w-64 rounded bg-base-100 px-3 py-2 text-sm shadow" role="status">
 				{locationMessage}
 			</p>
+		{/if}
+		{#if Math.abs(bearing) >= 0.5}
+			<button
+				class="btn btn-circle bg-base-100 shadow"
+				type="button"
+				onclick={resetBearing}
+				aria-label="Tilbakestill kartretning mot nord"
+				title="Tilbakestill kartretning mot nord"
+			>
+				<span
+					class="grid place-items-center text-error transition-transform"
+					style:transform={`rotate(${-bearing}deg)`}
+				>
+					<Navigation2 size={20} />
+				</span>
+			</button>
 		{/if}
 		<button
 			class="btn btn-circle bg-base-100 shadow"

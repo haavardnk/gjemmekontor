@@ -196,9 +196,12 @@ async function mockMap(page: Page): Promise<void> {
 			contentType: 'application/vnd.mapbox-vector-tile'
 		});
 	});
-	await page.route(/https:\/\/(tiles\.openseamap\.org|tiles\.maps\.eox\.at)\/.*/, async (route) => {
-		await route.fulfill({ body: transparentPng, contentType: 'image/png' });
-	});
+	await page.route(
+		/https:\/\/(server\.arcgisonline\.com|tiles\.openseamap\.org|tiles\.maps\.eox\.at)\/.*/,
+		async (route) => {
+			await route.fulfill({ body: transparentPng, contentType: 'image/png' });
+		}
+	);
 }
 
 async function login(page: Page): Promise<void> {
@@ -255,12 +258,16 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	const pageErrors: string[] = [];
 	const googleIconRequests: string[] = [];
 	const vectorTileRequests: string[] = [];
+	const satelliteRequests: string[] = [];
 	const marineProfileRequests: string[] = [];
 	const harbourRequests: string[] = [];
 	page.on('pageerror', (error) => pageErrors.push(error.message));
 	page.on('request', (request) => {
 		if (request.url().includes('/test-vector-tile/')) {
 			vectorTileRequests.push(request.url());
+		}
+		if (request.url().includes('/World_Imagery/MapServer/tile/')) {
+			satelliteRequests.push(request.url());
 		}
 		if (request.url() === googleIconHref) {
 			googleIconRequests.push(request.url());
@@ -294,6 +301,7 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 		'aria-pressed',
 		'true'
 	);
+	await expect.poll(() => satelliteRequests.length).toBeGreaterThan(0);
 	await page.getByRole('button', { name: 'Sjøkart' }).click();
 	await expect.poll(() => marineProfileRequests.length).toBeGreaterThan(0);
 	await expect.poll(() => harbourRequests.length).toBeGreaterThan(0);
@@ -394,6 +402,24 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	expect(marineProfileRequests.length).toBeGreaterThan(0);
 	expect(harbourRequests.length).toBeGreaterThan(0);
 	expect(pageErrors).toEqual([]);
+});
+
+test('shows map bearing and resets north from the compass', async ({ page }) => {
+	await mockMap(page);
+	await login(page);
+	await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready', 'true');
+	const compass = page.getByRole('button', { name: 'Tilbakestill kartretning mot nord' });
+	await expect(compass).toHaveCount(0);
+	const canvas = page.locator('.maplibregl-canvas');
+	const box = await canvas.boundingBox();
+	if (!box) throw new Error('MAP_CANVAS_UNAVAILABLE');
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down({ button: 'right' });
+	await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2, { steps: 10 });
+	await page.mouse.up({ button: 'right' });
+	await expect(compass).toBeVisible();
+	await compass.click();
+	await expect(compass).toHaveCount(0);
 });
 
 test('replaces a planned day route with the accumulated GPX track', async ({ page }) => {
