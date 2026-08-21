@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { BookOpen, LogOut, Map, Video } from '@lucide/svelte';
+	import { BookOpen, LogOut, Map, ShoppingBasket, Video } from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
 
@@ -28,7 +28,13 @@
 	const links = [
 		{ href: resolve('/map'), path: '/map', label: 'Kart', icon: Map },
 		{ href: resolve('/shots'), path: '/shots', label: 'Opptak', icon: Video },
-		{ href: resolve('/logbook'), path: '/logbook', label: 'Loggbok', icon: BookOpen }
+		{ href: resolve('/logbook'), path: '/logbook', label: 'Loggbok', icon: BookOpen },
+		{
+			href: resolve('/handleliste'),
+			path: '/handleliste',
+			label: 'Handleliste',
+			icon: ShoppingBasket
+		}
 	];
 
 	onMount(() => {
@@ -68,7 +74,7 @@
 </main>
 
 <nav
-	class="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-3 border-t border-base-300 bg-base-100 lg:inset-y-0 lg:right-auto lg:h-auto lg:w-20 lg:grid-cols-1 lg:grid-rows-3 lg:border-t-0 lg:border-r lg:pt-16"
+	class="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t border-base-300 bg-base-100 lg:inset-y-0 lg:right-auto lg:h-auto lg:w-20 lg:grid-cols-1 lg:grid-rows-4 lg:border-t-0 lg:border-r lg:pt-16"
 >
 	{#each links as link (link.href)}
 		<a

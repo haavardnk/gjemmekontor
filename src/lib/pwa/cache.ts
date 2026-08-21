@@ -1,4 +1,4 @@
-export const appShellPaths = ['/map', '/shots', '/logbook'] as const;
+export const appShellPaths = ['/map', '/shots', '/logbook', '/handleliste'] as const;
 
 export function relativeAppPath(pathname: string, base: string): string | undefined {
 	if (!base) {

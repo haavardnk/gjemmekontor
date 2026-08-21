@@ -53,6 +53,7 @@ describe('runtime environment', (): void => {
 			APP_PASSWORD: 'shared-password',
 			SESSION_SECRET: '0123456789abcdef0123456789abcdef',
 			DATA_DIR: '/data',
+			GOOGLE_MY_MAPS_ID: 'map-id',
 			ORIGIN: 'https://gjemmekontor.example.com'
 		};
 
@@ -68,5 +69,39 @@ describe('runtime environment', (): void => {
 		expect(() => parseRuntimeConfig({ ...environment, APP_VERSION: '00.1.0' })).toThrow(
 			'Invalid runtime environment: APP_VERSION'
 		);
+	});
+
+	test('maps a complete Bring configuration', (): void => {
+		expect(
+			parseRuntimeConfig({
+				APP_PASSWORD: 'shared-password',
+				SESSION_SECRET: '0123456789abcdef0123456789abcdef',
+				DATA_DIR: '/data',
+				GOOGLE_MY_MAPS_ID: 'map-id',
+				ORIGIN: 'https://gjemmekontor.example.com',
+				BRING_EMAIL: 'crew@example.com',
+				BRING_PASSWORD: 'bring-password',
+				BRING_LIST_UUID: 'trip-list'
+			})
+		).toMatchObject({
+			bring: {
+				email: 'crew@example.com',
+				password: 'bring-password',
+				listUuid: 'trip-list'
+			}
+		});
+	});
+
+	test('rejects a partial Bring configuration', (): void => {
+		expect(() =>
+			parseRuntimeConfig({
+				APP_PASSWORD: 'shared-password',
+				SESSION_SECRET: '0123456789abcdef0123456789abcdef',
+				DATA_DIR: '/data',
+				GOOGLE_MY_MAPS_ID: 'map-id',
+				ORIGIN: 'https://gjemmekontor.example.com',
+				BRING_EMAIL: 'crew@example.com'
+			})
+		).toThrow('Invalid runtime environment: BRING_PASSWORD, BRING_LIST_UUID');
 	});
 });

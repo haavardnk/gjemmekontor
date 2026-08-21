@@ -2,6 +2,7 @@ import { type DBSchema, type IDBPDatabase, openDB } from 'idb';
 
 import type { MapMode, MapSnapshot } from '$lib/map/types';
 import type { GpxExtraction } from '$lib/trip/gpx';
+import type { HandlelisteSnapshot } from '$lib/trip/handleliste';
 
 export type JsonValue =
 	null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -38,6 +39,12 @@ export type OfflineMapRecord = {
 	updatedAt: number;
 };
 
+export type HandlelisteSnapshotRecord = {
+	id: 'current';
+	value: HandlelisteSnapshot;
+	updatedAt: number;
+};
+
 export type MetaRecord = {
 	key: string;
 	value: JsonValue;
@@ -61,6 +68,7 @@ export interface GjemmekontorDatabase extends DBSchema {
 	mutations: { key: string; value: PendingMutation };
 	mapSnapshot: { key: string; value: MapSnapshotRecord };
 	offlineMap: { key: string; value: OfflineMapRecord };
+	handlelisteSnapshot: { key: string; value: HandlelisteSnapshotRecord };
 	pendingGpxUploads: { key: string; value: PendingGpxUpload };
 	meta: { key: string; value: MetaRecord };
 }
@@ -70,7 +78,7 @@ export const clientDatabaseName = 'gjemmekontor';
 export function openClientDatabase(
 	name = clientDatabaseName
 ): Promise<IDBPDatabase<GjemmekontorDatabase>> {
-	return openDB<GjemmekontorDatabase>(name, 2, {
+	return openDB<GjemmekontorDatabase>(name, 3, {
 		upgrade(db, oldVersion): void {
 			if (oldVersion < 1) {
 				db.createObjectStore('state', { keyPath: 'key' });
@@ -81,6 +89,9 @@ export function openClientDatabase(
 			}
 			if (oldVersion < 2) {
 				db.createObjectStore('pendingGpxUploads', { keyPath: 'id' });
+			}
+			if (oldVersion < 3) {
+				db.createObjectStore('handlelisteSnapshot', { keyPath: 'id' });
 			}
 		}
 	});

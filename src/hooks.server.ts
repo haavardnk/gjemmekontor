@@ -21,7 +21,7 @@ function applySecurityHeaders(response: Response, pathname: string): void {
 	response.headers.set('Referrer-Policy', 'no-referrer');
 	response.headers.set('X-Frame-Options', 'DENY');
 	if (
-		/^\/api\/(auth|state|map|logbook\/gpx)(\/|$)/.test(pathname) &&
+		/^\/api\/(auth|state|map|logbook\/gpx|handleliste)(\/|$)/.test(pathname) &&
 		!/^\/api\/map\/(offline\/(normal|nautical|satellite)|(depth-contours|marine-profile)\/\d+\/\d+\/\d+|harbours)$/.test(
 			pathname
 		)

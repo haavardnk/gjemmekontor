@@ -10,6 +10,9 @@ Copy `docker-compose.example.yml` and create a sibling `.env`:
 APP_PASSWORD=replace-with-a-strong-password
 SESSION_SECRET=replace-with-32-random-bytes
 GOOGLE_MY_MAPS_ID=replace-with-a-public-map-id
+BRING_EMAIL=replace-with-bring-account-email
+BRING_PASSWORD=replace-with-bring-account-password
+BRING_LIST_UUID=replace-with-bring-list-uuid
 ORIGIN=https://app.example.com
 ```
 
@@ -34,6 +37,9 @@ Health endpoint: `GET /api/health`.
 | `DATA_DIR`                | Persistent data directory; use `/data` in Docker           |
 | `BUNDLED_OFFLINE_MAP_DIR` | Optional directory containing image-bundled PMTiles        |
 | `GOOGLE_MY_MAPS_ID`       | Public Google My Maps map ID                               |
+| `BRING_EMAIL`             | Email for the shared Bring account                         |
+| `BRING_PASSWORD`          | Password for the shared Bring account                      |
+| `BRING_LIST_UUID`         | UUID of the trip shopping list                             |
 | `ORIGIN`                  | Exact public HTTP or HTTPS origin without a trailing slash |
 | `BODY_SIZE_LIMIT`         | Adapter request limit; keep at `6M` for 5 MB GPX uploads   |
 | `HOST`                    | Listen address; image default is `0.0.0.0`                 |
@@ -65,6 +71,18 @@ Licensed operator-provided packages in `/data` override bundled files with the s
 ```
 
 Only redistribute archives permitted by their data providers. Back up externally mounted archives separately.
+
+## Bring
+
+Handleliste uses one server-side Bring account and one list. Find the list UUID before deployment:
+
+```sh
+npm run bring:lists
+```
+
+The command reads `BRING_EMAIL` and `BRING_PASSWORD` from the ignored `.env` file. Set the matching UUID as `BRING_LIST_UUID`. Credentials never reach the browser. The app keeps the last successful list snapshot on each device for read-only use without a connection.
+
+The integration uses the unofficial `bring-shopping` wrapper. Bring does not publish this API, so upstream changes may interrupt Handleliste without affecting the other modules.
 
 ## Upgrade
 

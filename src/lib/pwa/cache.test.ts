@@ -12,9 +12,12 @@ describe('PWA cache paths', (): void => {
 		expect(relativeAppPath(pathname, base)).toBe(expected);
 	});
 
-	test.each(['/map', '/shots', '/logbook'])('recognizes shell page %s', (pathname): void => {
-		expect(isAppShellPath(pathname, '')).toBe(true);
-	});
+	test.each(['/map', '/shots', '/logbook', '/handleliste'])(
+		'recognizes shell page %s',
+		(pathname): void => {
+			expect(isAppShellPath(pathname, '')).toBe(true);
+		}
+	);
 
 	test('excludes login, APIs, assets, and partial route matches', (): void => {
 		expect(isAppShellPath('/login', '')).toBe(false);

@@ -11,6 +11,7 @@ A shared, offline-first travel app for a sailing trip in Croatia.
 - Downloadable PMTiles packages for offline maps
 - Daily video shot list and media digest
 - Shared sailing logbook with Orca GPX import and actual routes
+- Live shared Bring shopping list with completion, restore, detail editing, and cached offline access
 - Offline editing and synchronization between devices
 - Installable progressive web app
 
