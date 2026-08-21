@@ -18,14 +18,13 @@
 	const point = $derived(
 		feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined
 	);
-	const googleMapsQuery = $derived(
-		point
-			? encodeURIComponent(
-					[feature.properties.title, feature.properties.address, `${point[1]},${point[0]}`]
-						.filter(Boolean)
-						.join(' ')
-				)
-			: ''
+	const googleMapsPlaceQuery = $derived(
+		encodeURIComponent(
+			[feature.properties.title, feature.properties.address].filter(Boolean).join(', ')
+		)
+	);
+	const googleMapsPositionQuery = $derived(
+		point ? encodeURIComponent(`${point[1]},${point[0]}`) : ''
 	);
 	const hiddenFields = new Set(['description', 'name', 'opis', 'title']);
 	const fieldLabels: Record<string, string> = {
@@ -132,15 +131,26 @@
 					</p>
 				</div>
 			</div>
-			<a
-				class="btn w-full btn-primary"
-				href={`https://www.google.com/maps/search/?api=1&query=${googleMapsQuery}`}
-				target="_blank"
-				rel="noreferrer"
-			>
-				<ExternalLink size={18} />
-				Åpne i Google Maps
-			</a>
+			<div class="grid gap-2">
+				<a
+					class="btn w-full btn-primary"
+					href={`https://www.google.com/maps/search/?api=1&query=${googleMapsPlaceQuery}`}
+					target="_blank"
+					rel="noreferrer"
+				>
+					<ExternalLink size={18} />
+					Finn stedet i Google Maps
+				</a>
+				<a
+					class="btn w-full btn-outline"
+					href={`https://www.google.com/maps/search/?api=1&query=${googleMapsPositionQuery}`}
+					target="_blank"
+					rel="noreferrer"
+				>
+					<MapPin size={18} />
+					Vis posisjonen i Google Maps
+				</a>
+			</div>
 		{/if}
 		<p class="border-t border-base-300 pt-4 text-xs text-base-content/50">
 			Google My Maps · Oppdatert {updated}

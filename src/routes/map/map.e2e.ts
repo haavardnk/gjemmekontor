@@ -317,9 +317,13 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await expect(
 		page.locator('div[data-source-icon-href]', { hasText: 'Ankerplasser og fortøyninger' })
 	).toHaveAttribute('data-source-icon-href', googleIconHref);
-	await expect(page.getByRole('link', { name: 'Åpne i Google Maps' })).toHaveAttribute(
+	await expect(page.getByRole('link', { name: 'Finn stedet i Google Maps' })).toHaveAttribute(
 		'href',
-		'https://www.google.com/maps/search/?api=1&query=Stiniva-bukten%20Vis%2C%20Kroatia%2043.25%2C16.25'
+		'https://www.google.com/maps/search/?api=1&query=Stiniva-bukten%2C%20Vis%2C%20Kroatia'
+	);
+	await expect(page.getByRole('link', { name: 'Vis posisjonen i Google Maps' })).toHaveAttribute(
+		'href',
+		'https://www.google.com/maps/search/?api=1&query=43.25%2C16.25'
 	);
 
 	await page.getByRole('button', { name: 'Oppdater kartet' }).click();
