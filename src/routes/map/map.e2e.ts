@@ -426,6 +426,56 @@ test('shows map bearing and resets north from the compass', async ({ page }) => 
 	await expect(compass).toHaveCount(0);
 });
 
+test('restores map position and zoom after app navigation', async ({ page }) => {
+	await mockMap(page);
+	await login(page);
+	await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready', 'true');
+	await expect(page.getByRole('button', { name: 'Tilbakestill kartutsnitt' })).toHaveCount(0);
+	const canvas = page.locator('.maplibregl-canvas');
+	const box = await canvas.boundingBox();
+	if (!box) throw new Error('MAP_CANVAS_UNAVAILABLE');
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2 + 70, box.y + box.height / 2 + 50, { steps: 10 });
+	await page.mouse.up();
+	await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapCamera'))).not.toBeNull();
+	const zoomBefore = await page.evaluate(() => {
+		const value = sessionStorage.getItem('mapCamera');
+		return value ? (JSON.parse(value) as { zoom: number }).zoom : 0;
+	});
+	await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const value = sessionStorage.getItem('mapCamera');
+				return value ? (JSON.parse(value) as { zoom: number }).zoom : 0;
+			})
+		)
+		.toBeGreaterThan(zoomBefore + 0.5);
+	const camera = await page.evaluate(() => {
+		const value = sessionStorage.getItem('mapCamera');
+		if (!value) throw new Error('MAP_CAMERA_MISSING');
+		const parsed = JSON.parse(value) as { bearing: number };
+		parsed.bearing = 32;
+		const updated = JSON.stringify(parsed);
+		sessionStorage.setItem('mapCamera', updated);
+		return updated;
+	});
+	await page.getByRole('link', { name: 'Opptak' }).click();
+	await expect(page).toHaveURL(/\/shots/);
+	await page.getByRole('link', { name: 'Kart' }).click();
+	await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready', 'true');
+	await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapCamera'))).toBe(camera);
+	await expect(
+		page.getByRole('button', { name: 'Tilbakestill kartretning mot nord' })
+	).toBeVisible();
+	const resetView = page.getByRole('button', { name: 'Tilbakestill kartutsnitt' });
+	await expect(resetView).toBeVisible();
+	await resetView.click();
+	await expect(resetView).toHaveCount(0);
+	await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapCamera'))).toBeNull();
+});
+
 test('replaces a planned day route with the accumulated GPX track', async ({ page }) => {
 	await mockMap(page);
 	await login(page);

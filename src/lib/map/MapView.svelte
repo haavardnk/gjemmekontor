@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { LocateFixed, Navigation, Navigation2 } from '@lucide/svelte';
+	import { LocateFixed, Maximize, Navigation, Navigation2 } from '@lucide/svelte';
 	import { layers, namedFlavor } from '@protomaps/basemaps';
 	import {
 		Anchor,
@@ -55,13 +55,23 @@
 	);
 	let following = $state(false);
 	let bearing = $state(0);
+	let cameraChanged = $state(false);
 	let mapReady = $state(false);
 	let watchId: number | undefined;
 	let lastPosition: GeolocationPosition | undefined;
 	let styleRequest = 0;
 	let harbourRequest = 0;
 	let positionMarkerImage: ImageData | undefined;
+	let resettingCamera = false;
 	const protocol = new Protocol({ metadata: true });
+	const cameraStorageKey = 'mapCamera';
+
+	type MapCamera = {
+		center: Position;
+		zoom: number;
+		bearing: number;
+		pitch: number;
+	};
 
 	function isGeoJsonSource(source: Source | undefined): source is GeoJSONSource {
 		return source !== undefined && 'setData' in source;
@@ -244,6 +254,81 @@
 
 	function resetBearing(): void {
 		map?.resetNorth({ duration: 300 });
+	}
+
+	function storedCamera(): MapCamera | undefined {
+		try {
+			const value = JSON.parse(sessionStorage.getItem(cameraStorageKey) ?? 'null') as unknown;
+			if (!value || typeof value !== 'object') {
+				return undefined;
+			}
+			const camera = value as Partial<MapCamera>;
+			const center = camera.center;
+			const zoom = camera.zoom;
+			const cameraBearing = camera.bearing;
+			const pitch = camera.pitch;
+			if (
+				!Array.isArray(center) ||
+				center.length !== 2 ||
+				!center.every(Number.isFinite) ||
+				typeof zoom !== 'number' ||
+				!Number.isFinite(zoom) ||
+				typeof cameraBearing !== 'number' ||
+				!Number.isFinite(cameraBearing) ||
+				typeof pitch !== 'number' ||
+				!Number.isFinite(pitch) ||
+				center[0] < -180 ||
+				center[0] > 180 ||
+				center[1] < -90 ||
+				center[1] > 90 ||
+				zoom < 0 ||
+				zoom > 24 ||
+				pitch < 0 ||
+				pitch > 85
+			) {
+				return undefined;
+			}
+			return { center, zoom, bearing: cameraBearing, pitch };
+		} catch {
+			return undefined;
+		}
+	}
+
+	function saveCamera(): void {
+		if (!map) {
+			return;
+		}
+		if (resettingCamera) {
+			resettingCamera = false;
+			return;
+		}
+		const center = map.getCenter();
+		const camera: MapCamera = {
+			center: [center.lng, center.lat],
+			zoom: map.getZoom(),
+			bearing: map.getBearing(),
+			pitch: map.getPitch()
+		};
+		cameraChanged = true;
+		try {
+			sessionStorage.setItem(cameraStorageKey, JSON.stringify(camera));
+		} catch {
+			return;
+		}
+	}
+
+	function resetCamera(): void {
+		if (!map) {
+			return;
+		}
+		resettingCamera = true;
+		cameraChanged = false;
+		try {
+			sessionStorage.removeItem(cameraStorageKey);
+		} catch {
+			resettingCamera = true;
+		}
+		map.fitBounds(snapshot.bounds, { padding: 40, duration: 300 });
 	}
 
 	function featureCollection(kind: 'points' | 'lines'): {
@@ -693,15 +778,30 @@
 				maplibre.removeProtocol('pmtiles');
 				return;
 			}
+			const camera = storedCamera();
+			cameraChanged = camera !== undefined;
+			bearing = camera?.bearing ?? 0;
 			map = new maplibre.Map({
 				container,
 				style,
-				bounds: snapshot.bounds,
-				fitBoundsOptions: { padding: 40 },
+				...(camera
+					? {
+							center: camera.center,
+							zoom: camera.zoom,
+							bearing: camera.bearing,
+							pitch: camera.pitch
+						}
+					: { bounds: snapshot.bounds, fitBoundsOptions: { padding: 40 } }),
 				attributionControl: { compact: true }
 			});
 			map.on('style.load', addApplicationLayers);
-			map.once('load', collapseAttribution);
+			map.once('load', (): void => {
+				collapseAttribution();
+				map?.on('moveend', (): void => {
+					void updateHarbours();
+					saveCamera();
+				});
+			});
 			const selectPoint = (event: { features?: MapGeoJSONFeature[] }): void => {
 				const id = event.features?.[0]?.properties.featureId;
 				if (typeof id === 'string') {
@@ -730,7 +830,6 @@
 				following = false;
 			});
 			map.on('rotate', updateBearing);
-			map.on('moveend', updateHarbours);
 		})();
 		return (): void => {
 			disposed = true;
@@ -772,6 +871,17 @@
 				>
 					<Navigation2 size={20} />
 				</span>
+			</button>
+		{/if}
+		{#if cameraChanged}
+			<button
+				class="btn btn-circle bg-base-100 shadow"
+				type="button"
+				onclick={resetCamera}
+				aria-label="Tilbakestill kartutsnitt"
+				title="Tilbakestill kartutsnitt"
+			>
+				<Maximize size={20} />
 			</button>
 		{/if}
 		<button
