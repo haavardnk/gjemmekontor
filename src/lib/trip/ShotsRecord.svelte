@@ -63,14 +63,12 @@
 		return Boolean(normalizedScenarioQuery) || expandedGroups[title] === true;
 	}
 
-	function updateGroupOpen(title: string, event: Event): void {
+	function toggleGroup(title: string, event: MouseEvent): void {
+		event.preventDefault();
 		if (normalizedScenarioQuery) {
 			return;
 		}
-		const details = event.currentTarget;
-		if (details instanceof HTMLDetailsElement) {
-			expandedGroups[title] = details.open;
-		}
+		expandedGroups[title] = expandedGroups[title] !== true;
 	}
 
 	function roll(moduleId: string, index: number): 'A-roll' | 'B-roll' {
@@ -180,10 +178,12 @@
 					<details
 						class="group rounded-lg border border-base-300 bg-base-200/40"
 						open={groupOpen(group.title)}
-						ontoggle={(event) => updateGroupOpen(group.title, event)}
 						data-scene-group={group.title}
 					>
-						<summary class="flex cursor-pointer list-none items-center justify-between px-3 py-2.5">
+						<summary
+							class="flex cursor-pointer list-none items-center justify-between px-3 py-2.5"
+							onclick={(event) => toggleGroup(group.title, event)}
+						>
 							<h3 class="text-xs font-bold tracking-wide text-base-content/65 uppercase">
 								{group.title}
 							</h3>
