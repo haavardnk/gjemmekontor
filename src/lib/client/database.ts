@@ -73,26 +73,20 @@ export interface GjemmekontorDatabase extends DBSchema {
 	meta: { key: string; value: MetaRecord };
 }
 
-export const clientDatabaseName = 'gjemmekontor';
+export const clientDatabaseName = 'gjemmekontor-data';
 
 export function openClientDatabase(
 	name = clientDatabaseName
 ): Promise<IDBPDatabase<GjemmekontorDatabase>> {
-	return openDB<GjemmekontorDatabase>(name, 3, {
-		upgrade(db, oldVersion): void {
-			if (oldVersion < 1) {
-				db.createObjectStore('state', { keyPath: 'key' });
-				db.createObjectStore('mutations', { keyPath: 'mutationId' });
-				db.createObjectStore('mapSnapshot', { keyPath: 'id' });
-				db.createObjectStore('offlineMap', { keyPath: 'id' });
-				db.createObjectStore('meta', { keyPath: 'key' });
-			}
-			if (oldVersion < 2) {
-				db.createObjectStore('pendingGpxUploads', { keyPath: 'id' });
-			}
-			if (oldVersion < 3) {
-				db.createObjectStore('handlelisteSnapshot', { keyPath: 'id' });
-			}
+	return openDB<GjemmekontorDatabase>(name, 1, {
+		upgrade(db): void {
+			db.createObjectStore('state', { keyPath: 'key' });
+			db.createObjectStore('mutations', { keyPath: 'mutationId' });
+			db.createObjectStore('mapSnapshot', { keyPath: 'id' });
+			db.createObjectStore('offlineMap', { keyPath: 'id' });
+			db.createObjectStore('handlelisteSnapshot', { keyPath: 'id' });
+			db.createObjectStore('pendingGpxUploads', { keyPath: 'id' });
+			db.createObjectStore('meta', { keyPath: 'key' });
 		}
 	});
 }

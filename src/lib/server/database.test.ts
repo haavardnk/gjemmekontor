@@ -14,8 +14,8 @@ afterEach((): void => {
 	}
 });
 
-describe('database migration', (): void => {
-	test('creates the schema and configures SQLite idempotently', (): void => {
+describe('database', (): void => {
+	test('creates the complete version 1 schema', (): void => {
 		const dataDir = mkdtempSync(join(tmpdir(), 'gjemmekontor-'));
 		temporaryDirectories.push(dataDir);
 
@@ -30,15 +30,11 @@ describe('database migration', (): void => {
 		expect(first.pragma('foreign_keys', { simple: true })).toBe(1);
 		expect(first.pragma('busy_timeout', { simple: true })).toBe(5000);
 		expect(first.pragma('synchronous', { simple: true })).toBe(1);
-		expect(first.pragma('user_version', { simple: true })).toBe(2);
-		first.close();
-
-		const second = createDatabase(dataDir);
-		const revision = second
+		expect(first.pragma('user_version', { simple: true })).toBe(1);
+		const revision = first
 			.prepare("SELECT value FROM meta WHERE key = 'global_revision'")
 			.get() as { value: string };
 		expect(revision.value).toBe('0');
-		expect(second.pragma('user_version', { simple: true })).toBe(2);
-		second.close();
+		first.close();
 	});
 });

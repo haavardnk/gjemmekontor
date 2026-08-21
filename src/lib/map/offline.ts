@@ -7,7 +7,12 @@ import {
 	openClientDatabase
 } from '$lib/client/database';
 
-import type { MapMode, MapSnapshot, OfflineMapPackage } from './types';
+import {
+	isCurrentMapSnapshot,
+	type MapMode,
+	type MapSnapshot,
+	type OfflineMapPackage
+} from './types';
 
 export type OfflineMapProgress = {
 	received: number;
@@ -22,7 +27,7 @@ export async function storedMapSnapshot(
 	if (!database) {
 		clientDatabase.close();
 	}
-	return record?.value.version === 5 ? record : undefined;
+	return isCurrentMapSnapshot(record?.value) ? record : undefined;
 }
 
 export async function storeMapSnapshot(

@@ -120,7 +120,7 @@ export type MapLayer = {
 export type MapBounds = [west: number, south: number, east: number, north: number];
 
 export type MapSnapshot = {
-	version: 5;
+	version: 1;
 	type: 'FeatureCollection';
 	title: string;
 	description: string;
@@ -139,3 +139,40 @@ export type MapApiResponse = {
 	error?: string;
 	sourceMapId?: string;
 };
+
+export function isCurrentMapSnapshot(value: unknown): value is MapSnapshot {
+	if (value === null || typeof value !== 'object') {
+		return false;
+	}
+	const snapshot = value as Partial<MapSnapshot>;
+	if (
+		snapshot.version !== 1 ||
+		!Array.isArray(snapshot.sourceStyles) ||
+		!Array.isArray(snapshot.features)
+	) {
+		return false;
+	}
+	const sourceStyleKeys = new Set<string>();
+	for (const style of snapshot.sourceStyles) {
+		if (!style || typeof style !== 'object') {
+			return false;
+		}
+		const expected = mapPointCategory(style.iconCode);
+		if (
+			typeof style.key !== 'string' ||
+			style.symbol !== expected.symbol ||
+			style.label !== expected.label ||
+			style.color !== expected.color
+		) {
+			return false;
+		}
+		sourceStyleKeys.add(style.key);
+	}
+	return snapshot.features.every((feature) => {
+		if (!feature || typeof feature !== 'object' || feature.geometry?.type !== 'Point') {
+			return true;
+		}
+		const key = feature.properties?.sourceStyleKey;
+		return typeof key === 'string' && sourceStyleKeys.has(key);
+	});
+}

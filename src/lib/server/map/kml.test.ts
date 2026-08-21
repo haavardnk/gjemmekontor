@@ -35,7 +35,7 @@ describe('KML parser', (): void => {
 		);
 
 		expect(snapshot.title).toBe('Croatia seiltur! V2');
-		expect(snapshot.version).toBe(5);
+		expect(snapshot.version).toBe(1);
 		expect(snapshot.sourceHash).toBe(
 			'92abaf1dbbe4914fdfc5c71caa66e8977810d27bdd9fc902e6cfe22196f32d0d'
 		);

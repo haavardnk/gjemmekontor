@@ -93,7 +93,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Migrations run at startup and are forward-only.
+Database schema updates run at startup and are forward-only.
 
 ## GHCR
 

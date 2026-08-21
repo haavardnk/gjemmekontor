@@ -94,19 +94,30 @@ describe('Google map cache', (): void => {
 		expect(readFileSync(paths.snapshot, 'utf8')).toBe(cachedJson);
 	});
 
-	test('refreshes a legacy snapshot without source styles', async (): Promise<void> => {
+	test('refreshes a snapshot with stale category semantics', async (): Promise<void> => {
 		const fetchImplementation = vi
 			.fn<typeof fetch>()
 			.mockImplementation(async (): Promise<Response> => new Response(fixture));
 		const paths = mapCachePaths(temporaryDirectory());
 		const service = createMapService({ mapId: 'map-id', paths, fetch: fetchImplementation });
 		const current = await service.refresh();
-		writeFileSync(paths.snapshot, JSON.stringify({ ...current.snapshot, version: 1 }));
+		writeFileSync(
+			paths.snapshot,
+			JSON.stringify({
+				...current.snapshot,
+				sourceStyles: current.snapshot.sourceStyles.map((style) =>
+					style.iconCode === '1577'
+						? { ...style, symbol: 'restaurant-mooring', label: 'Restaurantfortøyninger' }
+						: style
+				)
+			})
+		);
 
 		const refreshed = await service.get();
 
-		expect(refreshed.snapshot.version).toBe(5);
-		expect(refreshed.snapshot.sourceStyles).toHaveLength(6);
+		expect(refreshed.snapshot.sourceStyles).toContainEqual(
+			expect.objectContaining({ iconCode: '1577', symbol: 'restaurant', label: 'Restauranter' })
+		);
 		expect(fetchImplementation).toHaveBeenCalledTimes(2);
 	});
 

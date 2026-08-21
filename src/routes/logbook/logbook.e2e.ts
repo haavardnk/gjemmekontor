@@ -171,7 +171,7 @@ test('offers every nautical map point as a destination', async ({ page }) => {
 		}
 	}));
 	const snapshot = {
-		version: 5,
+		version: 1,
 		type: 'FeatureCollection',
 		title: 'Test map',
 		description: '',

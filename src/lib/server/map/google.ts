@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { MapApiResponse, MapSnapshot } from '$lib/map/types';
+import { isCurrentMapSnapshot, type MapApiResponse, type MapSnapshot } from '$lib/map/types';
 
 import { parseKml } from './kml';
 
@@ -120,8 +120,8 @@ export function createMapService(dependencies: MapServiceDependencies): {
 	let refreshPromise: Promise<MapApiResponse> | undefined;
 
 	async function cachedSnapshot(): Promise<MapSnapshot | undefined> {
-		const snapshot = await optionalJson<MapSnapshot>(dependencies.paths.snapshot);
-		return snapshot?.version === 5 ? snapshot : undefined;
+		const snapshot = await optionalJson<unknown>(dependencies.paths.snapshot);
+		return isCurrentMapSnapshot(snapshot) ? snapshot : undefined;
 	}
 
 	async function fetchSnapshot(): Promise<MapApiResponse> {
@@ -133,10 +133,10 @@ export function createMapService(dependencies: MapServiceDependencies): {
 				throw new MapServiceError('MAP_INVALID_RESPONSE', 500);
 			}
 			const headers = new Headers();
-			if (metadata?.url === url.href && metadata.etag) {
+			if (cached && metadata?.url === url.href && metadata.etag) {
 				headers.set('If-None-Match', metadata.etag);
 			}
-			if (metadata?.url === url.href && metadata.lastModified) {
+			if (cached && metadata?.url === url.href && metadata.lastModified) {
 				headers.set('If-Modified-Since', metadata.lastModified);
 			}
 			let response: Response;

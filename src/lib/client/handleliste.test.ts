@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 
-import { deleteDB, openDB } from 'idb';
+import { deleteDB } from 'idb';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import type { HandlelisteSnapshot } from '$lib/trip/handleliste';
@@ -38,30 +38,5 @@ describe('Handleliste cache', (): void => {
 
 		expect(await storedHandlelisteSnapshot(database)).toEqual(snapshot);
 		database.close();
-	});
-
-	test('adds the snapshot store without losing version 2 data', async (): Promise<void> => {
-		const name = databaseName();
-		const oldDatabase = await openDB(name, 2, {
-			upgrade(database): void {
-				database.createObjectStore('state', { keyPath: 'key' });
-				database.createObjectStore('mutations', { keyPath: 'mutationId' });
-				database.createObjectStore('mapSnapshot', { keyPath: 'id' });
-				database.createObjectStore('offlineMap', { keyPath: 'id' });
-				database.createObjectStore('meta', { keyPath: 'key' });
-				database.createObjectStore('pendingGpxUploads', { keyPath: 'id' });
-			}
-		});
-		await oldDatabase.put('meta', { key: 'clientId', value: 'existing-client' });
-		oldDatabase.close();
-
-		const upgraded = await openClientDatabase(name);
-
-		expect(upgraded.objectStoreNames.contains('handlelisteSnapshot')).toBe(true);
-		expect(await upgraded.get('meta', 'clientId')).toEqual({
-			key: 'clientId',
-			value: 'existing-client'
-		});
-		upgraded.close();
 	});
 });

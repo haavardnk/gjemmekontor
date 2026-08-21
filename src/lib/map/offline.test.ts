@@ -32,7 +32,7 @@ describe('offline maps', (): void => {
 	test('stores and restores the latest map snapshot', async (): Promise<void> => {
 		const database = await openClientDatabase(databaseName());
 		const snapshot = {
-			version: 5,
+			version: 1,
 			type: 'FeatureCollection',
 			title: 'Trip map',
 			description: '',
@@ -47,6 +47,39 @@ describe('offline maps', (): void => {
 		await storeMapSnapshot(snapshot, database);
 
 		expect((await storedMapSnapshot(database))?.value).toEqual(snapshot);
+		database.close();
+	});
+
+	test('rejects a cached snapshot with stale category semantics', async (): Promise<void> => {
+		const database = await openClientDatabase(databaseName());
+		await database.put('mapSnapshot', {
+			id: 'current',
+			updatedAt: Date.now(),
+			value: {
+				version: 1,
+				type: 'FeatureCollection',
+				title: 'Trip map',
+				description: '',
+				fetchedAt: '2026-08-20T10:00:00.000Z',
+				sourceHash: 'hash',
+				bounds: [15.7, 42.7, 17, 43.7],
+				layers: [],
+				sourceStyles: [
+					{
+						key: 'source-style-old',
+						color: '#9a5b3f',
+						iconHref: '',
+						iconCode: '1577',
+						symbol: 'restaurant-mooring',
+						label: 'Restaurantfortøyninger',
+						count: 1
+					}
+				],
+				features: []
+			} as never
+		});
+
+		expect(await storedMapSnapshot(database)).toBeUndefined();
 		database.close();
 	});
 

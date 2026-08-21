@@ -35,7 +35,7 @@ const layerTwo = {
 };
 
 const snapshot = {
-	version: 5,
+	version: 1,
 	type: 'FeatureCollection',
 	title: 'Croatia seiltur! V2',
 	description: 'Seiltur',
@@ -475,7 +475,7 @@ test('restores the cached map snapshot when the map API is unavailable', async (
 			page.evaluate(
 				(): Promise<boolean> =>
 					new Promise((resolve, reject) => {
-						const request = indexedDB.open('gjemmekontor');
+						const request = indexedDB.open('gjemmekontor-data');
 						request.onerror = (): void => reject(request.error);
 						request.onsuccess = (): void => {
 							const database = request.result;

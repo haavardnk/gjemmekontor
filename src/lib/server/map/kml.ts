@@ -406,7 +406,7 @@ export function parseKml(kml: string, fetchedAt = new Date().toISOString()): Map
 		Math.max(...latitudes)
 	];
 	return {
-		version: 5,
+		version: 1,
 		type: 'FeatureCollection',
 		title: text(documentNode.name) || 'Kart',
 		description: safeHtml(documentNode.description),

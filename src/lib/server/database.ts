@@ -8,7 +8,7 @@ import { getRuntimeConfig } from './env';
 const migrations = [
 	(db: Database.Database): void => {
 		db.exec(`
-			CREATE TABLE IF NOT EXISTS state_entries (
+			CREATE TABLE state_entries (
 				key TEXT PRIMARY KEY,
 				value TEXT NOT NULL,
 				revision INTEGER NOT NULL UNIQUE CHECK (revision > 0),
@@ -16,21 +16,17 @@ const migrations = [
 				mutation_id TEXT NOT NULL,
 				updated_at TEXT NOT NULL
 			);
-			CREATE TABLE IF NOT EXISTS sessions (
+			CREATE TABLE sessions (
 				id_hash TEXT PRIMARY KEY,
 				expires_at INTEGER NOT NULL,
 				created_at INTEGER NOT NULL
 			);
-			CREATE INDEX IF NOT EXISTS sessions_expires_at ON sessions (expires_at);
-			CREATE TABLE IF NOT EXISTS meta (
+			CREATE INDEX sessions_expires_at ON sessions (expires_at);
+			CREATE TABLE meta (
 				key TEXT PRIMARY KEY,
 				value TEXT NOT NULL
 			);
-			INSERT OR IGNORE INTO meta (key, value) VALUES ('global_revision', '0');
-		`);
-	},
-	(db: Database.Database): void => {
-		db.exec(`
+			INSERT INTO meta (key, value) VALUES ('global_revision', '0');
 			CREATE TABLE gpx_uploads (
 				id TEXT PRIMARY KEY,
 				leg_key TEXT NOT NULL,
@@ -53,6 +49,9 @@ function migrate(db: Database.Database): void {
 	const currentVersion = db.pragma('user_version', { simple: true });
 	if (typeof currentVersion !== 'number') {
 		throw new Error('INVALID_DATABASE_VERSION');
+	}
+	if (currentVersion > migrations.length) {
+		throw new Error('DATABASE_VERSION_TOO_NEW');
 	}
 
 	for (let index = currentVersion; index < migrations.length; index += 1) {

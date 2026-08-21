@@ -1,6 +1,6 @@
 # Backup and restore
 
-All durable state lives under `DATA_DIR` (`/data` in the container). Database migrations are forward-only, so back up before upgrades.
+All durable state lives under `DATA_DIR` (`/data` in the container). Database schema updates are forward-only, so back up before upgrades.
 
 ## Scope
 
