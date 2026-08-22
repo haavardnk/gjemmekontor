@@ -55,9 +55,10 @@
 	let query = $state('');
 	let filterOpen = $state(false);
 	let routeScope = $state<'all' | 'current'>('all');
+	const currentMapDayIndex = $derived(tripDayState.todayIndex ?? tripDayState.selectedIndex);
 	const allActualRoutes = $derived(actualRouteFeatures(sharedState.values));
 	const actualRoutes = $derived(
-		visibleActualRoutes(allActualRoutes, tripDayState.selectedIndex, routeScope === 'current')
+		visibleActualRoutes(allActualRoutes, currentMapDayIndex, routeScope === 'current')
 	);
 	const hiddenRouteIds = $derived(
 		hiddenPlannedRouteIds(snapshot?.features ?? [], completedDayNumbers(allActualRoutes))
@@ -127,10 +128,10 @@
 	);
 	const currentMapLayers = $derived(
 		(snapshot?.layers ?? []).filter((layer) =>
-			layerDayNumbers(layer.name).includes(tripDayState.selectedIndex + 1)
+			layerDayNumbers(layer.name).includes(currentMapDayIndex + 1)
 		)
 	);
-	const currentTripDay = $derived(tripDays[tripDayState.selectedIndex]);
+	const currentTripDay = $derived(tripDays[currentMapDayIndex]);
 
 	async function errorCode(response: Response): Promise<string | undefined> {
 		try {
@@ -470,7 +471,8 @@
 					{#if currentMapLayers.length > 0}
 						{currentMapLayers.map((layer) => layer.name).join(', ')}
 					{:else}
-						Ingen dagsmappe for {currentTripDay?.dateLabel.toLocaleLowerCase('nb-NO')}.
+						Google-kartets dagsmapper dekker 5.–18. september. Alle kartpunkter vises for
+						{currentTripDay?.dateLabel.toLocaleLowerCase('nb-NO')}.
 					{/if}
 				</p>
 				<div class="join w-full">

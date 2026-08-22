@@ -127,7 +127,7 @@ const snapshot = {
 	]
 };
 
-async function mockMap(page: Page): Promise<void> {
+async function mockMap(page: Page, mapSnapshot = snapshot): Promise<void> {
 	await page.route('**/api/map{,/**}', async (route) => {
 		const pathname = new URL(route.request().url()).pathname;
 		if (pathname === '/api/map/offline') {
@@ -164,7 +164,9 @@ async function mockMap(page: Page): Promise<void> {
 			await route.fulfill({ json: { type: 'FeatureCollection', features: [] } });
 			return;
 		}
-		await route.fulfill({ json: { snapshot, stale: false, refreshing: false, sourceMapId } });
+		await route.fulfill({
+			json: { snapshot: mapSnapshot, stale: false, refreshing: false, sourceMapId }
+		});
 	});
 	await page.route('https://tiles.openfreemap.org/styles/bright*', async (route) => {
 		await route.fulfill({
@@ -474,6 +476,56 @@ test('restores map position and zoom after app navigation', async ({ page }) => 
 	await resetView.click();
 	await expect(resetView).toHaveCount(0);
 	await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapCamera'))).toBeNull();
+});
+
+test('shows all map points after the Google day folders end', async ({ page }) => {
+	await mockMap(page);
+	await login(page);
+	await page.getByRole('link', { name: 'Loggbok' }).click();
+	await page.getByRole('combobox', { name: 'Velg dag' }).selectOption({ index: 15 });
+	await page.getByRole('link', { name: 'Kart' }).click();
+	await page.getByRole('button', { name: 'Velg kartlag' }).click();
+	await expect(
+		page.getByText(
+			'Google-kartets dagsmapper dekker 5.–18. september. Alle kartpunkter vises for søndag 20. september.'
+		)
+	).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Dagens etappe' })).toBeDisabled();
+});
+
+test('uses the device date for today instead of another page selection', async ({ page }) => {
+	await page.clock.setFixedTime(new Date('2026-09-10T10:00:00.000Z'));
+	await mockMap(page, {
+		...snapshot,
+		layers: [
+			...snapshot.layers,
+			{
+				id: 'day-six-seven',
+				name: 'Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo',
+				path: ['Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo'],
+				color: '#dc6b3f',
+				featureCount: 0,
+				pointCount: 0,
+				lineCount: 0
+			}
+		]
+	});
+	await login(page);
+	await page.getByRole('link', { name: 'Loggbok' }).click();
+	const day = page.getByRole('combobox', { name: 'Velg dag' });
+	await expect(day).toHaveValue('5');
+	await day.selectOption({ index: 15 });
+	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await expect(day).toHaveValue('5');
+	await day.selectOption({ index: 15 });
+	await page.getByRole('link', { name: 'Kart' }).click();
+	await page.getByRole('button', { name: 'Velg kartlag' }).click();
+	await expect(
+		page.getByRole('paragraph').filter({
+			hasText: 'Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo'
+		})
+	).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Dagens etappe' })).toBeEnabled();
 });
 
 test('replaces a planned day route with the accumulated GPX track', async ({ page }) => {

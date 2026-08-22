@@ -21,6 +21,12 @@ export class TripDayState {
 	private databasePromise: Promise<IDBPDatabase<GjemmekontorDatabase>> | undefined;
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private started = false;
+	private readonly resumeToday = (): void => {
+		if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+			return;
+		}
+		void this.selectToday();
+	};
 
 	constructor(options: TripDayStateOptions = {}) {
 		this.databaseName = options.databaseName;
@@ -73,6 +79,14 @@ export class TripDayState {
 		await this.select(this.todayIndex);
 	}
 
+	async selectToday(): Promise<void> {
+		const current = tripDayIndexAt(this.now());
+		this.todayIndex = current;
+		if (current !== undefined && current !== this.selectedIndex) {
+			await this.select(current);
+		}
+	}
+
 	async start(): Promise<void> {
 		if (this.started) {
 			return;
@@ -82,11 +96,23 @@ export class TripDayState {
 		if (!this.started) {
 			return;
 		}
+		if (typeof window !== 'undefined') {
+			window.addEventListener('focus', this.resumeToday);
+		}
+		if (typeof document !== 'undefined') {
+			document.addEventListener('visibilitychange', this.resumeToday);
+		}
 		this.timer = setInterval(() => this.refreshToday(), 60_000);
 	}
 
 	stop(): void {
 		this.started = false;
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('focus', this.resumeToday);
+		}
+		if (typeof document !== 'undefined') {
+			document.removeEventListener('visibilitychange', this.resumeToday);
+		}
 		if (this.timer) {
 			clearInterval(this.timer);
 			this.timer = undefined;

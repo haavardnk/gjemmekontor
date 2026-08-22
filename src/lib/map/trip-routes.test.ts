@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import type { JsonValue } from '$lib/client/database';
 import type { MapFeature } from '$lib/map/types';
+import { tripDays } from '$lib/trip/days';
 import { type LogbookLeg, logbookLegKey, serializeLogbookLeg } from '$lib/trip/logbook';
 
 import {
@@ -82,6 +83,47 @@ function plannedFeature(id: string, layerName: string): MapFeature {
 }
 
 describe('trip routes', (): void => {
+	test('maps every trip date to the Google day folders', (): void => {
+		const folderNames = [
+			'Dag 1 - Lørdag',
+			'Dag 2 og 3 - Søndag og Mandag - Hvar Vest',
+			'Dag 4 og 5 - Tirsdag og Onsdag - Vis',
+			'Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo',
+			'Dag 8 og 9 - Lørdag og Søndag',
+			'Dag 10 og 11 - Mandag og Tirsdag',
+			'Dag 12 og 13 - Onsdag og Torsdag',
+			'Dag 14 - Fredag'
+		];
+		const assignments = Object.fromEntries(
+			tripDays.map((day) => [
+				day.date,
+				folderNames.filter((name) => layerDayNumbers(name).includes(day.index + 1))
+			])
+		);
+
+		expect(assignments).toEqual({
+			'2026-09-05': ['Dag 1 - Lørdag'],
+			'2026-09-06': ['Dag 2 og 3 - Søndag og Mandag - Hvar Vest'],
+			'2026-09-07': ['Dag 2 og 3 - Søndag og Mandag - Hvar Vest'],
+			'2026-09-08': ['Dag 4 og 5 - Tirsdag og Onsdag - Vis'],
+			'2026-09-09': ['Dag 4 og 5 - Tirsdag og Onsdag - Vis'],
+			'2026-09-10': ['Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo'],
+			'2026-09-11': ['Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo'],
+			'2026-09-12': ['Dag 8 og 9 - Lørdag og Søndag'],
+			'2026-09-13': ['Dag 8 og 9 - Lørdag og Søndag'],
+			'2026-09-14': ['Dag 10 og 11 - Mandag og Tirsdag'],
+			'2026-09-15': ['Dag 10 og 11 - Mandag og Tirsdag'],
+			'2026-09-16': ['Dag 12 og 13 - Onsdag og Torsdag'],
+			'2026-09-17': ['Dag 12 og 13 - Onsdag og Torsdag'],
+			'2026-09-18': ['Dag 14 - Fredag'],
+			'2026-09-19': [],
+			'2026-09-20': [],
+			'2026-09-21': [],
+			'2026-09-22': [],
+			'2026-09-23': []
+		});
+	});
+
 	test('emits each GPX segment independently and ignores legacy legs', (): void => {
 		const values: Record<string, JsonValue> = {
 			[logbookLegKey(0, 'gpx')]: serializeLogbookLeg(leg),

@@ -89,6 +89,23 @@ describe('trip day selection', (): void => {
 		await second.close();
 	});
 
+	test('returns to today on app resume only while the trip is active', async (): Promise<void> => {
+		let now = new Date('2026-09-10T10:00:00.000Z');
+		const state = new TripDayState({ databaseName: databaseName(), now: () => now });
+		await state.initialize();
+		await state.select(15);
+
+		await state.selectToday();
+
+		expect(state.selectedIndex).toBe(5);
+		now = new Date('2026-10-01T10:00:00.000Z');
+		await state.select(12);
+		await state.selectToday();
+		expect(state.selectedIndex).toBe(12);
+		expect(state.todayIndex).toBeUndefined();
+		await state.close();
+	});
+
 	test('offers the new day after midnight without changing selection', async (): Promise<void> => {
 		let now = new Date('2026-09-05T21:59:00.000Z');
 		const state = new TripDayState({ databaseName: databaseName(), now: () => now });
