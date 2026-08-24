@@ -7,9 +7,11 @@
 		LoaderCircle,
 		Plus,
 		RefreshCw,
+		Search,
 		ShoppingBasket,
 		Undo2,
-		WifiOff
+		WifiOff,
+		X
 	} from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
@@ -29,6 +31,7 @@
 	let errorMessage = $state('');
 	let name = $state('');
 	let specification = $state('');
+	let query = $state('');
 	let adding = $state(false);
 	let busyItem = $state('');
 	let editDialog: HTMLDialogElement;
@@ -41,6 +44,12 @@
 
 	const itemCount = $derived(snapshot?.items.length ?? 0);
 	const recentItems = $derived(snapshot ? [...snapshot.recentItems].reverse() : []);
+	const normalizedQuery = $derived(query.trim().toLocaleLowerCase('nb-NO'));
+	const filteredItems = $derived(
+		snapshot?.items.filter((item) =>
+			`${item.name} ${item.specification}`.toLocaleLowerCase('nb-NO').includes(normalizedQuery)
+		) ?? []
+	);
 	const writeAvailable = $derived(online && serviceAvailable);
 	const canMutate = $derived(writeAvailable && !adding && !busyItem && !refreshing);
 	const updatedLabel = $derived(
@@ -333,7 +342,7 @@
 	</div>
 
 	<form
-		class="mb-7 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]"
+		class="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]"
 		onsubmit={addItem}
 	>
 		<label class="input flex w-full items-center bg-base-100">
@@ -392,40 +401,71 @@
 			{/each}
 		</div>
 	{:else if snapshot?.items.length}
-		<ul class="space-y-2" aria-label="Varer">
-			{#each snapshot.items as item (item.sourceName)}
-				<li class="group relative">
-					<button
-						class="flex min-h-16 w-full cursor-pointer items-center rounded-lg border border-base-300/80 bg-base-100 py-3 pr-14 pl-4 text-left shadow-sm transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:border-success/35 hover:bg-success/8 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-success active:translate-y-0 active:bg-success/15 active:shadow-sm disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:translate-y-0 disabled:hover:shadow-sm"
-						type="button"
-						onclick={() => completeItem(item)}
-						disabled={!canMutate}
-						aria-label={`Marker ${item.name} som kjøpt`}
-					>
-						<span class="min-w-0 flex-1">
-							<span class="block leading-5 font-semibold">{item.name}</span>
-							{#if item.specification}
-								<span class="mt-0.5 block text-sm text-base-content/55">{item.specification}</span>
+		<label class="input mb-4 flex w-full items-center gap-2 bg-base-100">
+			<Search size={18} />
+			<input
+				class="min-w-0 grow"
+				type="search"
+				placeholder="Søk i handlelisten"
+				aria-label="Søk i handlelisten"
+				bind:value={query}
+			/>
+			{#if query}
+				<button
+					class="btn btn-square btn-ghost btn-xs"
+					type="button"
+					onclick={() => (query = '')}
+					aria-label="Tøm søket"
+					title="Tøm søket"
+				>
+					<X size={16} />
+				</button>
+			{/if}
+		</label>
+		{#if filteredItems.length}
+			<ul class="space-y-2" aria-label="Varer">
+				{#each filteredItems as item (item.sourceName)}
+					<li class="group relative">
+						<button
+							class="flex min-h-16 w-full cursor-pointer items-center rounded-lg border border-base-300/80 bg-base-100 py-3 pr-14 pl-4 text-left shadow-sm transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:border-success/35 hover:bg-success/8 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-success active:translate-y-0 active:bg-success/15 active:shadow-sm disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:translate-y-0 disabled:hover:shadow-sm"
+							type="button"
+							onclick={() => completeItem(item)}
+							disabled={!canMutate}
+							aria-label={`Marker ${item.name} som kjøpt`}
+						>
+							<span class="min-w-0 flex-1">
+								<span class="block leading-5 font-semibold">{item.name}</span>
+								{#if item.specification}
+									<span class="mt-0.5 block text-sm text-base-content/55">{item.specification}</span
+									>
+								{/if}
+							</span>
+						</button>
+						<button
+							class="btn absolute top-1/2 right-2 z-10 btn-circle -translate-y-1/2 cursor-pointer btn-ghost text-base-content/55 btn-sm hover:bg-base-300 hover:text-base-content focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary disabled:cursor-not-allowed"
+							type="button"
+							onclick={() => openEdit(item)}
+							disabled={!canMutate}
+							aria-label={`Endre ${item.name}`}
+							title={`Endre ${item.name}`}
+						>
+							{#if busyItem === item.sourceName}
+								<LoaderCircle class="animate-spin" size={18} />
+							{:else}
+								<Ellipsis size={20} />
 							{/if}
-						</span>
-					</button>
-					<button
-						class="btn absolute top-1/2 right-2 z-10 btn-circle -translate-y-1/2 cursor-pointer btn-ghost text-base-content/55 btn-sm hover:bg-base-300 hover:text-base-content focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary disabled:cursor-not-allowed"
-						type="button"
-						onclick={() => openEdit(item)}
-						disabled={!canMutate}
-						aria-label={`Endre ${item.name}`}
-						title={`Endre ${item.name}`}
-					>
-						{#if busyItem === item.sourceName}
-							<LoaderCircle class="animate-spin" size={18} />
-						{:else}
-							<Ellipsis size={20} />
-						{/if}
-					</button>
-				</li>
-			{/each}
-		</ul>
+						</button>
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<div
+				class="grid min-h-32 place-items-center border-y border-dashed border-base-300 py-8 text-center"
+				aria-live="polite"
+			>
+				<p class="text-sm font-semibold text-base-content/55">Ingen varer matcher søket.</p>
+			</div>
+		{/if}
 	{:else if snapshot}
 		<div
 			class="grid min-h-52 place-items-center border-y border-dashed border-base-300 py-8 text-center"

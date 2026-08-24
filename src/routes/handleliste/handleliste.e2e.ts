@@ -104,6 +104,16 @@ test('adds, completes, and restores Bring items with a responsive fourth navigat
 	await page.getByRole('button', { name: 'Legg til', exact: true }).click();
 	await expect(page.getByText('Melk', { exact: true })).toBeVisible();
 	await expect(page.getByText('2 liter')).toBeVisible();
+	const search = page.getByRole('searchbox', { name: 'Søk i handlelisten' });
+	await search.fill('OLIVEN');
+	await expect(page.getByRole('list', { name: 'Varer' }).getByText('Olivenolje')).toBeVisible();
+	await expect(
+		page.getByRole('list', { name: 'Varer' }).getByText('Melk', { exact: true })
+	).toHaveCount(0);
+	await search.fill('brød');
+	await expect(page.getByText('Ingen varer matcher søket.')).toBeVisible();
+	await page.getByRole('button', { name: 'Tøm søket' }).click();
+	await expect(search).toHaveValue('');
 	const editMelk = page.getByRole('button', { name: 'Endre Melk' });
 	await expect(editMelk).toHaveCSS('cursor', 'pointer');
 	await editMelk.click();
