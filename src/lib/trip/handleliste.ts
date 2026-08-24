@@ -1,15 +1,22 @@
 import { z } from 'zod';
 
-function isBringText(value: string): boolean {
-	return (
-		!value.includes('&') &&
-		!value.includes('=') &&
-		!value.includes('+') &&
-		[...value].every((character) => {
+export function sanitizeHandlelisteText(value: string): string {
+	return [...value]
+		.filter((character) => {
 			const codePoint = character.codePointAt(0) ?? 0;
-			return codePoint >= 32 && codePoint !== 127;
+			return (
+				character !== '&' &&
+				character !== '=' &&
+				character !== '+' &&
+				codePoint >= 32 &&
+				codePoint !== 127
+			);
 		})
-	);
+		.join('');
+}
+
+function isBringText(value: string): boolean {
+	return value === sanitizeHandlelisteText(value);
 }
 
 const bringTextSchema = (maximum: number) => z.string().trim().max(maximum).refine(isBringText);

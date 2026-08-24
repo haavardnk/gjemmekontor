@@ -13,13 +13,14 @@
 		WifiOff,
 		X
 	} from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 
 	import { storedHandlelisteSnapshot, storeHandlelisteSnapshot } from '$lib/client/handleliste';
 	import {
 		type HandlelisteItem,
 		type HandlelisteSnapshot,
-		handlelisteSnapshotSchema
+		handlelisteSnapshotSchema,
+		sanitizeHandlelisteText
 	} from '$lib/trip/handleliste';
 	import { handlelisteErrorMessage } from '$lib/ui/copy';
 
@@ -33,6 +34,7 @@
 	let specification = $state('');
 	let query = $state('');
 	let adding = $state(false);
+	let nameInput: HTMLInputElement | undefined;
 	let busyItem = $state('');
 	let editDialog: HTMLDialogElement;
 	let editingItem = $state<HandlelisteItem>();
@@ -74,6 +76,12 @@
 
 	function request(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
 		return fetch(input, { ...init, signal: AbortSignal.timeout(15_000) });
+	}
+
+	function safeInputValue(input: HTMLInputElement): string {
+		const value = sanitizeHandlelisteText(input.value);
+		input.value = value;
+		return value;
 	}
 
 	async function acceptResponse(response: Response): Promise<boolean> {
@@ -138,6 +146,8 @@
 			if (accepted) {
 				name = '';
 				specification = '';
+				await tick();
+				nameInput?.focus();
 			}
 		} catch {
 			serviceAvailable = false;
@@ -348,11 +358,13 @@
 		<label class="input flex w-full items-center bg-base-100">
 			<span class="sr-only">Vare</span>
 			<input
+				bind:this={nameInput}
 				class="min-w-0 grow"
 				placeholder="Legg til vare"
 				aria-label="Vare"
 				maxlength="100"
-				bind:value={name}
+				value={name}
+				oninput={(event) => (name = safeInputValue(event.currentTarget))}
 				disabled={!writeAvailable}
 			/>
 		</label>
@@ -363,7 +375,8 @@
 				placeholder="Detaljer (valgfritt)"
 				aria-label="Detaljer"
 				maxlength="120"
-				bind:value={specification}
+				value={specification}
+				oninput={(event) => (specification = safeInputValue(event.currentTarget))}
 				disabled={!writeAvailable}
 			/>
 		</label>
@@ -546,7 +559,8 @@
 						aria-label="Detaljer for vare"
 						placeholder="For eksempel mengde eller merke"
 						maxlength="120"
-						bind:value={editSpecification}
+						value={editSpecification}
+						oninput={(event) => (editSpecification = safeInputValue(event.currentTarget))}
 						disabled={editing}
 					/>
 				</label>

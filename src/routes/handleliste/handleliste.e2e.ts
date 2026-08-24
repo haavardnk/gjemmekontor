@@ -85,15 +85,17 @@ test('adds, completes, and restores Bring items with a responsive fourth navigat
 	);
 	await expect(page.locator('nav > a')).toHaveCount(4);
 
-	await page.getByRole('textbox', { name: 'Vare' }).fill('Melk');
-	await page.getByRole('textbox', { name: 'Detaljer' }).fill('2 liter');
+	const itemInput = page.getByRole('textbox', { name: 'Vare' });
+	const specificationInput = page.getByRole('textbox', { name: 'Detaljer' });
+	await itemInput.fill('Melk&=+');
+	await specificationInput.fill('2+ liter&=');
+	await expect(itemInput).toHaveValue('Melk');
+	await expect(specificationInput).toHaveValue('2 liter');
 	const mobileControlWidths = await Promise.all([
-		page
-			.getByRole('textbox', { name: 'Vare' })
-			.evaluate((element) => element.closest('label')?.getBoundingClientRect().width ?? 0),
-		page
-			.getByRole('textbox', { name: 'Detaljer' })
-			.evaluate((element) => element.closest('label')?.getBoundingClientRect().width ?? 0),
+		itemInput.evaluate((element) => element.closest('label')?.getBoundingClientRect().width ?? 0),
+		specificationInput.evaluate(
+			(element) => element.closest('label')?.getBoundingClientRect().width ?? 0
+		),
 		page
 			.getByRole('button', { name: 'Legg til', exact: true })
 			.evaluate((element) => element.getBoundingClientRect().width)
@@ -104,6 +106,7 @@ test('adds, completes, and restores Bring items with a responsive fourth navigat
 	await page.getByRole('button', { name: 'Legg til', exact: true }).click();
 	await expect(page.getByText('Melk', { exact: true })).toBeVisible();
 	await expect(page.getByText('2 liter')).toBeVisible();
+	await expect(itemInput).toBeFocused();
 	const search = page.getByRole('searchbox', { name: 'Søk i handlelisten' });
 	await search.fill('OLIVEN');
 	await expect(page.getByRole('list', { name: 'Varer' }).getByText('Olivenolje')).toBeVisible();
@@ -119,7 +122,9 @@ test('adds, completes, and restores Bring items with a responsive fourth navigat
 	await editMelk.click();
 	const editDialog = page.getByRole('dialog');
 	await expect(editDialog.getByRole('heading', { name: 'Endre vare' })).toBeVisible();
-	await editDialog.getByRole('textbox', { name: 'Detaljer for vare' }).fill('3 liter');
+	const editSpecificationInput = editDialog.getByRole('textbox', { name: 'Detaljer for vare' });
+	await editSpecificationInput.fill('3+ liter&=');
+	await expect(editSpecificationInput).toHaveValue('3 liter');
 	await editDialog.getByRole('button', { name: 'Lagre' }).click();
 	await expect(editDialog).not.toBeVisible();
 	await expect(page.getByText('3 liter')).toBeVisible();

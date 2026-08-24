@@ -4,7 +4,8 @@ import {
 	addHandlelisteItemSchema,
 	completeHandlelisteItemSchema,
 	editHandlelisteItemSchema,
-	handlelisteSnapshotSchema
+	handlelisteSnapshotSchema,
+	sanitizeHandlelisteText
 } from './handleliste';
 
 describe('handleliste', (): void => {
@@ -43,5 +44,9 @@ describe('handleliste', (): void => {
 		expect(addHandlelisteItemSchema.safeParse({ name: 'A+B', specification: '' }).success).toBe(
 			false
 		);
+	});
+
+	test('removes Bring control characters while preserving letters', (): void => {
+		expect(sanitizeHandlelisteText('Øl&Bröd+=\n')).toBe('ØlBröd');
 	});
 });
