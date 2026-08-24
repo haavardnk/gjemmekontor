@@ -2,6 +2,8 @@
 	import {
 		Anchor,
 		Binoculars,
+		Coffee,
+		IceCreamBowl,
 		LifeBuoy,
 		Martini,
 		Sailboat,
@@ -21,6 +23,8 @@
 		anchorage: Anchor,
 		bar: Martini,
 		'buoy-field': LifeBuoy,
+		cafe: Coffee,
+		dessert: IceCreamBowl,
 		marina: Sailboat,
 		restaurant: UtensilsCrossed,
 		shop: ShoppingBasket,

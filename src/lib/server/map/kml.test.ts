@@ -159,7 +159,15 @@ describe('KML parser', (): void => {
 	test.each([
 		['1502', 'poi', 'Interessepunkter'],
 		['1517', 'bar', 'Barer'],
-		['1577', 'restaurant', 'Restauranter']
+		['1521', 'poi', 'Interessepunkter'],
+		['1534', 'cafe', 'Kafeer'],
+		['1535', 'poi', 'Interessepunkter'],
+		['1577', 'restaurant', 'Restauranter'],
+		['1592', 'cafe', 'Kafeer'],
+		['1607', 'dessert', 'Iskrem og desserter'],
+		['1762', 'cafe', 'Kafeer'],
+		['1798', 'bar', 'Barer'],
+		['1899', 'poi', 'Interessepunkter']
 	])('maps Google icon %s to %s', (iconCode, symbol, label): void => {
 		const snapshot = parseKml(`<?xml version="1.0"?>
 			<kml><Document><Style id="icon-${iconCode}-FFFFFF"><IconStyle><Icon><href>${googleIconHref}</href></Icon></IconStyle></Style><Folder><name>Layer</name><Placemark>
