@@ -30,8 +30,8 @@
 		{ href: resolve('/shots'), path: '/shots', label: 'Opptak', icon: Video },
 		{ href: resolve('/logbook'), path: '/logbook', label: 'Loggbok', icon: BookOpen },
 		{
-			href: resolve('/handleliste'),
-			path: '/handleliste',
+			href: resolve('/shoppinglist'),
+			path: '/shoppinglist',
 			label: 'Handleliste',
 			icon: ShoppingBasket
 		}

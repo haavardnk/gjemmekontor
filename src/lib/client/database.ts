@@ -2,7 +2,7 @@ import { type DBSchema, type IDBPDatabase, openDB } from 'idb';
 
 import type { MapMode, MapSnapshot } from '$lib/map/types';
 import type { GpxExtraction } from '$lib/trip/gpx';
-import type { HandlelisteSnapshot } from '$lib/trip/handleliste';
+import type { ShoppingListSnapshot } from '$lib/trip/shoppinglist';
 
 export type JsonValue =
 	null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -39,9 +39,9 @@ export type OfflineMapRecord = {
 	updatedAt: number;
 };
 
-export type HandlelisteSnapshotRecord = {
+export type ShoppingListSnapshotRecord = {
 	id: 'current';
-	value: HandlelisteSnapshot;
+	value: ShoppingListSnapshot;
 	updatedAt: number;
 };
 
@@ -68,7 +68,7 @@ export interface GjemmekontorDatabase extends DBSchema {
 	mutations: { key: string; value: PendingMutation };
 	mapSnapshot: { key: string; value: MapSnapshotRecord };
 	offlineMap: { key: string; value: OfflineMapRecord };
-	handlelisteSnapshot: { key: string; value: HandlelisteSnapshotRecord };
+	shoppingListSnapshot: { key: string; value: ShoppingListSnapshotRecord };
 	pendingGpxUploads: { key: string; value: PendingGpxUpload };
 	meta: { key: string; value: MetaRecord };
 }
@@ -84,7 +84,7 @@ export function openClientDatabase(
 			db.createObjectStore('mutations', { keyPath: 'mutationId' });
 			db.createObjectStore('mapSnapshot', { keyPath: 'id' });
 			db.createObjectStore('offlineMap', { keyPath: 'id' });
-			db.createObjectStore('handlelisteSnapshot', { keyPath: 'id' });
+			db.createObjectStore('shoppingListSnapshot', { keyPath: 'id' });
 			db.createObjectStore('pendingGpxUploads', { keyPath: 'id' });
 			db.createObjectStore('meta', { keyPath: 'key' });
 		}

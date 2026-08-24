@@ -1,12 +1,12 @@
 import Bring from 'bring-shopping';
 
 import {
-	addHandlelisteItemSchema,
-	completeHandlelisteItemSchema,
-	editHandlelisteItemSchema,
-	type HandlelisteItem,
-	type HandlelisteSnapshot
-} from '$lib/trip/handleliste';
+	addShoppingListItemSchema,
+	completeShoppingListItemSchema,
+	editShoppingListItemSchema,
+	type ShoppingListItem,
+	type ShoppingListSnapshot
+} from '$lib/trip/shoppinglist';
 
 import { apiError, apiSuccess } from './api';
 import { type BringConfig, getRuntimeConfig } from './env';
@@ -66,7 +66,7 @@ function isAuthenticationError(error: unknown): boolean {
 function validUpstreamItem(
 	item: BringItem,
 	displayNames: Map<string, string>
-): HandlelisteItem | undefined {
+): ShoppingListItem | undefined {
 	const sourceName = item.name.trim();
 	const name = displayNames.get(sourceName) ?? sourceName;
 	const specification = item.specification.trim();
@@ -202,11 +202,11 @@ export class BringService {
 		throw new BringServiceError(failureCode);
 	}
 
-	async snapshot(): Promise<HandlelisteSnapshot> {
+	async snapshot(): Promise<ShoppingListSnapshot> {
 		try {
-			return await this.withAuthentication(async (client): Promise<HandlelisteSnapshot> => {
+			return await this.withAuthentication(async (client): Promise<ShoppingListSnapshot> => {
 				const response = await client.getItems(this.config?.listUuid ?? '');
-				const normalize = (items: BringItem[]): HandlelisteItem[] =>
+				const normalize = (items: BringItem[]): ShoppingListItem[] =>
 					items.flatMap((item) => {
 						const valid = validUpstreamItem(item, this.displayNames);
 						return valid ? [valid] : [];
@@ -242,8 +242,8 @@ export class BringService {
 	}
 
 	private serializeMutation(
-		operation: () => Promise<HandlelisteSnapshot>
-	): Promise<HandlelisteSnapshot> {
+		operation: () => Promise<ShoppingListSnapshot>
+	): Promise<ShoppingListSnapshot> {
 		const result = this.mutationTail.then(operation);
 		this.mutationTail = result.then(
 			() => undefined,
@@ -252,8 +252,8 @@ export class BringService {
 		return result;
 	}
 
-	add(name: string, specification: string): Promise<HandlelisteSnapshot> {
-		return this.serializeMutation(async (): Promise<HandlelisteSnapshot> => {
+	add(name: string, specification: string): Promise<ShoppingListSnapshot> {
+		return this.serializeMutation(async (): Promise<ShoppingListSnapshot> => {
 			try {
 				await this.authenticate();
 				const sourceName = this.sourceNames.get(name.toLocaleLowerCase('nb-NO')) ?? name;
@@ -276,8 +276,8 @@ export class BringService {
 		});
 	}
 
-	complete(sourceName: string): Promise<HandlelisteSnapshot> {
-		return this.serializeMutation(async (): Promise<HandlelisteSnapshot> => {
+	complete(sourceName: string): Promise<ShoppingListSnapshot> {
+		return this.serializeMutation(async (): Promise<ShoppingListSnapshot> => {
 			try {
 				await this.withAuthentication(
 					(client) => client.moveToRecentList(this.config?.listUuid ?? '', sourceName),
@@ -300,8 +300,8 @@ export class BringService {
 		});
 	}
 
-	edit(sourceName: string, specification: string): Promise<HandlelisteSnapshot> {
-		return this.serializeMutation(async (): Promise<HandlelisteSnapshot> => {
+	edit(sourceName: string, specification: string): Promise<ShoppingListSnapshot> {
+		return this.serializeMutation(async (): Promise<ShoppingListSnapshot> => {
 			try {
 				await this.withAuthentication(
 					(client) => client.saveItem(this.config?.listUuid ?? '', sourceName, specification),
@@ -340,7 +340,7 @@ export function getBringService(): BringService {
 	return service;
 }
 
-export async function handleGetHandleliste(
+export async function handleGetShoppingList(
 	bring: BringService = getBringService()
 ): Promise<Response> {
 	try {
@@ -350,7 +350,7 @@ export async function handleGetHandleliste(
 	}
 }
 
-export async function handleAddHandlelisteItem(
+export async function handleAddShoppingListItem(
 	request: Request,
 	bring: BringService = getBringService()
 ): Promise<Response> {
@@ -360,7 +360,7 @@ export async function handleAddHandlelisteItem(
 	} catch {
 		return apiError('INVALID_REQUEST', 400);
 	}
-	const result = addHandlelisteItemSchema.safeParse(body);
+	const result = addShoppingListItemSchema.safeParse(body);
 	if (!result.success) {
 		return apiError('INVALID_REQUEST', 400);
 	}
@@ -371,7 +371,7 @@ export async function handleAddHandlelisteItem(
 	}
 }
 
-export async function handleCompleteHandlelisteItem(
+export async function handleCompleteShoppingListItem(
 	request: Request,
 	bring: BringService = getBringService()
 ): Promise<Response> {
@@ -381,7 +381,7 @@ export async function handleCompleteHandlelisteItem(
 	} catch {
 		return apiError('INVALID_REQUEST', 400);
 	}
-	const result = completeHandlelisteItemSchema.safeParse(body);
+	const result = completeShoppingListItemSchema.safeParse(body);
 	if (!result.success) {
 		return apiError('INVALID_REQUEST', 400);
 	}
@@ -392,7 +392,7 @@ export async function handleCompleteHandlelisteItem(
 	}
 }
 
-export async function handleEditHandlelisteItem(
+export async function handleEditShoppingListItem(
 	request: Request,
 	bring: BringService = getBringService()
 ): Promise<Response> {
@@ -402,7 +402,7 @@ export async function handleEditHandlelisteItem(
 	} catch {
 		return apiError('INVALID_REQUEST', 400);
 	}
-	const result = editHandlelisteItemSchema.safeParse(body);
+	const result = editShoppingListItemSchema.safeParse(body);
 	if (!result.success) {
 		return apiError('INVALID_REQUEST', 400);
 	}

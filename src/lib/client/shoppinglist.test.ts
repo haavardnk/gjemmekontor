@@ -3,10 +3,10 @@ import 'fake-indexeddb/auto';
 import { deleteDB } from 'idb';
 import { afterEach, describe, expect, test } from 'vitest';
 
-import type { HandlelisteSnapshot } from '$lib/trip/handleliste';
+import type { ShoppingListSnapshot } from '$lib/trip/shoppinglist';
 
 import { openClientDatabase } from './database';
-import { storedHandlelisteSnapshot, storeHandlelisteSnapshot } from './handleliste';
+import { storedShoppingListSnapshot, storeShoppingListSnapshot } from './shoppinglist';
 
 const databaseNames: string[] = [];
 
@@ -17,12 +17,12 @@ afterEach(async (): Promise<void> => {
 });
 
 function databaseName(): string {
-	const name = `gjemmekontor-handleliste-${crypto.randomUUID()}`;
+	const name = `gjemmekontor-shoppinglist-${crypto.randomUUID()}`;
 	databaseNames.push(name);
 	return name;
 }
 
-const snapshot: HandlelisteSnapshot = {
+const snapshot: ShoppingListSnapshot = {
 	listUuid: 'trip-list',
 	listName: 'Kroatia',
 	items: [{ sourceName: 'Milch', name: 'Melk', specification: '2 liter' }],
@@ -30,13 +30,13 @@ const snapshot: HandlelisteSnapshot = {
 	fetchedAt: '2026-08-21T10:00:00.000Z'
 };
 
-describe('Handleliste cache', (): void => {
+describe('shopping list cache', (): void => {
 	test('stores and restores the current Bring snapshot', async (): Promise<void> => {
 		const database = await openClientDatabase(databaseName());
 
-		await storeHandlelisteSnapshot(snapshot, database);
+		await storeShoppingListSnapshot(snapshot, database);
 
-		expect(await storedHandlelisteSnapshot(database)).toEqual(snapshot);
+		expect(await storedShoppingListSnapshot(database)).toEqual(snapshot);
 		database.close();
 	});
 });

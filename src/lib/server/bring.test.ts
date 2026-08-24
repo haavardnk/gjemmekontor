@@ -4,10 +4,10 @@ import {
 	type BringClient,
 	BringService,
 	BringServiceError,
-	handleAddHandlelisteItem,
-	handleCompleteHandlelisteItem,
-	handleEditHandlelisteItem,
-	handleGetHandleliste
+	handleAddShoppingListItem,
+	handleCompleteShoppingListItem,
+	handleEditShoppingListItem,
+	handleGetShoppingList
 } from './bring';
 import type { BringConfig } from './env';
 
@@ -202,20 +202,20 @@ describe('Bring service', (): void => {
 
 	test('validates handlers and returns stable errors', async (): Promise<void> => {
 		const service = new BringService(config, () => fakeClient([]));
-		const invalid = await handleAddHandlelisteItem(
-			new Request('http://localhost/api/handleliste/items', {
+		const invalid = await handleAddShoppingListItem(
+			new Request('http://localhost/api/shoppinglist/items', {
 				method: 'POST',
 				body: JSON.stringify({ name: '', specification: '', listUuid: 'other' })
 			}),
 			service
 		);
-		const notConfigured = await handleGetHandleliste(new BringService(undefined));
-		const malformed = await handleCompleteHandlelisteItem(
-			new Request('http://localhost/api/handleliste/items', { method: 'PATCH', body: '{' }),
+		const notConfigured = await handleGetShoppingList(new BringService(undefined));
+		const malformed = await handleCompleteShoppingListItem(
+			new Request('http://localhost/api/shoppinglist/items', { method: 'PATCH', body: '{' }),
 			service
 		);
-		const invalidEdit = await handleEditHandlelisteItem(
-			new Request('http://localhost/api/handleliste/items', {
+		const invalidEdit = await handleEditShoppingListItem(
+			new Request('http://localhost/api/shoppinglist/items', {
 				method: 'PUT',
 				body: JSON.stringify({ sourceName: 'Milch', specification: '', name: 'Ny' })
 			}),

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import HandlelisteView from '$lib/trip/HandlelisteView.svelte';
+	import ShoppingListView from '$lib/trip/ShoppingListView.svelte';
 </script>
 
 <svelte:head><title>Handleliste · Gjemmekontor</title></svelte:head>
 
-<HandlelisteView />
+<ShoppingListView />

@@ -18,7 +18,7 @@ test('adds, completes, and restores Bring items with a responsive fourth navigat
 	let recentItems: Item[] = [{ sourceName: 'Eier', name: 'Egg', specification: '' }];
 	let failRefresh = false;
 	const requests: Array<{ method: string; body: unknown }> = [];
-	await page.route('**/api/handleliste{,/items}', async (route) => {
+	await page.route('**/api/shoppinglist{,/items}', async (route) => {
 		const request = route.request();
 		const pathname = new URL(request.url()).pathname;
 		if (request.method() === 'GET') {
@@ -67,14 +67,14 @@ test('adds, completes, and restores Bring items with a responsive fourth navigat
 				fetchedAt: '2026-08-21T10:00:00.000Z'
 			}
 		});
-		if (pathname !== '/api/handleliste' && pathname !== '/api/handleliste/items') {
-			throw new Error('Unexpected Handleliste route');
+		if (pathname !== '/api/shoppinglist' && pathname !== '/api/shoppinglist/items') {
+			throw new Error('Unexpected shopping-list route');
 		}
 	});
 	await login(page);
 	await page.getByRole('link', { name: 'Handleliste' }).click();
 
-	await expect(page).toHaveURL(/\/handleliste$/);
+	await expect(page).toHaveURL(/\/shoppinglist$/);
 	await expect(page.getByRole('heading', { name: 'Handleliste' })).toBeVisible();
 	await expect(page.getByText('Kroatia 2026 · 1 vare')).toBeVisible();
 	await expect(page.getByText('Olivenolje')).toBeVisible();
@@ -180,7 +180,7 @@ test('syncs remote changes on focus and while open without overwriting local wri
 	const heldGetStarted = new Promise<void>((resolve) => {
 		markHeldGetStarted = resolve;
 	});
-	await page.route('**/api/handleliste{,/items}', async (route) => {
+	await page.route('**/api/shoppinglist{,/items}', async (route) => {
 		const request = route.request();
 		if (request.method() === 'GET') {
 			const responseItems = items.map((item) => ({ ...item }));
@@ -218,7 +218,7 @@ test('syncs remote changes on focus and while open without overwriting local wri
 		});
 	});
 	await login(page);
-	await page.goto('/handleliste');
+	await page.goto('/shoppinglist');
 	await expect(page.getByText('Olivenolje', { exact: true })).toBeVisible();
 
 	items = [{ sourceName: 'Brot', name: 'Brød', specification: '' }, ...items];
@@ -236,7 +236,7 @@ test('syncs remote changes on focus and while open without overwriting local wri
 	const staleResponse = page.waitForResponse(
 		(response) =>
 			response.request().method() === 'GET' &&
-			new URL(response.url()).pathname === '/api/handleliste'
+			new URL(response.url()).pathname === '/api/shoppinglist'
 	);
 	if (!releaseHeldGet) {
 		throw new Error('Polling request was not held');
@@ -249,7 +249,7 @@ test('syncs remote changes on focus and while open without overwriting local wri
 
 test('shows the cached list read-only without network access', async ({ context, page }) => {
 	let apiAvailable = true;
-	await page.route('**/api/handleliste', async (route) => {
+	await page.route('**/api/shoppinglist', async (route) => {
 		if (!apiAvailable) {
 			await route.abort('internetdisconnected');
 			return;
@@ -265,7 +265,7 @@ test('shows the cached list read-only without network access', async ({ context,
 		});
 	});
 	await login(page);
-	await page.goto('/handleliste');
+	await page.goto('/shoppinglist');
 	await expect(page.getByText('Solkrem')).toBeVisible();
 	await page.waitForFunction(async (): Promise<boolean> => {
 		const keys = await caches.keys();
@@ -273,7 +273,7 @@ test('shows the cached list read-only without network access', async ({ context,
 		if (!pageCache) {
 			return false;
 		}
-		return Boolean(await (await caches.open(pageCache)).match('/handleliste'));
+		return Boolean(await (await caches.open(pageCache)).match('/shoppinglist'));
 	});
 
 	apiAvailable = false;
@@ -290,9 +290,9 @@ test('shows the cached list read-only without network access', async ({ context,
 });
 
 test('explains when no shopping list has been cached offline', async ({ context, page }) => {
-	await page.route('**/api/handleliste', async (route) => route.abort('failed'));
+	await page.route('**/api/shoppinglist', async (route) => route.abort('failed'));
 	await login(page);
-	await page.goto('/handleliste');
+	await page.goto('/shoppinglist');
 	await expect(page.getByRole('alert')).toContainText('Bring er ikke tilgjengelig akkurat nå.');
 
 	await context.setOffline(true);

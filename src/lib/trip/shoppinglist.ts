@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export function sanitizeHandlelisteText(value: string): string {
+export function sanitizeShoppingListText(value: string): string {
 	return [...value]
 		.filter((character) => {
 			const codePoint = character.codePointAt(0) ?? 0;
@@ -16,40 +16,40 @@ export function sanitizeHandlelisteText(value: string): string {
 }
 
 function isBringText(value: string): boolean {
-	return value === sanitizeHandlelisteText(value);
+	return value === sanitizeShoppingListText(value);
 }
 
 const bringTextSchema = (maximum: number) => z.string().trim().max(maximum).refine(isBringText);
 
-export const handlelisteItemSchema = z.object({
+export const shoppingListItemSchema = z.object({
 	sourceName: bringTextSchema(100).pipe(z.string().min(1)),
 	name: bringTextSchema(100).pipe(z.string().min(1)),
 	specification: bringTextSchema(120)
 });
 
-export const handlelisteSnapshotSchema = z.object({
+export const shoppingListSnapshotSchema = z.object({
 	listUuid: z.string().min(1).max(100),
 	listName: z.string().min(1).max(200),
-	items: z.array(handlelisteItemSchema),
-	recentItems: z.array(handlelisteItemSchema),
+	items: z.array(shoppingListItemSchema),
+	recentItems: z.array(shoppingListItemSchema),
 	fetchedAt: z.iso.datetime()
 });
 
-export const addHandlelisteItemSchema = z
+export const addShoppingListItemSchema = z
 	.object({
 		name: bringTextSchema(100).pipe(z.string().min(1)),
 		specification: bringTextSchema(120)
 	})
 	.strict();
-export const completeHandlelisteItemSchema = z
+export const completeShoppingListItemSchema = z
 	.object({ sourceName: bringTextSchema(100).pipe(z.string().min(1)) })
 	.strict();
-export const editHandlelisteItemSchema = z
+export const editShoppingListItemSchema = z
 	.object({
 		sourceName: bringTextSchema(100).pipe(z.string().min(1)),
 		specification: bringTextSchema(120)
 	})
 	.strict();
 
-export type HandlelisteItem = z.infer<typeof handlelisteItemSchema>;
-export type HandlelisteSnapshot = z.infer<typeof handlelisteSnapshotSchema>;
+export type ShoppingListItem = z.infer<typeof shoppingListItemSchema>;
+export type ShoppingListSnapshot = z.infer<typeof shoppingListSnapshotSchema>;

@@ -41,12 +41,12 @@ describe('client state', (): void => {
 		const db = await openClientDatabase(databaseName());
 
 		expect(Array.from(db.objectStoreNames)).toEqual([
-			'handlelisteSnapshot',
 			'mapSnapshot',
 			'meta',
 			'mutations',
 			'offlineMap',
 			'pendingGpxUploads',
+			'shoppingListSnapshot',
 			'state'
 		]);
 		db.close();

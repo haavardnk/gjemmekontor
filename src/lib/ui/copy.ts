@@ -14,7 +14,7 @@ export function mapErrorMessage(code: string | undefined): string {
 		: 'Kartet kunne ikke lastes inn.';
 }
 
-const handlelisteErrors: Record<string, string> = {
+const shoppingListErrors: Record<string, string> = {
 	BRING_NOT_CONFIGURED: 'Handlelisten er ikke koblet til Bring ennå.',
 	BRING_AUTH_FAILED: 'Bring-kontoen kunne ikke kobles til.',
 	BRING_LIST_NOT_FOUND: 'Finner ikke den valgte listen i Bring.',
@@ -24,8 +24,8 @@ const handlelisteErrors: Record<string, string> = {
 	UNAUTHENTICATED: 'Økten er utløpt. Logg inn på nytt.'
 };
 
-export function handlelisteErrorMessage(code: string | undefined): string {
+export function shoppingListErrorMessage(code: string | undefined): string {
 	return code
-		? (handlelisteErrors[code] ?? 'Handlelisten kunne ikke oppdateres.')
+		? (shoppingListErrors[code] ?? 'Handlelisten kunne ikke oppdateres.')
 		: 'Handlelisten kunne ikke oppdateres.';
 }

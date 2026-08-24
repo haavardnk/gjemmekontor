@@ -15,16 +15,16 @@
 	} from '@lucide/svelte';
 	import { onMount, tick } from 'svelte';
 
-	import { storedHandlelisteSnapshot, storeHandlelisteSnapshot } from '$lib/client/handleliste';
+	import { storedShoppingListSnapshot, storeShoppingListSnapshot } from '$lib/client/shoppinglist';
 	import {
-		type HandlelisteItem,
-		type HandlelisteSnapshot,
-		handlelisteSnapshotSchema,
-		sanitizeHandlelisteText
-	} from '$lib/trip/handleliste';
-	import { handlelisteErrorMessage } from '$lib/ui/copy';
+		sanitizeShoppingListText,
+		type ShoppingListItem,
+		type ShoppingListSnapshot,
+		shoppingListSnapshotSchema
+	} from '$lib/trip/shoppinglist';
+	import { shoppingListErrorMessage } from '$lib/ui/copy';
 
-	let snapshot = $state<HandlelisteSnapshot>();
+	let snapshot = $state<ShoppingListSnapshot>();
 	let loading = $state(true);
 	let refreshing = $state(false);
 	let online = $state(true);
@@ -37,7 +37,7 @@
 	let nameInput: HTMLInputElement | undefined;
 	let busyItem = $state('');
 	let editDialog: HTMLDialogElement;
-	let editingItem = $state<HandlelisteItem>();
+	let editingItem = $state<ShoppingListItem>();
 	let editSpecification = $state('');
 	let editing = $state(false);
 	const refreshIntervalMs = 5_000;
@@ -79,7 +79,7 @@
 	}
 
 	function safeInputValue(input: HTMLInputElement): string {
-		const value = sanitizeHandlelisteText(input.value);
+		const value = sanitizeShoppingListText(input.value);
 		input.value = value;
 		return value;
 	}
@@ -88,17 +88,17 @@
 		if (!response.ok) {
 			const code = await errorCode(response);
 			serviceAvailable = code === 'INVALID_REQUEST';
-			errorMessage = handlelisteErrorMessage(code);
+			errorMessage = shoppingListErrorMessage(code);
 			return false;
 		}
-		const result = handlelisteSnapshotSchema.safeParse(await response.json());
+		const result = shoppingListSnapshotSchema.safeParse(await response.json());
 		if (!result.success) {
-			errorMessage = handlelisteErrorMessage(undefined);
+			errorMessage = shoppingListErrorMessage(undefined);
 			return false;
 		}
 		snapshot = result.data;
 		serviceAvailable = true;
-		await storeHandlelisteSnapshot(result.data);
+		await storeShoppingListSnapshot(result.data);
 		errorMessage = '';
 		return true;
 	}
@@ -111,14 +111,14 @@
 		refreshInFlight = true;
 		refreshing = showProgress;
 		try {
-			const response = await request('/api/handleliste');
+			const response = await request('/api/shoppinglist');
 			if (revision === mutationRevision) {
 				await acceptResponse(response);
 			}
 		} catch {
 			if (revision === mutationRevision) {
 				serviceAvailable = false;
-				errorMessage = handlelisteErrorMessage('BRING_UNAVAILABLE');
+				errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
 			}
 		} finally {
 			refreshInFlight = false;
@@ -137,7 +137,7 @@
 		adding = true;
 		try {
 			const accepted = await acceptResponse(
-				await request('/api/handleliste/items', {
+				await request('/api/shoppinglist/items', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ name: itemName, specification: specification.trim() })
@@ -151,13 +151,13 @@
 			}
 		} catch {
 			serviceAvailable = false;
-			errorMessage = handlelisteErrorMessage('BRING_UNAVAILABLE');
+			errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
 		} finally {
 			adding = false;
 		}
 	}
 
-	async function completeItem(item: HandlelisteItem): Promise<void> {
+	async function completeItem(item: ShoppingListItem): Promise<void> {
 		if (!canMutate) {
 			return;
 		}
@@ -165,7 +165,7 @@
 		busyItem = item.sourceName;
 		try {
 			await acceptResponse(
-				await request('/api/handleliste/items', {
+				await request('/api/shoppinglist/items', {
 					method: 'PATCH',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ sourceName: item.sourceName })
@@ -173,13 +173,13 @@
 			);
 		} catch {
 			serviceAvailable = false;
-			errorMessage = handlelisteErrorMessage('BRING_UNAVAILABLE');
+			errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
 		} finally {
 			busyItem = '';
 		}
 	}
 
-	async function restoreItem(item: HandlelisteItem): Promise<void> {
+	async function restoreItem(item: ShoppingListItem): Promise<void> {
 		if (!canMutate) {
 			return;
 		}
@@ -187,7 +187,7 @@
 		busyItem = item.sourceName;
 		try {
 			await acceptResponse(
-				await request('/api/handleliste/items', {
+				await request('/api/shoppinglist/items', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ name: item.name, specification: item.specification })
@@ -195,13 +195,13 @@
 			);
 		} catch {
 			serviceAvailable = false;
-			errorMessage = handlelisteErrorMessage('BRING_UNAVAILABLE');
+			errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
 		} finally {
 			busyItem = '';
 		}
 	}
 
-	function openEdit(item: HandlelisteItem): void {
+	function openEdit(item: ShoppingListItem): void {
 		if (!canMutate) {
 			return;
 		}
@@ -229,7 +229,7 @@
 		busyItem = item.sourceName;
 		try {
 			const accepted = await acceptResponse(
-				await request('/api/handleliste/items', {
+				await request('/api/shoppinglist/items', {
 					method: 'PUT',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({
@@ -244,7 +244,7 @@
 			}
 		} catch {
 			serviceAvailable = false;
-			errorMessage = handlelisteErrorMessage('BRING_UNAVAILABLE');
+			errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
 		} finally {
 			editing = false;
 			busyItem = '';
@@ -274,7 +274,7 @@
 		window.addEventListener('focus', refreshWhenActive);
 		document.addEventListener('visibilitychange', refreshWhenActive);
 		const refreshInterval = window.setInterval(refreshWhenActive, refreshIntervalMs);
-		void storedHandlelisteSnapshot().then((cached) => {
+		void storedShoppingListSnapshot().then((cached) => {
 			if (disposed) {
 				return;
 			}
