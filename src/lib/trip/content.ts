@@ -101,7 +101,7 @@ export const shotModules: Record<string, ShotModule> = {
 	},
 	sup: {
 		title: 'SUP',
-		camera: 'GoPro eller Insta360 X5',
+		camera: 'Osmo Action 4 eller Insta360 X5',
 		aRoll: [1, 2],
 		shots: [
 			{ text: 'SUP-brett og åre gjøres klare ved båten.' },
@@ -115,41 +115,44 @@ export const shotModules: Record<string, ShotModule> = {
 	},
 	snorkling: {
 		title: 'Snorkling og fridykking',
-		camera: 'GoPro',
+		camera: 'Osmo Action 4',
 		aRoll: [1, 2, 3],
 		shots: [
 			{ text: 'Maske og finner på ved badestigen.' },
-			{ text: 'Følg en svømmer fra båten og ned under vann.', camera: 'GoPro' },
+			{ text: 'Følg en svømmer fra båten og ned under vann.', camera: 'Osmo Action 4' },
 			{ text: 'Et rolig fridykk: nedstigningen, noen svømmetak og lyset fra overflaten.' },
 			{ text: 'Tilbake ved badestigen og reaksjonen etter dykket.' }
 		]
 	},
 	badepause: {
 		title: 'Badepause fra båten',
-		camera: 'GoPro eller Pocket 4',
+		camera: 'Osmo Action 4 eller Pocket 4',
 		aRoll: [0, 2, 3],
 		shots: [
 			{ text: 'Hopp og stup fra båten, med reaksjonene etterpå.' },
 			{ text: 'Hoppene sett ovenfra med Bad Buoy og vika rundt.', camera: 'Mini Pro 5' },
-			{ text: 'Film både fra båten, i vannflaten og under vann.', camera: 'GoPro' },
+			{
+				text: 'Film både fra båten, i vannflaten og under vann.',
+				camera: 'Osmo Action 4'
+			},
 			{ text: 'En sammenhengende 360-sekvens fra sats til plask.', camera: 'Insta360 X5' },
 			{ text: 'Våte ansikter, plask og latter mellom hoppene.' }
 		]
 	},
 	morgenbad: {
 		title: 'Morgenbad',
-		camera: 'GoPro eller Pocket 4',
+		camera: 'Osmo Action 4 eller Pocket 4',
 		aRoll: [1, 2],
 		shots: [
 			{ text: 'Den stille båten eller villaen før resten har våknet.' },
 			{ text: 'Hopp i vannet før frokosten begynner.' },
-			{ text: 'Noen rolige svømmetak i morgenlyset.', camera: 'GoPro' },
+			{ text: 'Noen rolige svømmetak i morgenlyset.', camera: 'Osmo Action 4' },
 			{ text: 'Vannet, håndkleet og den første kaffen etter badet.' }
 		]
 	},
 	babyring: {
 		title: 'Bading med babyring',
-		camera: 'GoPro eller Pocket 4',
+		camera: 'Osmo Action 4 eller Pocket 4',
 		aRoll: [1, 2, 3, 4],
 		shots: [
 			{ text: 'Babyringen blåses opp og gjøres klar.' },
@@ -173,7 +176,7 @@ export const shotModules: Record<string, ShotModule> = {
 	},
 	jolle: {
 		title: 'Tur med jolla',
-		camera: 'GoPro eller Insta360 X5',
+		camera: 'Osmo Action 4 eller Insta360 X5',
 		aRoll: [0, 2, 3],
 		shots: [
 			{ text: 'Jolla gjøres klar og alle kommer trygt om bord.' },
@@ -274,7 +277,7 @@ export const shotModules: Record<string, ShotModule> = {
 	},
 	strand: {
 		title: 'Strandtur',
-		camera: 'Pocket 4 eller GoPro',
+		camera: 'Pocket 4 eller Osmo Action 4',
 		aRoll: [0, 1, 2],
 		shots: [
 			{ text: 'Jolleturen fra Bad Buoy til stranden med håndklær og badeutstyr.' },
@@ -398,7 +401,7 @@ export const shotModules: Record<string, ShotModule> = {
 	},
 	vaer: {
 		title: 'Vær og endrede planer',
-		camera: 'Pocket 4 eller GoPro',
+		camera: 'Pocket 4 eller Osmo Action 4',
 		aRoll: [1, 2, 3],
 		shots: [
 			{ text: 'Været på vei inn over sjøen.' },
@@ -498,12 +501,12 @@ export const shotModules: Record<string, ShotModule> = {
 	},
 	basseng: {
 		title: 'Bassengliv',
-		camera: 'GoPro eller Pocket 4',
+		camera: 'Osmo Action 4 eller Pocket 4',
 		aRoll: [1, 2],
 		shots: [
 			{ text: 'Det stille bassenget før dagen begynner.' },
 			{ text: 'Babyring, små tær og plask i vannet.' },
-			{ text: 'Film i vannflaten og under vann.', camera: 'GoPro' },
+			{ text: 'Film i vannflaten og under vann.', camera: 'Osmo Action 4' },
 			{ text: 'Våte fotspor, håndklær og en pause i skyggen.' },
 			{ text: 'Monsieur Bintang kan dukke opp i bakgrunnen hvis han allerede er med.' }
 		]

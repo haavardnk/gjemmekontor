@@ -26,11 +26,13 @@ describe('trip shot content', (): void => {
 	});
 
 	test('keeps camera suggestions person-neutral', (): void => {
-		const suggestions = Object.values(shotModules)
-			.flatMap((module) => module.shots)
-			.flatMap((shot) => (shot.camera ? [shot.camera] : []));
+		const suggestions = Object.values(shotModules).flatMap((module) => [
+			module.camera,
+			...module.shots.flatMap((shot) => (shot.camera ? [shot.camera] : []))
+		]);
 
 		expect(suggestions.every((suggestion) => !/Odd|Håvard/.test(suggestion))).toBe(true);
+		expect(suggestions.some((suggestion) => suggestion.includes('Osmo Action 4'))).toBe(true);
 	});
 
 	test('keeps flexible boat days free of fixed scenes', (): void => {

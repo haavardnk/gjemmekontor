@@ -34,7 +34,7 @@ test('merges rows created by two offline clients', async ({ browser }) => {
 		await firstContext.setOffline(true);
 		await secondContext.setOffline(true);
 
-		await addVideo(firstPage, firstDescription, 'GoPro');
+		await addVideo(firstPage, firstDescription, 'Osmo Action 4');
 		await addVideo(secondPage, secondDescription, 'Pocket 4');
 
 		await firstContext.setOffline(false);

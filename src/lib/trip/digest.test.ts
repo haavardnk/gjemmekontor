@@ -28,7 +28,7 @@ describe('Digest media rows', (): void => {
 			'A7 IV',
 			'A7 III',
 			'Insta360 X5',
-			'GoPro',
+			'Osmo Action 4',
 			'Mini Pro 5',
 			'Håvard sin mobil',
 			'Odd sin mobil',
