@@ -626,19 +626,98 @@ test('replaces a planned day route with the accumulated GPX track', async ({ pag
 	);
 	await expect(page.locator('[data-trip-nautical-miles]')).toContainText('nm');
 });
-test('starts explicit geolocation and follows the device position', async ({ page, context }) => {
-	await context.grantPermissions(['geolocation']);
-	await context.setGeolocation({ longitude: 16.24, latitude: 43.51, accuracy: 25 });
+test('starts explicit geolocation and follows the device position', async ({ page }) => {
+	const positionStyleErrors: string[] = [];
+	page.on('console', (message) => {
+		if (message.type() === 'error' && message.text().includes('layers.position')) {
+			positionStyleErrors.push(message.text());
+		}
+	});
+	await page.addInitScript(() => {
+		let update: PositionCallback | undefined;
+		const emit = (
+			speed: number,
+			heading: number | null,
+			longitude: number,
+			latitude: number
+		): void => {
+			update?.({
+				coords: {
+					accuracy: 20,
+					altitude: null,
+					altitudeAccuracy: null,
+					heading,
+					latitude,
+					longitude,
+					speed,
+					toJSON: () => ({})
+				},
+				timestamp: Date.now(),
+				toJSON: () => ({})
+			});
+		};
+		Object.defineProperty(navigator, 'geolocation', {
+			configurable: true,
+			value: {
+				clearWatch: (): void => {
+					update = undefined;
+				},
+				watchPosition: (next: PositionCallback): number => {
+					update = next;
+					emit(0, 0, 16.24, 43.51);
+					return 1;
+				}
+			}
+		});
+		Object.defineProperty(window, '__setMapTestGeolocation', {
+			configurable: true,
+			value: emit
+		});
+	});
 	await mockMap(page);
 	await login(page);
 
 	await page.getByRole('button', { name: 'Finn posisjonen min' }).click();
 	await expect(page.getByRole('button', { name: 'Følger posisjonen din' })).toBeVisible();
-	await expect(page.locator('[data-position-marker]')).toHaveAttribute(
-		'data-position-marker',
-		'monsieur-bintang'
-	);
+	const positionMarker = page.locator('[data-position-marker]');
+	const telemetry = page.locator('[data-vessel-telemetry]');
+	await expect(positionMarker).toHaveAttribute('data-position-marker', 'monsieur-bintang');
+	await expect(positionMarker).toHaveAttribute('data-position-speed-knots', '');
+	await expect(telemetry).toHaveCount(0);
+
+	await page.evaluate(() => {
+		(
+			window as unknown as {
+				__setMapTestGeolocation: (
+					speed: number,
+					heading: number | null,
+					longitude: number,
+					latitude: number
+				) => void;
+			}
+		).__setMapTestGeolocation(2, 270, 16.241, 43.511);
+	});
+	await expect(positionMarker).toHaveAttribute('data-position-heading', '270');
+	await expect(positionMarker).toHaveAttribute('data-position-speed-knots', '3.9');
+	await expect(telemetry).toContainText('3,9');
+	await expect(telemetry).toContainText('kn');
+	await expect(telemetry).toContainText('270°');
+	await page.evaluate(() => {
+		(
+			window as unknown as {
+				__setMapTestGeolocation: (
+					speed: number,
+					heading: number | null,
+					longitude: number,
+					latitude: number
+				) => void;
+			}
+		).__setMapTestGeolocation(0, null, 16.241, 43.511);
+	});
+	await expect(positionMarker).toHaveAttribute('data-position-speed-knots', '');
+	await expect(telemetry).toHaveCount(0);
 	await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+	expect(positionStyleErrors).toEqual([]);
 });
 
 test('restores the cached map snapshot when the map API is unavailable', async ({ page }) => {

@@ -64,17 +64,31 @@
 	);
 	let following = $state(false);
 	let bearing = $state(0);
+	let vesselHeading = $state(0);
+	let vesselSpeedKnots = $state<number>();
 	let cameraChanged = $state(false);
 	let mapReady = $state(false);
 	let watchId: number | undefined;
 	let lastPosition: GeolocationPosition | undefined;
 	let styleRequest = 0;
 	let positionMarkerImage: ImageData | undefined;
+	let positionMarkerImageFlipped: ImageData | undefined;
 	let aisMarkerImage: ImageData | undefined;
 	let aisMarkerImageFlipped: ImageData | undefined;
 	let resettingCamera = false;
 	const protocol = new Protocol({ metadata: true });
 	const cameraStorageKey = 'mapCamera';
+	const minimumMovingSpeedKnots = 0.3;
+	const metersPerSecondToKnots = 1.9438444924406;
+	const vesselSpeedLabel = $derived(
+		vesselSpeedKnots?.toLocaleString('nb-NO', {
+			minimumFractionDigits: 1,
+			maximumFractionDigits: 1
+		}) ?? ''
+	);
+	const vesselHeadingLabel = $derived(
+		`${String(Math.round(vesselHeading) % 360).padStart(3, '0')}°`
+	);
 
 	type MapCamera = {
 		center: Position;
@@ -248,6 +262,22 @@
 	function updateLocation(position: GeolocationPosition): void {
 		lastPosition = position;
 		locationState = 'active';
+		if (
+			position.coords.heading !== null &&
+			Number.isFinite(position.coords.heading) &&
+			position.coords.heading >= 0 &&
+			position.coords.heading < 360
+		) {
+			vesselHeading = position.coords.heading;
+		}
+		const speedKnots =
+			position.coords.speed !== null &&
+			Number.isFinite(position.coords.speed) &&
+			position.coords.speed >= 0
+				? position.coords.speed * metersPerSecondToKnots
+				: undefined;
+		vesselSpeedKnots =
+			speedKnots !== undefined && speedKnots >= minimumMovingSpeedKnots ? speedKnots : undefined;
 		const coordinates: Position = [position.coords.longitude, position.coords.latitude];
 		const source = map?.getSource('location');
 		if (isGeoJsonSource(source)) {
@@ -264,7 +294,11 @@
 					},
 					{
 						type: 'Feature',
-						properties: { kind: 'position', heading: position.coords.heading ?? 0 },
+						properties: {
+							kind: 'position',
+							heading: vesselHeading,
+							moving: vesselSpeedKnots !== undefined
+						},
 						geometry: { type: 'Point', coordinates }
 					}
 				]
@@ -566,6 +600,9 @@
 		if (positionMarkerImage && !map.hasImage('position-duck')) {
 			map.addImage('position-duck', positionMarkerImage, { pixelRatio: 2 });
 		}
+		if (positionMarkerImageFlipped && !map.hasImage('position-duck-flipped')) {
+			map.addImage('position-duck-flipped', positionMarkerImageFlipped, { pixelRatio: 2 });
+		}
 		if (aisMarkerImage && !map.hasImage('ais-flamingo')) {
 			map.addImage('ais-flamingo', aisMarkerImage, { pixelRatio: 4 });
 		}
@@ -728,7 +765,26 @@
 			metadata: { marker: 'monsieur-bintang' },
 			filter: ['==', ['get', 'kind'], 'position'],
 			layout: {
-				'icon-image': 'position-duck',
+				'icon-image': [
+					'case',
+					[
+						'all',
+						['==', ['get', 'moving'], true],
+						['>=', ['coalesce', ['get', 'heading'], 0], 180],
+						['<', ['coalesce', ['get', 'heading'], 0], 360]
+					],
+					'position-duck-flipped',
+					'position-duck'
+				],
+				'icon-rotate': [
+					'case',
+					['!=', ['get', 'moving'], true],
+					0,
+					['<', ['coalesce', ['get', 'heading'], 0], 180],
+					['-', ['coalesce', ['get', 'heading'], 0], 90],
+					['-', ['coalesce', ['get', 'heading'], 0], 270]
+				],
+				'icon-rotation-alignment': 'map',
 				'icon-allow-overlap': true
 			}
 		});
@@ -862,6 +918,7 @@
 				return;
 			}
 			positionMarkerImage = markerImage;
+			positionMarkerImageFlipped = flipImageHorizontally(markerImage);
 			aisMarkerImage = vesselMarkerImage;
 			aisMarkerImageFlipped = flipImageHorizontally(vesselMarkerImage);
 			maplibre.setWorkerUrl(maplibreWorkerUrl);
@@ -949,6 +1006,8 @@
 	data-actual-route-ids={actualRoutes.map((route) => route.properties.gpxId).join(',')}
 	data-hidden-route-count={hiddenRouteIds.size}
 	data-position-marker="monsieur-bintang"
+	data-position-heading={vesselHeading}
+	data-position-speed-knots={vesselSpeedKnots?.toFixed(1) ?? ''}
 	data-ais-vessel-count={aisVessels.length}
 	data-selected-ais-mmsi={selectedAisMmsi ?? ''}
 >
@@ -987,8 +1046,9 @@
 			</button>
 		{/if}
 		<button
-			class="btn btn-circle bg-base-100 shadow"
+			class="btn btn-circle shadow"
 			class:btn-primary={following}
+			class:bg-base-100={!following}
 			type="button"
 			onclick={locate}
 			aria-label={following ? 'Følger posisjonen din' : 'Finn posisjonen min'}
@@ -996,5 +1056,26 @@
 		>
 			{#if following}<Navigation size={20} />{:else}<LocateFixed size={20} />{/if}
 		</button>
+		{#if vesselSpeedKnots !== undefined}
+			<div
+				class="flex items-center gap-2 rounded-full border border-base-300 bg-base-100/95 py-1.5 pr-3 pl-1.5 shadow-lg backdrop-blur-sm"
+				data-vessel-telemetry
+				aria-label={`Fart ${vesselSpeedLabel} knop, kurs ${Math.round(vesselHeading)} grader`}
+			>
+				<span class="grid size-8 place-items-center rounded-full bg-primary text-primary-content">
+					<span class="grid place-items-center" style:transform={`rotate(${vesselHeading}deg)`}>
+						<Navigation2 size={16} strokeWidth={2.5} />
+					</span>
+				</span>
+				<span class="flex items-baseline gap-1 font-semibold tabular-nums">
+					<span class="text-base leading-none text-neutral">{vesselSpeedLabel}</span>
+					<span class="text-xs text-base-content/55">kn</span>
+				</span>
+				<span class="h-4 w-px bg-base-300" aria-hidden="true"></span>
+				<span class="font-mono text-sm font-semibold text-neutral tabular-nums">
+					{vesselHeadingLabel}
+				</span>
+			</div>
+		{/if}
 	</div>
 </div>
