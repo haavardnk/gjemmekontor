@@ -164,6 +164,38 @@ async function mockMap(page: Page, mapSnapshot = snapshot): Promise<void> {
 			await route.fulfill({ json: { type: 'FeatureCollection', features: [] } });
 			return;
 		}
+		if (pathname === '/api/map/ais') {
+			await route.fulfill({
+				json: {
+					type: 'FeatureCollection',
+					status: 'connected',
+					lastMessageAt: '2026-08-25T12:00:00.000Z',
+					features: [
+						{
+							type: 'Feature',
+							id: 'ais-257069200',
+							geometry: { type: 'Point', coordinates: [16.25, 43.25] },
+							properties: {
+								mmsi: 257069200,
+								name: 'KV FARM',
+								callSign: 'LBHF',
+								shipType: 55,
+								navigationStatus: 0,
+								speedOverGround: 12.4,
+								courseOverGround: 86.7,
+								trueHeading: 87,
+								direction: 87,
+								lengthMeters: 47,
+								widthMeters: 14,
+								destination: 'SPLIT',
+								lastSeenAt: '2026-08-25T12:00:00.000Z'
+							}
+						}
+					]
+				}
+			});
+			return;
+		}
 		await route.fulfill({
 			json: { snapshot: mapSnapshot, stale: false, refreshing: false, sourceMapId }
 		});
@@ -410,6 +442,43 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	expect(pageErrors).toEqual([]);
 });
 
+test('shows, selects, and toggles the live AIS vessel layer', async ({ page }) => {
+	const aisStyleErrors: string[] = [];
+	page.on('console', (message) => {
+		if (message.type() === 'error' && message.text().includes('layers.ais-vessels')) {
+			aisStyleErrors.push(message.text());
+		}
+	});
+	await mockMap(page);
+	await login(page);
+	const map = page.locator('[data-map-ready]');
+	await expect(map).toHaveAttribute('data-map-ready', 'true');
+	await expect(map).toHaveAttribute('data-ais-vessel-count', '1');
+	expect(aisStyleErrors).toEqual([]);
+
+	const canvas = page.locator('.maplibregl-canvas');
+	const box = await canvas.boundingBox();
+	expect(box).not.toBeNull();
+	await canvas.click({ position: { x: (box?.width ?? 0) / 2, y: (box?.height ?? 0) / 2 } });
+	await expect(page.getByRole('heading', { name: 'KV FARM' })).toBeVisible();
+	await expect(page.getByText('MMSI 257069200')).toBeVisible();
+	await expect(page.getByText('Kallesignal LBHF')).toBeVisible();
+	await expect(page.getByText('47 m / 154 ft lang · 14 m bred')).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Mer informasjon og bilder' })).toHaveAttribute(
+		'href',
+		'https://ships25.com/no/vessel/detail/257069200'
+	);
+	await page.getByRole('button', { name: 'Lukk fartøydetaljer' }).click();
+
+	await page.getByRole('button', { name: 'Velg kartlag' }).click();
+	const aisToggle = page.locator('[data-ais-toggle]');
+	await expect(aisToggle).toHaveAttribute('aria-pressed', 'true');
+	await expect(aisToggle).toContainText('1 fartøy');
+	await aisToggle.click();
+	await expect(aisToggle).toHaveAttribute('aria-pressed', 'false');
+	await expect(map).toHaveAttribute('data-ais-vessel-count', '0');
+});
+
 test('shows map bearing and resets north from the compass', async ({ page }) => {
 	await mockMap(page);
 	await login(page);
@@ -588,6 +657,12 @@ test('restores the cached map snapshot when the map API is unavailable', async (
 		const pathname = new URL(route.request().url()).pathname;
 		if (pathname === '/api/map/offline') {
 			await route.fulfill({ json: { packages: [] } });
+			return;
+		}
+		if (pathname === '/api/map/ais') {
+			await route.fulfill({
+				json: { type: 'FeatureCollection', features: [], status: 'connected' }
+			});
 			return;
 		}
 		if (!mapAvailable) {

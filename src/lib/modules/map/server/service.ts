@@ -1,3 +1,4 @@
+import type { MapSnapshot } from '$lib/modules/map/domain/types';
 import { apiError, apiSuccess } from '$lib/server/api';
 
 import { getMapRuntimeConfig } from './config';
@@ -44,4 +45,8 @@ export function handleGetMap(): Promise<Response> {
 
 export function handleRefreshMap(): Promise<Response> {
 	return response((service) => service.refresh());
+}
+
+export async function getCurrentMapSnapshot(): Promise<MapSnapshot> {
+	return (await getConfiguredService().service.get()).snapshot;
 }

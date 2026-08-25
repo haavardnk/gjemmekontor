@@ -24,6 +24,7 @@
 	import { onMount } from 'svelte';
 
 	import type { ActualRouteFeature } from '$lib/modules/logbook/public';
+	import type { AisVesselFeature } from '$lib/modules/map/domain/ais';
 	import type { OfflineMapRecord } from '$lib/modules/map/public';
 
 	import type { MapFeature, MapMode, MapPointSymbol, MapSnapshot, Position } from '../domain/types';
@@ -37,7 +38,10 @@
 		offlineMap,
 		actualRoutes,
 		hiddenRouteIds,
-		onselect
+		aisVessels,
+		selectedAisMmsi,
+		onselect,
+		onselectais
 	}: {
 		snapshot: MapSnapshot;
 		visibleLayerIds: Set<string>;
@@ -47,7 +51,10 @@
 		offlineMap: OfflineMapRecord | undefined;
 		actualRoutes: ActualRouteFeature[];
 		hiddenRouteIds: Set<string>;
+		aisVessels: AisVesselFeature[];
+		selectedAisMmsi: number | undefined;
 		onselect: (id: string) => void;
+		onselectais: (mmsi: number) => void;
 	} = $props();
 
 	let container: HTMLDivElement;
@@ -64,6 +71,8 @@
 	let styleRequest = 0;
 	let harbourRequest = 0;
 	let positionMarkerImage: ImageData | undefined;
+	let aisMarkerImage: ImageData | undefined;
+	let aisMarkerImageFlipped: ImageData | undefined;
 	let resettingCamera = false;
 	const protocol = new Protocol({ metadata: true });
 	const cameraStorageKey = 'mapCamera';
@@ -174,6 +183,44 @@
 		context.drawImage(bitmap, (128 - width) / 2, (128 - height) / 2, width, height);
 		bitmap.close();
 		return context.getImageData(0, 0, canvas.width, canvas.height);
+	}
+
+	async function loadAisMarkerImage(): Promise<ImageData> {
+		const response = await fetch('/flamingo-vessel.png');
+		if (!response.ok) {
+			throw new Error('AIS_MARKER_UNAVAILABLE');
+		}
+		const bitmap = await createImageBitmap(await response.blob());
+		const canvas = document.createElement('canvas');
+		canvas.width = 256;
+		canvas.height = 256;
+		const context = canvas.getContext('2d');
+		if (!context) {
+			bitmap.close();
+			throw new Error('CANVAS_UNAVAILABLE');
+		}
+		context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+		bitmap.close();
+		return context.getImageData(0, 0, canvas.width, canvas.height);
+	}
+
+	function flipImageHorizontally(image: ImageData): ImageData {
+		const source = document.createElement('canvas');
+		source.width = image.width;
+		source.height = image.height;
+		const sourceContext = source.getContext('2d');
+		const target = document.createElement('canvas');
+		target.width = image.width;
+		target.height = image.height;
+		const targetContext = target.getContext('2d');
+		if (!sourceContext || !targetContext) {
+			throw new Error('CANVAS_UNAVAILABLE');
+		}
+		sourceContext.putImageData(image, 0, 0);
+		targetContext.translate(image.width, 0);
+		targetContext.scale(-1, 1);
+		targetContext.drawImage(source, 0, 0);
+		return targetContext.getImageData(0, 0, image.width, image.height);
 	}
 
 	const locationMessage = $derived(
@@ -372,6 +419,19 @@
 		};
 	}
 
+	function aisFeatureCollection(): GeoJSON.FeatureCollection<GeoJSON.Point> {
+		return {
+			type: 'FeatureCollection',
+			features: aisVessels.map((feature) => ({
+				...feature,
+				properties: {
+					...feature.properties,
+					selected: feature.properties.mmsi === selectedAisMmsi
+				}
+			}))
+		};
+	}
+
 	function ensureMarkerImages(): void {
 		if (!map) {
 			return;
@@ -532,6 +592,12 @@
 		if (positionMarkerImage && !map.hasImage('position-duck')) {
 			map.addImage('position-duck', positionMarkerImage, { pixelRatio: 2 });
 		}
+		if (aisMarkerImage && !map.hasImage('ais-flamingo')) {
+			map.addImage('ais-flamingo', aisMarkerImage, { pixelRatio: 4 });
+		}
+		if (aisMarkerImageFlipped && !map.hasImage('ais-flamingo-flipped')) {
+			map.addImage('ais-flamingo-flipped', aisMarkerImageFlipped, { pixelRatio: 4 });
+		}
 		if (mode === 'nautical' && !offlineMap) {
 			map.addSource('marine-profile', {
 				type: 'raster',
@@ -610,6 +676,10 @@
 		map.addSource('location', {
 			type: 'geojson',
 			data: { type: 'FeatureCollection', features: [] }
+		});
+		map.addSource('ais-vessels', {
+			type: 'geojson',
+			data: aisFeatureCollection()
 		});
 		map.addLayer({
 			id: 'routes',
@@ -706,6 +776,62 @@
 				'icon-allow-overlap': true
 			}
 		});
+		map.addLayer({
+			id: 'ais-selected',
+			type: 'circle',
+			source: 'ais-vessels',
+			filter: ['==', ['get', 'selected'], true],
+			paint: {
+				'circle-color': '#ffffff',
+				'circle-opacity': 0.92,
+				'circle-radius': 17,
+				'circle-stroke-color': '#17343c',
+				'circle-stroke-width': 2
+			}
+		});
+		map.addLayer({
+			id: 'ais-hit-targets',
+			type: 'circle',
+			source: 'ais-vessels',
+			paint: {
+				'circle-color': '#000000',
+				'circle-opacity': 0.01,
+				'circle-radius': 18
+			}
+		});
+		map.addLayer({
+			id: 'ais-vessels',
+			type: 'symbol',
+			source: 'ais-vessels',
+			layout: {
+				'icon-image': [
+					'case',
+					[
+						'all',
+						['>=', ['coalesce', ['get', 'direction'], 0], 180],
+						['<', ['coalesce', ['get', 'direction'], 0], 360]
+					],
+					'ais-flamingo-flipped',
+					'ais-flamingo'
+				],
+				'icon-size': [
+					'interpolate',
+					['linear'],
+					['coalesce', ['get', 'lengthMeters'], 20],
+					0,
+					0.32,
+					20,
+					0.36,
+					100,
+					0.48,
+					300,
+					0.62
+				],
+				'icon-allow-overlap': true,
+				'icon-ignore-placement': false
+			},
+			paint: { 'icon-opacity': 1 }
+		});
 		if (lastPosition) {
 			updateLocation(lastPosition);
 		}
@@ -737,6 +863,7 @@
 		const pointSource = map?.getSource('points');
 		const lineSource = map?.getSource('lines');
 		const routeSource = map?.getSource('actual-routes');
+		const aisSource = map?.getSource('ais-vessels');
 		if (isGeoJsonSource(pointSource)) {
 			pointSource.setData(points);
 		}
@@ -745,6 +872,9 @@
 		}
 		if (isGeoJsonSource(routeSource)) {
 			routeSource.setData(routes);
+		}
+		if (isGeoJsonSource(aisSource)) {
+			aisSource.setData(aisFeatureCollection());
 		}
 	});
 
@@ -766,15 +896,18 @@
 	onMount(() => {
 		let disposed = false;
 		void (async (): Promise<void> => {
-			const [maplibre, markerImage] = await Promise.all([
+			const [maplibre, markerImage, vesselMarkerImage] = await Promise.all([
 				import('maplibre-gl'),
-				loadPositionMarkerImage()
+				loadPositionMarkerImage(),
+				loadAisMarkerImage()
 			]);
 			await import('maplibre-gl/dist/maplibre-gl.css');
 			if (disposed) {
 				return;
 			}
 			positionMarkerImage = markerImage;
+			aisMarkerImage = vesselMarkerImage;
+			aisMarkerImageFlipped = flipImageHorizontally(vesselMarkerImage);
 			maplibre.setWorkerUrl(maplibreWorkerUrl);
 			maplibre.addProtocol('pmtiles', protocol.tile);
 			const style = await mapStyle(mode, offlineMap);
@@ -814,6 +947,14 @@
 			};
 			map.on('click', 'points', selectPoint);
 			map.on('click', 'point-hit-targets', selectPoint);
+			const selectAisVessel = (event: { features?: MapGeoJSONFeature[] }): void => {
+				const mmsi = event.features?.[0]?.properties.mmsi;
+				if (typeof mmsi === 'number') {
+					onselectais(mmsi);
+				}
+			};
+			map.on('click', 'ais-vessels', selectAisVessel);
+			map.on('click', 'ais-hit-targets', selectAisVessel);
 			map.on('click', 'clusters', (event): void => {
 				const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
 				const clusterId = feature?.properties.cluster_id;
@@ -853,6 +994,8 @@
 	data-actual-route-ids={actualRoutes.map((route) => route.properties.gpxId).join(',')}
 	data-hidden-route-count={hiddenRouteIds.size}
 	data-position-marker="monsieur-bintang"
+	data-ais-vessel-count={aisVessels.length}
+	data-selected-ais-mmsi={selectedAisMmsi ?? ''}
 >
 	<div bind:this={container} class="size-full" aria-label="Reisekart"></div>
 	<div class="absolute right-3 bottom-12 z-20 flex flex-col items-end gap-2">

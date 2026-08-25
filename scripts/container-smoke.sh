@@ -22,6 +22,7 @@ start() {
 		-e GOOGLE_MY_MAPS_ID=test-map \
 		-e ORIGIN=http://127.0.0.1:3000 \
 		-e BODY_SIZE_LIMIT=6M \
+		-e AISSTREAM_API_KEY=test-aisstream-key \
 		-p 127.0.0.1:3000:3000 \
 		"$image" >/dev/null
 

@@ -23,6 +23,7 @@ async function fixture(): Promise<{
 	directories.push(directory);
 	const bundledDirectory = join(directory, 'bundled');
 	const config: MapRuntimeConfig = {
+		aisStreamApiKey: 'ais-key',
 		dataDir: directory,
 		bundledOfflineMapDir: bundledDirectory,
 		googleMyMapsId: 'map-id'

@@ -11,6 +11,7 @@ APP_PASSWORD=replace-with-a-strong-password
 SESSION_SECRET=replace-with-32-random-bytes
 ENABLED_MODULES=map,shots,logbook,shopping-list,menu
 GOOGLE_MY_MAPS_ID=replace-with-a-public-map-id
+AISSTREAM_API_KEY=replace-with-an-aisstream-api-key
 BRING_EMAIL=replace-with-bring-account-email
 BRING_PASSWORD=replace-with-bring-account-password
 BRING_LIST_UUID=replace-with-bring-list-uuid
@@ -39,6 +40,7 @@ Health endpoint: `GET /api/health`.
 | `ENABLED_MODULES`         | Optional comma-separated module IDs; defaults to all       |
 | `BUNDLED_OFFLINE_MAP_DIR` | Optional directory containing image-bundled PMTiles        |
 | `GOOGLE_MY_MAPS_ID`       | Public Google My Maps map ID                               |
+| `AISSTREAM_API_KEY`       | Server-side key for the live AISStream vessel layer        |
 | `BRING_EMAIL`             | Email for the shared Bring account                         |
 | `BRING_PASSWORD`          | Password for the shared Bring account                      |
 | `BRING_LIST_UUID`         | UUID of the trip shopping list                             |
@@ -64,7 +66,7 @@ Compose binds direct access to `127.0.0.1:3000`. Remove `ports` when only anothe
 
 ## Maps
 
-`GOOGLE_MY_MAPS_ID` must reference a map shared as **Anyone with the link can view**. The image includes a Protomaps normal basemap for the sailing region at zoom 0–14. The app offers only packages present in the image or data directory.
+`GOOGLE_MY_MAPS_ID` must reference a map shared as **Anyone with the link can view**. `AISSTREAM_API_KEY` remains on the server and subscribes the live vessel feed to this map's initial bounds. The image includes a Protomaps normal basemap for the sailing region at zoom 0–14. The app offers only packages present in the image or data directory.
 
 Licensed operator-provided packages in `/data` override bundled files with the same name:
 

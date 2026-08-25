@@ -9,6 +9,7 @@
 		RotateCcw,
 		Satellite,
 		Search,
+		Ship,
 		ShipWheel,
 		Trash2,
 		X
@@ -33,6 +34,7 @@
 		storedOfflineMaps,
 		storeMapSnapshot
 	} from '$lib/modules/map/client/offline';
+	import type { AisApiResponse } from '$lib/modules/map/domain/ais';
 	import type {
 		MapApiResponse,
 		MapFeature,
@@ -45,6 +47,7 @@
 	import MapSymbol from '$lib/modules/map/ui/MapSymbol.svelte';
 	import MapView from '$lib/modules/map/ui/MapView.svelte';
 	import PoiSheet from '$lib/modules/map/ui/PoiSheet.svelte';
+	import VesselSheet from '$lib/modules/map/ui/VesselSheet.svelte';
 	import { tripDayState } from '$lib/trip/day.svelte';
 	import { tripDays } from '$lib/trip/itinerary';
 	import { mapErrorMessage } from '$lib/ui/copy';
@@ -78,10 +81,36 @@
 	let statusMessage = $state('Laster kart …');
 	let errorMessage = $state('');
 	let sourceMapId = $state('');
+	let aisEnabled = $state(false);
+	let aisPreferenceReady = $state(false);
+	let pageVisible = $state(true);
+	let selectedAisMmsi = $state<number>();
+	let aisResponse = $state<AisApiResponse>({
+		type: 'FeatureCollection',
+		features: [],
+		status: 'idle'
+	});
 
 	const selected = $derived(snapshot?.features.find((feature) => feature.id === selectedId));
 	const selectedSourceStyle = $derived(
 		snapshot?.sourceStyles.find((style) => style.key === selected?.properties.sourceStyleKey)
+	);
+	const selectedAisVessel = $derived(
+		aisResponse.features.find((feature) => feature.properties.mmsi === selectedAisMmsi)
+	);
+	const visibleAisVessels = $derived(aisEnabled ? aisResponse.features : []);
+	const aisStatusLabel = $derived(
+		!online
+			? 'Ikke tilgjengelig uten nett'
+			: aisResponse.status === 'connected'
+				? `${aisResponse.features.length} ${aisResponse.features.length === 1 ? 'fartøy' : 'fartøy'}`
+				: aisResponse.status === 'connecting'
+					? 'Kobler til AIS …'
+					: aisResponse.status === 'reconnecting'
+						? 'Kobler til AIS på nytt …'
+						: aisResponse.status === 'error'
+							? 'AIS er midlertidig utilgjengelig'
+							: 'AIS er av'
 	);
 	const activeOfflineMap = $derived(
 		online ? undefined : offlineMaps.find((record) => record.id === mode)
@@ -207,6 +236,7 @@
 		visibleLayerIds.clear();
 		routeScope = 'all';
 		selectedId = undefined;
+		selectedAisMmsi = undefined;
 	}
 
 	function showCurrentMapItems(): void {
@@ -225,7 +255,16 @@
 
 	function selectFeature(feature: MapFeature): void {
 		selectedId = feature.id;
+		selectedAisMmsi = undefined;
 		query = '';
+	}
+
+	function toggleAis(): void {
+		aisEnabled = !aisEnabled;
+		localStorage.setItem('mapAisEnabled', String(aisEnabled));
+		if (!aisEnabled) {
+			selectedAisMmsi = undefined;
+		}
 	}
 
 	function selectMode(selectedMode: MapMode): void {
@@ -291,25 +330,78 @@
 		offlineMessage = 'Kartpakken er slettet fra enheten.';
 	}
 
+	$effect(() => {
+		if (!aisPreferenceReady || !aisEnabled || !online || !pageVisible) {
+			return;
+		}
+		let disposed = false;
+		let loading = false;
+		let controller: AbortController | undefined;
+		const refresh = async (): Promise<void> => {
+			if (loading) return;
+			loading = true;
+			controller = new AbortController();
+			try {
+				const response = await fetch('/api/map/ais', {
+					signal: controller.signal,
+					cache: 'no-store'
+				});
+				if (!response.ok) {
+					throw new Error('AIS_UNAVAILABLE');
+				}
+				const next = (await response.json()) as Partial<AisApiResponse>;
+				if (
+					next.type !== 'FeatureCollection' ||
+					!Array.isArray(next.features) ||
+					typeof next.status !== 'string'
+				) {
+					throw new Error('AIS_INVALID_RESPONSE');
+				}
+				if (!disposed) aisResponse = next as AisApiResponse;
+			} catch (error) {
+				if (!disposed && !(error instanceof DOMException && error.name === 'AbortError')) {
+					aisResponse = { ...aisResponse, status: 'error', error: 'AIS_UNAVAILABLE' };
+				}
+			} finally {
+				loading = false;
+			}
+		};
+		void refresh();
+		const interval = window.setInterval(refresh, 5_000);
+		return (): void => {
+			disposed = true;
+			controller?.abort();
+			window.clearInterval(interval);
+		};
+	});
+
 	onMount(() => {
 		const savedMode = localStorage.getItem('mapMode');
 		if (savedMode === 'normal' || savedMode === 'nautical' || savedMode === 'satellite') {
 			mode = savedMode;
 		}
+		aisEnabled = localStorage.getItem('mapAisEnabled') !== 'false';
+		aisPreferenceReady = true;
 		online = navigator.onLine;
+		pageVisible = document.visibilityState === 'visible';
 		const updateOnlineStatus = (): void => {
 			online = navigator.onLine;
 			if (online) {
 				void loadOfflineMaps();
 			}
 		};
+		const updateVisibility = (): void => {
+			pageVisible = document.visibilityState === 'visible';
+		};
 		window.addEventListener('online', updateOnlineStatus);
 		window.addEventListener('offline', updateOnlineStatus);
+		document.addEventListener('visibilitychange', updateVisibility);
 		void bootstrapMap();
 		void loadOfflineMaps();
 		return (): void => {
 			window.removeEventListener('online', updateOnlineStatus);
 			window.removeEventListener('offline', updateOnlineStatus);
+			document.removeEventListener('visibilitychange', updateVisibility);
 		};
 	});
 </script>
@@ -328,8 +420,17 @@
 			{mode}
 			{actualRoutes}
 			{hiddenRouteIds}
+			aisVessels={visibleAisVessels}
+			{selectedAisMmsi}
 			offlineMap={activeOfflineMap}
-			onselect={(id) => (selectedId = id)}
+			onselect={(id) => {
+				selectedId = id;
+				selectedAisMmsi = undefined;
+			}}
+			onselectais={(mmsi) => {
+				selectedAisMmsi = mmsi;
+				selectedId = undefined;
+			}}
 		/>
 	{:else}
 		<div class="grid size-full place-items-center bg-base-200">
@@ -467,6 +568,39 @@
 				<RotateCcw size={16} />
 				Nullstill filtre
 			</button>
+			<section class="border-b border-base-300 py-4" data-ais-controls>
+				<button
+					class={`flex min-h-14 w-full items-center gap-3 rounded-lg border border-base-300 px-3 py-2 text-left ${aisEnabled ? 'bg-primary/10' : ''}`}
+					type="button"
+					aria-pressed={aisEnabled}
+					onclick={toggleAis}
+					data-ais-toggle
+				>
+					<span
+						class="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
+					>
+						<Ship size={18} />
+					</span>
+					<span class="min-w-0 flex-1">
+						<span class="block text-sm font-bold">AIS-fartøy</span>
+						<span class="mt-0.5 block text-xs text-base-content/55" role="status">
+							{aisStatusLabel}
+						</span>
+					</span>
+					<span
+						class="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+						class:bg-primary={aisEnabled}
+						class:bg-base-300={!aisEnabled}
+						aria-hidden="true"
+					>
+						<span
+							class="absolute top-1 size-4 rounded-full bg-white shadow transition-transform"
+							class:translate-x-6={aisEnabled}
+							class:translate-x-1={!aisEnabled}
+						></span>
+					</span>
+				</button>
+			</section>
 			<section class="border-b border-base-300 py-4">
 				<h3 class="mb-1 text-sm font-bold">Dagens kartpunkter</h3>
 				<p class="mb-3 text-xs leading-5 text-base-content/60">
@@ -635,6 +769,8 @@
 					>,
 					<a class="link" href="https://www.openseamap.org/" target="_blank" rel="noreferrer"
 						>OpenSeaMap</a
+					>,
+					<a class="link" href="https://aisstream.io/" target="_blank" rel="noreferrer">AISStream</a
 					>.
 				</p>
 				<a
@@ -654,5 +790,8 @@
 			fetchedAt={snapshot.fetchedAt}
 			onclose={() => (selectedId = undefined)}
 		/>
+	{/if}
+	{#if selectedAisVessel}
+		<VesselSheet vessel={selectedAisVessel} onclose={() => (selectedAisMmsi = undefined)} />
 	{/if}
 </section>
