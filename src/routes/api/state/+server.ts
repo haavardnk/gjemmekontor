@@ -1,4 +1,4 @@
-import { getDatabase } from '$lib/server/database';
+import { getDatabase } from '$lib/app/server/database';
 import { handleGetState } from '$lib/server/state';
 
 import type { RequestHandler } from './$types';

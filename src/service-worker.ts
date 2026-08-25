@@ -3,7 +3,7 @@
 /// <reference lib="webworker" />
 /// <reference types="@sveltejs/kit" />
 
-import { appShellPaths, isApiPath, isAppShellPath } from '$lib/pwa/cache';
+import { isApiPath, isAppShellPath, knownAppShellPaths } from '$lib/app/pwa/cache';
 import { base, build, files, version } from '$service-worker';
 
 const worker = globalThis.self as unknown as ServiceWorkerGlobalScope;
@@ -11,6 +11,7 @@ const cachePrefix = 'gjemmekontor-';
 const assetCacheName = `${cachePrefix}assets-${version}`;
 const pageCacheName = `${cachePrefix}pages-${version}`;
 const assets = [...new Set([...build, ...files])];
+let enabledAppShellPaths = [...knownAppShellPaths];
 
 async function cachePage(request: Request, response: Response): Promise<void> {
 	const contentType = response.headers.get('content-type') ?? '';
@@ -18,7 +19,7 @@ async function cachePage(request: Request, response: Response): Promise<void> {
 		return;
 	}
 	const responseUrl = new URL(response.url);
-	if (!isAppShellPath(responseUrl.pathname, base)) {
+	if (!isAppShellPath(responseUrl.pathname, base, enabledAppShellPaths)) {
 		return;
 	}
 	const cache = await caches.open(pageCacheName);
@@ -39,9 +40,16 @@ async function navigationResponse(request: Request): Promise<Response> {
 	}
 }
 
-async function warmPages(): Promise<void> {
+async function warmPages(paths: readonly string[]): Promise<void> {
+	enabledAppShellPaths = paths.filter((path) => knownAppShellPaths.includes(path));
+	const cache = await caches.open(pageCacheName);
 	await Promise.all(
-		appShellPaths.map(async (path): Promise<void> => {
+		knownAppShellPaths
+			.filter((path) => !enabledAppShellPaths.includes(path))
+			.map((path) => cache.delete(`${base}${path}`))
+	);
+	await Promise.all(
+		enabledAppShellPaths.map(async (path): Promise<void> => {
 			const request = new Request(`${base}${path}`, {
 				headers: { accept: 'text/html' },
 				credentials: 'same-origin'
@@ -81,7 +89,10 @@ worker.addEventListener('activate', (event): void => {
 
 worker.addEventListener('message', (event): void => {
 	if (event.data?.type === 'CACHE_APP_SHELL') {
-		event.waitUntil(warmPages());
+		const paths = Array.isArray(event.data.paths)
+			? event.data.paths.filter((path: unknown): path is string => typeof path === 'string')
+			: [];
+		event.waitUntil(warmPages(paths));
 	}
 });
 
@@ -98,7 +109,7 @@ worker.addEventListener('fetch', (event): void => {
 		event.respondWith(caches.match(url.pathname).then((response) => response ?? fetch(request)));
 		return;
 	}
-	if (request.mode === 'navigate' && isAppShellPath(url.pathname, base)) {
+	if (request.mode === 'navigate' && isAppShellPath(url.pathname, base, enabledAppShellPaths)) {
 		event.respondWith(navigationResponse(request));
 	}
 });

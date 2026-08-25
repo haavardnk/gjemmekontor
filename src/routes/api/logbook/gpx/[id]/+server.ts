@@ -1,5 +1,5 @@
-import { getDatabase } from '$lib/server/database';
-import { handleGetGpx, handlePutGpx } from '$lib/server/gpx';
+import { getDatabase } from '$lib/app/server/database';
+import { handleGetGpx, handlePutGpx } from '$lib/modules/logbook/server';
 
 import type { RequestHandler } from './$types';
 

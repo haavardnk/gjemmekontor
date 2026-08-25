@@ -1,4 +1,4 @@
-import { handleOfflineMapFile } from '$lib/server/map/offline';
+import { handleOfflineMapFile } from '$lib/modules/map/server';
 
 import type { RequestHandler } from './$types';
 

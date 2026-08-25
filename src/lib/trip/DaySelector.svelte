@@ -2,7 +2,7 @@
 	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 
 	import { tripDayState } from './day.svelte';
-	import { tripDays } from './days';
+	import { tripDays } from './itinerary';
 
 	function changeDay(event: Event): void {
 		const select = event.currentTarget;

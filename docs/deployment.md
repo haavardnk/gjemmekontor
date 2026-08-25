@@ -9,6 +9,7 @@ Copy `docker-compose.example.yml` and create a sibling `.env`:
 ```env
 APP_PASSWORD=replace-with-a-strong-password
 SESSION_SECRET=replace-with-32-random-bytes
+ENABLED_MODULES=map,shots,logbook,shopping-list
 GOOGLE_MY_MAPS_ID=replace-with-a-public-map-id
 BRING_EMAIL=replace-with-bring-account-email
 BRING_PASSWORD=replace-with-bring-account-password
@@ -35,6 +36,7 @@ Health endpoint: `GET /api/health`.
 | `APP_VERSION`             | Image-owned version derived from the GitHub Release tag    |
 | `SESSION_SECRET`          | Session signing secret, at least 32 bytes                  |
 | `DATA_DIR`                | Persistent data directory; use `/data` in Docker           |
+| `ENABLED_MODULES`         | Optional comma-separated module IDs; defaults to all       |
 | `BUNDLED_OFFLINE_MAP_DIR` | Optional directory containing image-bundled PMTiles        |
 | `GOOGLE_MY_MAPS_ID`       | Public Google My Maps map ID                               |
 | `BRING_EMAIL`             | Email for the shared Bring account                         |
@@ -44,6 +46,8 @@ Health endpoint: `GET /api/health`.
 | `BODY_SIZE_LIMIT`         | Adapter request limit; keep at `6M` for 5 MB GPX uploads   |
 | `HOST`                    | Listen address; image default is `0.0.0.0`                 |
 | `PORT`                    | Listen port; image default is `3000`                       |
+
+Available module IDs are `map`, `shots`, `logbook`, and `shopping-list`. At least one must be enabled. Unknown or duplicate IDs fail configuration validation. Map configuration is required only when `map` is enabled. Bring configuration remains optional for `shopping-list`; without it, the module shows its provider-unavailable state.
 
 ## Reverse proxy
 

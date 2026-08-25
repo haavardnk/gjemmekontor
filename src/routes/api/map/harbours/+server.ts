@@ -1,4 +1,4 @@
-import { handleHarbours } from '$lib/server/map/harbours';
+import { handleHarbours } from '$lib/modules/map/server';
 
 import type { RequestHandler } from './$types';
 

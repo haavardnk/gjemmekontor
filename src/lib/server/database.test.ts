@@ -25,7 +25,7 @@ describe('database', (): void => {
 			.all()
 			.map((row) => (row as { name: string }).name);
 
-		expect(tables).toEqual(['gpx_uploads', 'meta', 'sessions', 'state_entries']);
+		expect(tables).toEqual(['meta', 'sessions', 'state_entries']);
 		expect(first.pragma('journal_mode', { simple: true })).toBe('wal');
 		expect(first.pragma('foreign_keys', { simple: true })).toBe(1);
 		expect(first.pragma('busy_timeout', { simple: true })).toBe(5000);

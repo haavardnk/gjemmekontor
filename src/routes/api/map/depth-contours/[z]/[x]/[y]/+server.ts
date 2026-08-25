@@ -1,4 +1,4 @@
-import { handleDepthContourTile } from '$lib/server/map/depth-contours';
+import { handleDepthContourTile } from '$lib/modules/map/server';
 
 import type { RequestHandler } from './$types';
 

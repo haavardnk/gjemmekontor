@@ -3,9 +3,9 @@ import { join } from 'node:path';
 
 import Database from 'better-sqlite3';
 
-import { getRuntimeConfig } from './env';
+export type DatabaseMigration = (db: Database.Database) => void;
 
-const migrations = [
+export const coreDatabaseMigrations: readonly DatabaseMigration[] = [
 	(db: Database.Database): void => {
 		db.exec(`
 			CREATE TABLE state_entries (
@@ -27,25 +27,11 @@ const migrations = [
 				value TEXT NOT NULL
 			);
 			INSERT INTO meta (key, value) VALUES ('global_revision', '0');
-			CREATE TABLE gpx_uploads (
-				id TEXT PRIMARY KEY,
-				leg_key TEXT NOT NULL,
-				filename TEXT NOT NULL,
-				content_type TEXT NOT NULL,
-				checksum TEXT NOT NULL,
-				byte_size INTEGER NOT NULL CHECK (byte_size > 0),
-				parser_version INTEGER NOT NULL CHECK (parser_version > 0),
-				extraction TEXT NOT NULL,
-				original BLOB NOT NULL,
-				client_id TEXT NOT NULL,
-				created_at TEXT NOT NULL
-			);
-			CREATE INDEX gpx_uploads_leg_key ON gpx_uploads (leg_key);
 		`);
 	}
 ];
 
-function migrate(db: Database.Database): void {
+function migrate(db: Database.Database, migrations: readonly DatabaseMigration[]): void {
 	const currentVersion = db.pragma('user_version', { simple: true });
 	if (typeof currentVersion !== 'number') {
 		throw new Error('INVALID_DATABASE_VERSION');
@@ -67,23 +53,16 @@ function migrate(db: Database.Database): void {
 	}
 }
 
-export function createDatabase(dataDir: string): Database.Database {
+export function createDatabase(
+	dataDir: string,
+	migrations: readonly DatabaseMigration[] = coreDatabaseMigrations
+): Database.Database {
 	mkdirSync(dataDir, { recursive: true });
 	const db = new Database(join(dataDir, 'gjemmekontor.sqlite'));
 	db.pragma('journal_mode = WAL');
 	db.pragma('foreign_keys = ON');
 	db.pragma('busy_timeout = 5000');
 	db.pragma('synchronous = NORMAL');
-	migrate(db);
+	migrate(db, migrations);
 	return db;
-}
-
-let database: Database.Database | undefined;
-
-export function getDatabase(): Database.Database {
-	if (!database) {
-		database = createDatabase(getRuntimeConfig().dataDir);
-	}
-
-	return database;
 }

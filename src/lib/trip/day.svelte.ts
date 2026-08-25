@@ -3,7 +3,7 @@ import { SvelteDate } from 'svelte/reactivity';
 
 import { type GjemmekontorDatabase, openClientDatabase } from '$lib/client/database';
 
-import { isTripDayIndex, tripDayIndexAt } from './days';
+import { isTripDayIndex, tripDayIndexAt } from './itinerary';
 
 type TripDayStateOptions = {
 	databaseName?: string;

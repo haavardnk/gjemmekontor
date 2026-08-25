@@ -31,6 +31,16 @@ npm run test:e2e
 
 Configure the required runtime values in `.env` before starting the app.
 
+## Modules
+
+Product features are statically bundled modules under `src/lib/modules`. Enable a subset with a comma-separated runtime value such as:
+
+```env
+ENABLED_MODULES=map,shots,logbook,shopping-list
+```
+
+The module catalog controls navigation, protected routes and APIs, PWA page warming, state namespaces, and optional cross-module capabilities. Disabled modules retain their data. See [Deployment](docs/deployment.md) for module-specific configuration.
+
 ## Deployment
 
 Run the app as one Docker container with a persistent `/data` volume. See

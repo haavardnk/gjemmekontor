@@ -1,9 +1,9 @@
 import 'fake-indexeddb/auto';
 
-import { deleteDB } from 'idb';
+import { deleteDB, openDB } from 'idb';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { openClientDatabase } from './database';
+import { openClientDatabase, type PendingUpload } from './database';
 import { SharedState } from './state.svelte';
 
 const extraction = {
@@ -36,20 +36,77 @@ function databaseName(): string {
 	return name;
 }
 
+function pendingUpload(
+	id: string,
+	relatedStateKey: string,
+	filename: string,
+	data = 'gpx',
+	createdAt = 1_000
+): PendingUpload {
+	return {
+		id,
+		moduleId: 'logbook',
+		relatedStateKey,
+		path: `/api/logbook/gpx/${id}`,
+		query: { legKey: relatedStateKey, filename },
+		contentType: 'application/gpx+xml',
+		data: new Blob([data]),
+		clientId: 'client-a',
+		createdAt,
+		expectedResponse: { checksum: 'abc', parserVersion: 1, extraction }
+	};
+}
+
 describe('client state', (): void => {
 	test('creates all typed stores', async (): Promise<void> => {
 		const db = await openClientDatabase(databaseName());
 
 		expect(Array.from(db.objectStoreNames)).toEqual([
-			'mapSnapshot',
 			'meta',
+			'moduleBlobs',
+			'moduleData',
 			'mutations',
-			'offlineMap',
-			'pendingGpxUploads',
-			'shoppingListSnapshot',
+			'pendingUploads',
 			'state'
 		]);
 		db.close();
+	});
+
+	test('drops unused version 1 module caches while preserving shared state and metadata', async (): Promise<void> => {
+		const name = databaseName();
+		const legacy = await openDB(name, 1, {
+			upgrade(database): void {
+				database.createObjectStore('state', { keyPath: 'key' });
+				database.createObjectStore('mutations', { keyPath: 'mutationId' });
+				database.createObjectStore('meta', { keyPath: 'key' });
+				database.createObjectStore('mapSnapshot', { keyPath: 'id' });
+				database.createObjectStore('offlineMap', { keyPath: 'id' });
+				database.createObjectStore('shoppingListSnapshot', { keyPath: 'id' });
+				database.createObjectStore('pendingGpxUploads', { keyPath: 'id' });
+			}
+		});
+		await legacy.put('state', {
+			key: 'shots:d0:scenario:test',
+			value: true,
+			revision: 0,
+			clientId: 'client-a',
+			mutationId: 'mutation-a',
+			updatedAt: '2026-08-25T00:00:00.000Z'
+		});
+		await legacy.put('meta', { key: 'selectedDay', value: { dayIndex: 2 } });
+		await legacy.put('mapSnapshot', { id: 'current', value: { stale: true } });
+		legacy.close();
+
+		const database = await openClientDatabase(name);
+		expect(database.version).toBe(2);
+		expect(await database.get('state', 'shots:d0:scenario:test')).toMatchObject({ value: true });
+		expect(await database.get('meta', 'selectedDay')).toEqual({
+			key: 'selectedDay',
+			value: { dayIndex: 2 }
+		});
+		expect(await database.count('moduleData')).toBe(0);
+		expect(Array.from(database.objectStoreNames)).not.toContain('mapSnapshot');
+		database.close();
 	});
 
 	test('persists a leg mutation and GPX blob atomically', async (): Promise<void> => {
@@ -61,25 +118,15 @@ describe('client state', (): void => {
 			randomId: (): string => 'mutation-gpx'
 		});
 
-		await state.setWithGpx(
+		await state.setWithUpload(
 			'logbook:d0:leg:leg-a',
 			{ gpxId: 'gpx-a' },
-			{
-				id: 'gpx-a',
-				legKey: 'logbook:d0:leg:leg-a',
-				filename: 'orca.gpx',
-				contentType: 'application/gpx+xml',
-				checksum: 'abc',
-				data: new Blob(['gpx']),
-				createdAt: 1_000,
-				parserVersion: 1,
-				extraction
-			}
+			pendingUpload('gpx-a', 'logbook:d0:leg:leg-a', 'orca.gpx')
 		);
 		const db = await openClientDatabase(name);
 		const saved = await db.get('state', 'logbook:d0:leg:leg-a');
 		const mutation = await db.get('mutations', 'mutation-gpx');
-		const upload = await db.get('pendingGpxUploads', 'gpx-a');
+		const upload = await db.get('pendingUploads', 'gpx-a');
 		db.close();
 		await state.close();
 
@@ -87,7 +134,7 @@ describe('client state', (): void => {
 		expect(mutation?.key).toBe('logbook:d0:leg:leg-a');
 		expect(mutation?.sequence).toBe(1);
 		expect(await upload?.data.text()).toBe('gpx');
-		expect(state.isGpxUploadPending('gpx-a')).toBe(true);
+		expect(state.isUploadPending('gpx-a')).toBe(true);
 	});
 
 	test('persists optimistic state and mutation in one operation', async (): Promise<void> => {
@@ -229,21 +276,10 @@ describe('client state', (): void => {
 			clientTimestamp: 1_000,
 			sequence: 1
 		});
-		await db.put('pendingGpxUploads', {
-			id: 'gpx-a',
-			legKey: 'logbook:d0:leg:leg-a',
-			filename: 'orca.gpx',
-			contentType: 'application/gpx+xml',
-			checksum: 'abc',
-			data: new Blob(['gpx']),
-			clientId: 'client-a',
-			createdAt: 1_000,
-			parserVersion: 1,
-			extraction
-		});
+		await db.put('pendingUploads', pendingUpload('gpx-a', 'logbook:d0:leg:leg-a', 'orca.gpx'));
 
 		await state.sync();
-		const uploadCount = await db.count('pendingGpxUploads');
+		const uploadCount = await db.count('pendingUploads');
 		db.close();
 		await state.close();
 
@@ -251,7 +287,39 @@ describe('client state', (): void => {
 		expect(calls[1]).toBe('/api/state/sync');
 		expect(calls[2]).toBe('/api/state?since=0');
 		expect(uploadCount).toBe(0);
-		expect(state.isGpxUploadPending('gpx-a')).toBe(false);
+		expect(state.isUploadPending('gpx-a')).toBe(false);
+	});
+
+	test('does not initialize a disabled module pending-upload provider', async (): Promise<void> => {
+		const name = databaseName();
+		const calls: string[] = [];
+		const fetcher = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+			calls.push(String(input));
+			return Response.json({ revision: 0, entries: [] });
+		});
+		const database = await openClientDatabase(name);
+		await database.put('mutations', {
+			mutationId: 'mutation-gpx',
+			clientId: 'client-a',
+			key: 'logbook:d0:leg:leg-a',
+			value: { gpxId: 'gpx-a' },
+			clientTimestamp: 1_000,
+			sequence: 1
+		});
+		await database.put(
+			'pendingUploads',
+			pendingUpload('gpx-a', 'logbook:d0:leg:leg-a', 'orca.gpx')
+		);
+		database.close();
+		const state = new SharedState({ databaseName: name, fetcher });
+
+		await state.start(['shots']);
+		const reopened = await openClientDatabase(name);
+		expect(calls).toEqual(['/api/state?since=0']);
+		expect(await reopened.count('pendingUploads')).toBe(1);
+		expect(await reopened.count('mutations')).toBe(1);
+		reopened.close();
+		await state.close();
 	});
 
 	test('replays pending mutations in durable sequence order', async (): Promise<void> => {
@@ -308,20 +376,10 @@ describe('client state', (): void => {
 				calls.push(url);
 				if (url.startsWith('/api/logbook/gpx/gpx-a?') && !injected) {
 					injected = true;
-					await state.setWithGpx(
+					await state.setWithUpload(
 						'logbook:d0:leg:leg-b',
 						{ gpxId: 'gpx-b' },
-						{
-							id: 'gpx-b',
-							legKey: 'logbook:d0:leg:leg-b',
-							filename: 'b.gpx',
-							contentType: 'application/gpx+xml',
-							checksum: 'abc',
-							data: new Blob(['b']),
-							createdAt: 2_000,
-							parserVersion: 1,
-							extraction
-						}
+						pendingUpload('gpx-b', 'logbook:d0:leg:leg-b', 'b.gpx', 'b', 2_000)
 					);
 				}
 				if (url.startsWith('/api/logbook/gpx/')) {
@@ -348,22 +406,11 @@ describe('client state', (): void => {
 			clientTimestamp: 1_000,
 			sequence: 1
 		});
-		await db.put('pendingGpxUploads', {
-			id: 'gpx-a',
-			legKey: 'logbook:d0:leg:leg-a',
-			filename: 'a.gpx',
-			contentType: 'application/gpx+xml',
-			checksum: 'abc',
-			data: new Blob(['a']),
-			clientId: 'client-a',
-			createdAt: 1_000,
-			parserVersion: 1,
-			extraction
-		});
+		await db.put('pendingUploads', pendingUpload('gpx-a', 'logbook:d0:leg:leg-a', 'a.gpx', 'a'));
 
 		await state.sync();
 		const mutationCount = await db.count('mutations');
-		const uploadCount = await db.count('pendingGpxUploads');
+		const uploadCount = await db.count('pendingUploads');
 		db.close();
 		await state.close();
 
@@ -394,22 +441,11 @@ describe('client state', (): void => {
 			clientTimestamp: 1_000,
 			sequence: 1
 		});
-		await db.put('pendingGpxUploads', {
-			id: 'gpx-a',
-			legKey: 'logbook:d0:leg:leg-a',
-			filename: 'orca.gpx',
-			contentType: 'application/gpx+xml',
-			checksum: 'abc',
-			data: new Blob(['gpx']),
-			clientId: 'client-a',
-			createdAt: 1_000,
-			parserVersion: 1,
-			extraction
-		});
+		await db.put('pendingUploads', pendingUpload('gpx-a', 'logbook:d0:leg:leg-a', 'orca.gpx'));
 
 		await state.sync();
 		const mutationCount = await db.count('mutations');
-		const uploadCount = await db.count('pendingGpxUploads');
+		const uploadCount = await db.count('pendingUploads');
 		db.close();
 		await state.close();
 

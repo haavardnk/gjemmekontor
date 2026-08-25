@@ -5,6 +5,7 @@
 
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { moduleCatalog, type ModuleId } from '$lib/app/modules/catalog';
 	import { warmAppShell } from '$lib/client/pwa';
 	import { sharedState } from '$lib/client/state.svelte';
 	import { tripDayState } from '$lib/trip/day.svelte';
@@ -25,22 +26,32 @@
 		}
 	}
 
-	const links = [
-		{ href: resolve('/map'), path: '/map', label: 'Kart', icon: Map },
-		{ href: resolve('/shots'), path: '/shots', label: 'Opptak', icon: Video },
-		{ href: resolve('/logbook'), path: '/logbook', label: 'Loggbok', icon: BookOpen },
-		{
-			href: resolve('/shoppinglist'),
-			path: '/shoppinglist',
-			label: 'Handleliste',
-			icon: ShoppingBasket
-		}
-	];
+	const icons = {
+		'book-open': BookOpen,
+		map: Map,
+		'shopping-basket': ShoppingBasket,
+		video: Video
+	};
+	const enabledModuleIds = $derived(
+		new Set((page.data.enabledModuleIds ?? moduleCatalog.map((module) => module.id)) as ModuleId[])
+	);
+	const enabledModules = $derived(
+		moduleCatalog.filter((module) => enabledModuleIds.has(module.id))
+	);
+	const links = $derived(
+		enabledModules.map((module) => ({
+			href: resolve(module.primaryPath),
+			path: module.primaryPath,
+			label: module.label,
+			icon: icons[module.icon]
+		}))
+	);
+	const homePath = $derived(enabledModules[0]?.primaryPath ?? '/');
 
 	onMount(() => {
-		void sharedState.start();
+		void sharedState.start([...enabledModuleIds]);
 		void tripDayState.start();
-		void warmAppShell();
+		void warmAppShell(enabledModules.flatMap((module) => module.appShellPaths));
 		return (): void => {
 			sharedState.stop();
 			tripDayState.stop();
@@ -51,7 +62,7 @@
 <header
 	class="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-base-300 bg-base-100 px-4 lg:pl-24"
 >
-	<a class="text-primary" href={resolve('/map')} aria-label="Gjemmekontor" title="Gjemmekontor">
+	<a class="text-primary" href={resolve(homePath)} aria-label="Gjemmekontor" title="Gjemmekontor">
 		<BrandLogo class="size-10" label="" />
 	</a>
 	<div class="flex items-center gap-1">
@@ -74,7 +85,8 @@
 </main>
 
 <nav
-	class="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t border-base-300 bg-base-100 lg:inset-y-0 lg:right-auto lg:h-auto lg:w-20 lg:grid-cols-1 lg:grid-rows-4 lg:border-t-0 lg:border-r lg:pt-16"
+	class="module-nav fixed inset-x-0 bottom-0 z-40 grid h-16 border-t border-base-300 bg-base-100 lg:inset-y-0 lg:right-auto lg:h-auto lg:w-20 lg:border-t-0 lg:border-r lg:pt-16"
+	style:--module-count={links.length}
 >
 	{#each links as link (link.href)}
 		<a
@@ -87,3 +99,16 @@
 		</a>
 	{/each}
 </nav>
+
+<style>
+	.module-nav {
+		grid-template-columns: repeat(var(--module-count), minmax(0, 1fr));
+	}
+
+	@media (min-width: 64rem) {
+		.module-nav {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: repeat(var(--module-count), minmax(0, 1fr));
+		}
+	}
+</style>

@@ -1,8 +1,15 @@
 import type { Handle } from '@sveltejs/kit';
 
+import { firstEnabledModulePath, resolveEnabledModuleIds } from '$lib/app/modules/activation';
+import {
+	isCacheableModuleApi,
+	moduleForApiPath,
+	moduleForPagePath
+} from '$lib/app/modules/catalog';
+import { validateEnabledModuleConfiguration } from '$lib/app/modules/server-config';
+import { getDatabase } from '$lib/app/server/database';
 import { apiError } from '$lib/server/api';
 import { isSessionValid, sessionCookieName } from '$lib/server/auth';
-import { getDatabase } from '$lib/server/database';
 import { getRuntimeConfig } from '$lib/server/env';
 
 const publicPaths = new Set(['/login', '/api/auth/login', '/api/health']);
@@ -21,10 +28,8 @@ function applySecurityHeaders(response: Response, pathname: string): void {
 	response.headers.set('Referrer-Policy', 'no-referrer');
 	response.headers.set('X-Frame-Options', 'DENY');
 	if (
-		/^\/api\/(auth|state|map|logbook\/gpx|shoppinglist)(\/|$)/.test(pathname) &&
-		!/^\/api\/map\/(offline\/(normal|nautical|satellite)|(depth-contours|marine-profile)\/\d+\/\d+\/\d+|harbours)$/.test(
-			pathname
-		)
+		/^\/api\/(auth|state)(\/|$)/.test(pathname) ||
+		(moduleForApiPath(pathname) && !isCacheableModuleApi(pathname))
 	) {
 		response.headers.set('Cache-Control', 'no-store');
 	}
@@ -33,6 +38,9 @@ function applySecurityHeaders(response: Response, pathname: string): void {
 export const handle: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
 	const config = getRuntimeConfig();
+	const enabledModuleIds = resolveEnabledModuleIds(config.enabledModuleIds);
+	validateEnabledModuleConfiguration(enabledModuleIds);
+	const enabledModules = new Set(enabledModuleIds);
 	const authenticated = isSessionValid(
 		getDatabase(),
 		event.cookies.get(sessionCookieName),
@@ -45,6 +53,20 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const response = pathname.startsWith('/api/')
 			? apiError('UNAUTHENTICATED', 401)
 			: new Response(null, { status: 303, headers: { location: '/login' } });
+		applySecurityHeaders(response, pathname);
+		return response;
+	}
+
+	const requestedModule = pathname.startsWith('/api/')
+		? moduleForApiPath(pathname)
+		: moduleForPagePath(pathname);
+	if (requestedModule && !enabledModules.has(requestedModule.id)) {
+		const response = pathname.startsWith('/api/')
+			? apiError('MODULE_DISABLED', 404)
+			: new Response(null, {
+					status: 303,
+					headers: { location: firstEnabledModulePath(enabledModuleIds) }
+				});
 		applySecurityHeaders(response, pathname);
 		return response;
 	}

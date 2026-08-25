@@ -1,4 +1,4 @@
-import { handleMarineProfileTile } from '$lib/server/map/depth-contours';
+import { handleMarineProfileTile } from '$lib/modules/map/server';
 
 import type { RequestHandler } from './$types';
 

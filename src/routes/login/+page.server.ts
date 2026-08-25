@@ -1,7 +1,8 @@
 import { fail, redirect } from '@sveltejs/kit';
 
+import { firstEnabledModulePath } from '$lib/app/modules/activation';
+import { getDatabase } from '$lib/app/server/database';
 import { createAuthenticatedSession } from '$lib/server/auth';
-import { getDatabase } from '$lib/server/database';
 import { getRuntimeConfig } from '$lib/server/env';
 
 import type { Actions } from './$types';
@@ -21,6 +22,6 @@ export const actions = {
 		) {
 			return fail(401, { errorMessage: 'Passordet er ikke riktig.' });
 		}
-		redirect(303, '/map');
+		redirect(303, firstEnabledModulePath(getRuntimeConfig().enabledModuleIds));
 	}
 } satisfies Actions;

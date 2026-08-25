@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { openClientDatabase } from '$lib/client/database';
 
 import { TripDayState } from './day.svelte';
-import { dateKeyAt, tripDayIndexAt } from './days';
+import { dateKeyAt, tripDayIndexAt } from './itinerary';
 
 const databaseNames: string[] = [];
 

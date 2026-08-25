@@ -1,4 +1,4 @@
-import { handleRefreshMap } from '$lib/server/map/service';
+import { handleRefreshMap } from '$lib/modules/map/server';
 
 import type { RequestHandler } from './$types';
 

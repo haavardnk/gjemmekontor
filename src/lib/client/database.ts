@@ -1,9 +1,5 @@
 import { type DBSchema, type IDBPDatabase, openDB } from 'idb';
 
-import type { MapMode, MapSnapshot } from '$lib/map/types';
-import type { GpxExtraction } from '$lib/trip/gpx';
-import type { ShoppingListSnapshot } from '$lib/trip/shoppinglist';
-
 export type JsonValue =
 	null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
@@ -25,23 +21,16 @@ export type PendingMutation = {
 	sequence?: number;
 };
 
-export type MapSnapshotRecord = {
-	id: 'current';
-	value: MapSnapshot;
+export type ModuleDataRecord = {
+	key: string;
+	value: unknown;
 	updatedAt: number;
 };
 
-export type OfflineMapRecord = {
-	id: MapMode;
+export type ModuleBlobRecord = {
+	key: string;
 	data: Blob;
-	version: string;
-	size: number;
-	updatedAt: number;
-};
-
-export type ShoppingListSnapshotRecord = {
-	id: 'current';
-	value: ShoppingListSnapshot;
+	metadata: JsonValue;
 	updatedAt: number;
 };
 
@@ -50,26 +39,25 @@ export type MetaRecord = {
 	value: JsonValue;
 };
 
-export type PendingGpxUpload = {
+export type PendingUpload = {
 	id: string;
-	legKey: string;
-	filename: string;
-	contentType: 'application/gpx+xml';
-	checksum: string;
+	moduleId: string;
+	relatedStateKey: string;
+	path: string;
+	query: Record<string, string>;
+	contentType: string;
 	data: Blob;
 	clientId: string;
 	createdAt: number;
-	parserVersion: number;
-	extraction: GpxExtraction;
+	expectedResponse: JsonValue;
 };
 
 export interface GjemmekontorDatabase extends DBSchema {
 	state: { key: string; value: ClientStateEntry };
 	mutations: { key: string; value: PendingMutation };
-	mapSnapshot: { key: string; value: MapSnapshotRecord };
-	offlineMap: { key: string; value: OfflineMapRecord };
-	shoppingListSnapshot: { key: string; value: ShoppingListSnapshotRecord };
-	pendingGpxUploads: { key: string; value: PendingGpxUpload };
+	moduleData: { key: string; value: ModuleDataRecord };
+	moduleBlobs: { key: string; value: ModuleBlobRecord };
+	pendingUploads: { key: string; value: PendingUpload };
 	meta: { key: string; value: MetaRecord };
 }
 
@@ -78,15 +66,29 @@ export const clientDatabaseName = 'gjemmekontor-data';
 export function openClientDatabase(
 	name = clientDatabaseName
 ): Promise<IDBPDatabase<GjemmekontorDatabase>> {
-	return openDB<GjemmekontorDatabase>(name, 1, {
-		upgrade(db): void {
-			db.createObjectStore('state', { keyPath: 'key' });
-			db.createObjectStore('mutations', { keyPath: 'mutationId' });
-			db.createObjectStore('mapSnapshot', { keyPath: 'id' });
-			db.createObjectStore('offlineMap', { keyPath: 'id' });
-			db.createObjectStore('shoppingListSnapshot', { keyPath: 'id' });
-			db.createObjectStore('pendingGpxUploads', { keyPath: 'id' });
-			db.createObjectStore('meta', { keyPath: 'key' });
+	return openDB<GjemmekontorDatabase>(name, 2, {
+		upgrade(db, oldVersion): void {
+			if (oldVersion < 1) {
+				db.createObjectStore('state', { keyPath: 'key' });
+				db.createObjectStore('mutations', { keyPath: 'mutationId' });
+				db.createObjectStore('meta', { keyPath: 'key' });
+			}
+			if (oldVersion < 2) {
+				db.createObjectStore('moduleData', { keyPath: 'key' });
+				db.createObjectStore('moduleBlobs', { keyPath: 'key' });
+				db.createObjectStore('pendingUploads', { keyPath: 'id' });
+				const rawDatabase = db as unknown as IDBDatabase;
+				for (const legacyStore of [
+					'mapSnapshot',
+					'offlineMap',
+					'shoppingListSnapshot',
+					'pendingGpxUploads'
+				]) {
+					if (rawDatabase.objectStoreNames.contains(legacyStore)) {
+						rawDatabase.deleteObjectStore(legacyStore);
+					}
+				}
+			}
 		}
 	});
 }

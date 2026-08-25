@@ -1,4 +1,4 @@
-import { handleGetMap } from '$lib/server/map/service';
+import { handleGetMap } from '$lib/modules/map/server';
 
 import type { RequestHandler } from './$types';
 
