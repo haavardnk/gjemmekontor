@@ -79,6 +79,21 @@ test('adds, completes, and restores Bring items with responsive module navigatio
 	await expect(page.getByText('Kroatia 2026 · 1 vare')).toBeVisible();
 	await expect(page.getByText('Olivenolje')).toBeVisible();
 	await expect(page.getByText('1 flaske')).toBeVisible();
+	const syncStatusBounds = await page.getByRole('status').boundingBox();
+	const refreshBounds = await page
+		.getByRole('button', { name: 'Oppdater handlelisten' })
+		.boundingBox();
+	if (!syncStatusBounds || !refreshBounds) {
+		throw new Error('Shopping list sync controls are unavailable');
+	}
+	expect(
+		Math.abs(
+			syncStatusBounds.y +
+				syncStatusBounds.height / 2 -
+				(refreshBounds.y + refreshBounds.height / 2)
+		)
+	).toBeLessThanOrEqual(1);
+	expect(refreshBounds.x + refreshBounds.width).toBeLessThanOrEqual(390);
 	await expect(page.getByRole('link', { name: 'Handleliste' })).toHaveAttribute(
 		'aria-current',
 		'page'
