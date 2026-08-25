@@ -11,8 +11,7 @@ export const mapManifest = {
 	cacheableApiPrefixes: [
 		'/api/map/offline/',
 		'/api/map/depth-contours/',
-		'/api/map/marine-profile/',
-		'/api/map/harbours'
+		'/api/map/marine-profile/'
 	],
 	appShellPaths: ['/map'],
 	statePrefixes: [],

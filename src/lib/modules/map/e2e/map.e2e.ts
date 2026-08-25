@@ -160,10 +160,6 @@ async function mockMap(page: Page, mapSnapshot = snapshot): Promise<void> {
 			await route.fulfill({ body: transparentPng, contentType: 'image/png' });
 			return;
 		}
-		if (pathname === '/api/map/harbours') {
-			await route.fulfill({ json: { type: 'FeatureCollection', features: [] } });
-			return;
-		}
 		if (pathname === '/api/map/ais') {
 			await route.fulfill({
 				json: {
@@ -294,7 +290,6 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	const vectorTileRequests: string[] = [];
 	const satelliteRequests: string[] = [];
 	const marineProfileRequests: string[] = [];
-	const harbourRequests: string[] = [];
 	page.on('pageerror', (error) => pageErrors.push(error.message));
 	page.on('request', (request) => {
 		if (request.url().includes('/test-vector-tile/')) {
@@ -308,9 +303,6 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 		}
 		if (request.url().includes('/api/map/marine-profile/')) {
 			marineProfileRequests.push(request.url());
-		}
-		if (request.url().includes('/api/map/harbours?')) {
-			harbourRequests.push(request.url());
 		}
 	});
 	await mockMap(page);
@@ -338,7 +330,6 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await expect.poll(() => satelliteRequests.length).toBeGreaterThan(0);
 	await page.getByRole('button', { name: 'Sjøkart' }).click();
 	await expect.poll(() => marineProfileRequests.length).toBeGreaterThan(0);
-	await expect.poll(() => harbourRequests.length).toBeGreaterThan(0);
 	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Stiniva');
 	await page.getByRole('button', { name: /Stiniva-bukten/ }).click();
 	await expect(page.getByRole('heading', { name: 'Stiniva-bukten' })).toBeVisible();
@@ -438,7 +429,6 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	expect(dimensions.width).toBeLessThanOrEqual(dimensions.viewport);
 	expect(googleIconRequests).toEqual([]);
 	expect(marineProfileRequests.length).toBeGreaterThan(0);
-	expect(harbourRequests.length).toBeGreaterThan(0);
 	expect(pageErrors).toEqual([]);
 });
 

@@ -69,7 +69,6 @@
 	let watchId: number | undefined;
 	let lastPosition: GeolocationPosition | undefined;
 	let styleRequest = 0;
-	let harbourRequest = 0;
 	let positionMarkerImage: ImageData | undefined;
 	let aisMarkerImage: ImageData | undefined;
 	let aisMarkerImageFlipped: ImageData | undefined;
@@ -466,31 +465,6 @@
 		container.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
 	}
 
-	async function updateHarbours(): Promise<void> {
-		const source = map?.getSource('harbours');
-		if (!map || !isGeoJsonSource(source)) {
-			return;
-		}
-		const request = ++harbourRequest;
-		const bounds = map.getBounds();
-		const params = new URLSearchParams({
-			west: bounds.getWest().toFixed(5),
-			south: bounds.getSouth().toFixed(5),
-			east: bounds.getEast().toFixed(5),
-			north: bounds.getNorth().toFixed(5),
-			zoom: String(Math.round(map.getZoom()))
-		});
-		try {
-			const response = await fetch(`/api/map/harbours?${params}`);
-			if (!response.ok || request !== harbourRequest) {
-				return;
-			}
-			source.setData((await response.json()) as GeoJSON.FeatureCollection);
-		} catch {
-			return;
-		}
-	}
-
 	function satelliteStyle(): StyleSpecification {
 		return {
 			version: 8,
@@ -622,11 +596,6 @@
 				attribution:
 					'<a href="https://depth.openseamap.org/">OpenSeaMap water depths</a> contributors'
 			});
-			map.addSource('harbours', {
-				type: 'geojson',
-				data: { type: 'FeatureCollection', features: [] },
-				attribution: '<a href="https://www.openseamap.org/">OpenSeaMap</a> harbours'
-			});
 			map.addLayer({
 				id: 'marine-profile',
 				type: 'raster',
@@ -647,19 +616,6 @@
 				minzoom: 8,
 				paint: { 'raster-opacity': 0.9 }
 			});
-			map.addLayer({
-				id: 'harbours',
-				type: 'circle',
-				source: 'harbours',
-				minzoom: 7,
-				paint: {
-					'circle-color': '#2563a8',
-					'circle-radius': 6,
-					'circle-stroke-color': '#ffffff',
-					'circle-stroke-width': 2
-				}
-			});
-			void updateHarbours();
 		}
 		map.addSource('points', {
 			type: 'geojson',
@@ -935,7 +891,6 @@
 			map.once('load', (): void => {
 				collapseAttribution();
 				map?.on('moveend', (): void => {
-					void updateHarbours();
 					saveCamera();
 				});
 			});
