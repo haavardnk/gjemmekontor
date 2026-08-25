@@ -51,19 +51,6 @@ Health endpoint: `GET /api/health`.
 
 Available module IDs are `map`, `shots`, `logbook`, `shopping-list`, and `menu`. At least one must be enabled. Unknown or duplicate IDs fail configuration validation. Map configuration is required only when `map` is enabled. Bring configuration remains optional for `shopping-list`; without it, the module shows its provider-unavailable state.
 
-## Reverse proxy
-
-Set `ORIGIN` to the exact external origin. For a containerized proxy, attach it to the `gjemmekontor` network and route traffic to `http://gjemmekontor:3000`. Example Cloudflare Tunnel ingress:
-
-```yml
-ingress:
-  - hostname: app.example.com
-    service: http://gjemmekontor:3000
-  - service: http_status:404
-```
-
-Compose binds direct access to `127.0.0.1:3000`. Remove `ports` when only another container needs access.
-
 ## Maps
 
 `GOOGLE_MY_MAPS_ID` must reference a map shared as **Anyone with the link can view**. `AISSTREAM_API_KEY` remains on the server and subscribes the live vessel feed to this map's initial bounds. The image includes a Protomaps normal basemap for the sailing region at zoom 0–14. The app offers only packages present in the image or data directory.
@@ -100,7 +87,3 @@ docker compose up -d
 ```
 
 Database schema updates run at startup and are forward-only.
-
-## GHCR
-
-The GitHub Release tag is the only release-version source. The first release is `v0.1.0`; later tags must use stable `vMAJOR.MINOR.PATCH` format and point to `main`. The workflow derives `MAJOR.MINOR.PATCH` from the tag, injects it into the image metadata and health response, then smoke-tests and publishes `ghcr.io/haavardnk/gjemmekontor:MAJOR.MINOR.PATCH` and `latest`. Do not set `APP_VERSION` in Compose; the image owns it.
