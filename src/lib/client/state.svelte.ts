@@ -44,6 +44,11 @@ type SharedStateOptions = {
 	randomId?: () => string;
 };
 
+export type SharedStateWrite = {
+	key: string;
+	value: JsonValue;
+};
+
 export class SharedState {
 	values = $state<Record<string, JsonValue>>({});
 	status = $state<SyncStatus>({ phase: 'idle', pending: 0 });
@@ -118,6 +123,17 @@ export class SharedState {
 	}
 
 	async set(key: string, value: JsonValue): Promise<void> {
+		await this.setMany([{ key, value }]);
+	}
+
+	async setMany(writes: readonly SharedStateWrite[]): Promise<void> {
+		if (writes.length === 0) {
+			return;
+		}
+		const keys = writes.map((write) => write.key);
+		if (keys.some((key) => !key) || keys.some((key, index) => keys.indexOf(key) !== index)) {
+			throw new Error('INVALID_STATE_WRITES');
+		}
 		await this.initialize();
 		const db = await this.database();
 		const clientId = await getClientId(db);
@@ -126,29 +142,37 @@ export class SharedState {
 			durability: 'strict'
 		});
 		const sequenceRecord = await transaction.objectStore('meta').get('mutationSequence');
-		const sequence = (typeof sequenceRecord?.value === 'number' ? sequenceRecord.value : 0) + 1;
-		const mutation: PendingMutation = {
-			mutationId: this.randomId(),
-			clientId,
-			key,
-			value,
-			clientTimestamp,
-			sequence
-		};
-		this.status = { phase: 'saving', pending: this.status.pending + 1 };
-		const existing = await transaction.objectStore('state').get(key);
-		await transaction.objectStore('state').put({
-			key,
-			value,
-			revision: existing?.revision ?? 0,
-			clientId,
-			mutationId: mutation.mutationId,
-			updatedAt: new SvelteDate(mutation.clientTimestamp).toISOString()
+		const previousSequence = typeof sequenceRecord?.value === 'number' ? sequenceRecord.value : 0;
+		this.status = { phase: 'saving', pending: this.status.pending + writes.length };
+		for (const [index, write] of writes.entries()) {
+			const mutation: PendingMutation = {
+				mutationId: this.randomId(),
+				clientId,
+				key: write.key,
+				value: write.value,
+				clientTimestamp,
+				sequence: previousSequence + index + 1
+			};
+			const existing = await transaction.objectStore('state').get(write.key);
+			await transaction.objectStore('state').put({
+				key: write.key,
+				value: write.value,
+				revision: existing?.revision ?? 0,
+				clientId,
+				mutationId: mutation.mutationId,
+				updatedAt: new SvelteDate(clientTimestamp).toISOString()
+			});
+			await transaction.objectStore('mutations').put(mutation);
+		}
+		await transaction.objectStore('meta').put({
+			key: 'mutationSequence',
+			value: previousSequence + writes.length
 		});
-		await transaction.objectStore('mutations').put(mutation);
-		await transaction.objectStore('meta').put({ key: 'mutationSequence', value: sequence });
 		await transaction.done;
-		this.values = { ...this.values, [key]: value };
+		this.values = {
+			...this.values,
+			...Object.fromEntries(writes.map((write) => [write.key, write.value]))
+		};
 		this.status = {
 			phase: this.isOnline() ? 'saving' : 'offline',
 			pending: await db.count('mutations')

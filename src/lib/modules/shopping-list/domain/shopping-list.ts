@@ -53,3 +53,22 @@ export const editShoppingListItemSchema = z
 
 export type ShoppingListItem = z.infer<typeof shoppingListItemSchema>;
 export type ShoppingListSnapshot = z.infer<typeof shoppingListSnapshotSchema>;
+
+export const absoluteShoppingOperationSchema = z
+	.object({
+		sourceName: bringTextSchema(100).pipe(z.string().min(1)),
+		specification: bringTextSchema(120)
+	})
+	.strict();
+
+export type AbsoluteShoppingOperation = z.infer<typeof absoluteShoppingOperationSchema>;
+
+export type ShoppingCatalogItem = {
+	sourceName: string;
+	name: string;
+};
+
+export type ShoppingPlanningSnapshot = {
+	snapshot: ShoppingListSnapshot;
+	catalog: ShoppingCatalogItem[];
+};

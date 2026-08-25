@@ -158,6 +158,44 @@ describe('client state', (): void => {
 		expect(state.values['day:one']).toEqual({ complete: true });
 	});
 
+	test('persists several state writes and consecutive mutations atomically', async (): Promise<void> => {
+		const name = databaseName();
+		let id = 0;
+		const state = new SharedState({
+			databaseName: name,
+			fetcher: vi.fn(() => new Promise<Response>(() => undefined)),
+			now: (): number => 1_000,
+			randomId: (): string => `mutation-${++id}`
+		});
+
+		await state.setMany([
+			{ key: 'menu:archive:a', value: { name: 'Taco' } },
+			{ key: 'menu:active:a', value: { categories: ['dinner'] } }
+		]);
+		const db = await openClientDatabase(name);
+		const mutations = await db.getAll('mutations');
+		const sequence = await db.get('meta', 'mutationSequence');
+		db.close();
+		await state.close();
+
+		expect(mutations.map((mutation) => mutation.sequence).sort()).toEqual([1, 2]);
+		expect(sequence?.value).toBe(2);
+		expect(state.values['menu:archive:a']).toEqual({ name: 'Taco' });
+		expect(state.values['menu:active:a']).toEqual({ categories: ['dinner'] });
+	});
+
+	test('rejects duplicate keys before opening a transaction', async (): Promise<void> => {
+		const state = new SharedState({ databaseName: databaseName() });
+
+		await expect(
+			state.setMany([
+				{ key: 'same', value: 1 },
+				{ key: 'same', value: 2 }
+			])
+		).rejects.toThrow('INVALID_STATE_WRITES');
+		await state.close();
+	});
+
 	test('preserves an edit started while initialization is running', async (): Promise<void> => {
 		const name = databaseName();
 		const state = new SharedState({

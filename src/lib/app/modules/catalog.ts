@@ -1,5 +1,6 @@
 import { logbookManifest } from '$lib/modules/logbook/manifest';
 import { mapManifest } from '$lib/modules/map/manifest';
+import { menuManifest } from '$lib/modules/menu/manifest';
 import { shoppingListManifest } from '$lib/modules/shopping-list/manifest';
 import { shotsManifest } from '$lib/modules/shots/manifest';
 
@@ -9,7 +10,8 @@ export const moduleCatalog = [
 	mapManifest,
 	shotsManifest,
 	logbookManifest,
-	shoppingListManifest
+	shoppingListManifest,
+	menuManifest
 ] as const satisfies readonly AppModuleManifest[];
 
 export type ModuleId = (typeof moduleCatalog)[number]['id'];

@@ -18,7 +18,11 @@ test('loads the authenticated app shell without a network connection', async ({
 			return false;
 		}
 		const cache = await caches.open(pageCache);
-		return Boolean((await cache.match('/shots')) && (await cache.match('/shopping-list')));
+		return Boolean(
+			(await cache.match('/shots')) &&
+			(await cache.match('/shopping-list')) &&
+			(await cache.match('/menu'))
+		);
 	});
 
 	await page.goto('/shots?mode=record');

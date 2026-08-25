@@ -12,7 +12,7 @@ describe('PWA cache paths', (): void => {
 		expect(relativeAppPath(pathname, base)).toBe(expected);
 	});
 
-	test.each(['/map', '/shots', '/logbook', '/shopping-list'])(
+	test.each(['/map', '/shots', '/logbook', '/shopping-list', '/menu'])(
 		'recognizes shell page %s',
 		(pathname): void => {
 			expect(isAppShellPath(pathname, '')).toBe(true);

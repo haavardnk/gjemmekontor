@@ -1,11 +1,13 @@
 import Bring from 'bring-shopping';
 
 import {
+	type AbsoluteShoppingOperation,
 	addShoppingListItemSchema,
 	completeShoppingListItemSchema,
 	editShoppingListItemSchema,
 	type ShoppingListItem,
-	type ShoppingListSnapshot
+	type ShoppingListSnapshot,
+	type ShoppingPlanningSnapshot
 } from '$lib/modules/shopping-list/domain/shopping-list';
 import { apiError, apiSuccess } from '$lib/server/api';
 
@@ -80,6 +82,7 @@ export class BringService {
 	private listName: string | undefined;
 	private displayNames = new Map<string, string>();
 	private sourceNames = new Map<string, string>();
+	private listedSourceNames = new Map<string, string>();
 	private itemSections = new Map<string, string>();
 	private sectionRanks = new Map<string, number>();
 	private loginPromise: Promise<void> | undefined;
@@ -177,6 +180,7 @@ export class BringService {
 		this.listName = undefined;
 		this.displayNames = new Map();
 		this.sourceNames = new Map();
+		this.listedSourceNames = new Map();
 		this.itemSections = new Map();
 		this.sectionRanks = new Map();
 	}
@@ -212,6 +216,9 @@ export class BringService {
 						return valid ? [valid] : [];
 					});
 				const items = normalize(response.purchase);
+				this.listedSourceNames = new Map(
+					items.map((item) => [item.sourceName.toLocaleLowerCase('nb-NO'), item.sourceName])
+				);
 				items.sort((first, second) => {
 					const firstSection = this.itemSections.get(first.sourceName) ?? 'Eigene Artikel';
 					const secondSection = this.itemSections.get(second.sourceName) ?? 'Eigene Artikel';
@@ -239,6 +246,14 @@ export class BringService {
 			}
 			throw new BringServiceError('BRING_UNAVAILABLE');
 		}
+	}
+
+	async planningSnapshot(): Promise<ShoppingPlanningSnapshot> {
+		const snapshot = await this.snapshot();
+		return {
+			snapshot,
+			catalog: [...this.displayNames.entries()].map(([sourceName, name]) => ({ sourceName, name }))
+		};
 	}
 
 	private serializeMutation(
@@ -317,6 +332,40 @@ export class BringService {
 				if (error instanceof BringServiceError) {
 					throw error;
 				}
+				throw new BringServiceError('BRING_MUTATION_FAILED');
+			}
+		});
+	}
+
+	applyAbsolute(operations: readonly AbsoluteShoppingOperation[]): Promise<ShoppingListSnapshot> {
+		return this.serializeMutation(async (): Promise<ShoppingListSnapshot> => {
+			try {
+				await this.authenticate();
+				for (const operation of operations) {
+					const sourceName =
+						this.listedSourceNames.get(operation.sourceName.toLocaleLowerCase('nb-NO')) ??
+						this.sourceNames.get(operation.sourceName.toLocaleLowerCase('nb-NO')) ??
+						operation.sourceName;
+					await this.withAuthentication(
+						(client) =>
+							client.saveItem(this.config?.listUuid ?? '', sourceName, operation.specification),
+						'BRING_MUTATION_FAILED'
+					);
+				}
+				const snapshot = await this.snapshot();
+				for (const operation of operations) {
+					const sourceName =
+						this.listedSourceNames.get(operation.sourceName.toLocaleLowerCase('nb-NO')) ??
+						this.sourceNames.get(operation.sourceName.toLocaleLowerCase('nb-NO')) ??
+						operation.sourceName;
+					const saved = snapshot.items.find((item) => item.sourceName === sourceName);
+					if (!saved || saved.specification !== operation.specification) {
+						throw new BringServiceError('BRING_MUTATION_FAILED');
+					}
+				}
+				return snapshot;
+			} catch (error) {
+				if (error instanceof BringServiceError) throw error;
 				throw new BringServiceError('BRING_MUTATION_FAILED');
 			}
 		});

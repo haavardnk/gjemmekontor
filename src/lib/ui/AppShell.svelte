@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { BookOpen, LogOut, Map, ShoppingBasket, Video } from '@lucide/svelte';
+	import { BookOpen, LogOut, Map, ShoppingBasket, Utensils, Video } from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
 
@@ -30,6 +30,7 @@
 		'book-open': BookOpen,
 		map: Map,
 		'shopping-basket': ShoppingBasket,
+		utensils: Utensils,
 		video: Video
 	};
 	const enabledModuleIds = $derived(

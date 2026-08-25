@@ -11,7 +11,7 @@ async function login(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-test('adds, completes, and restores Bring items with a responsive fourth navigation item', async ({
+test('adds, completes, and restores Bring items with responsive module navigation', async ({
 	page
 }) => {
 	let items: Item[] = [{ sourceName: 'Olivenöl', name: 'Olivenolje', specification: '1 flaske' }];
@@ -83,7 +83,7 @@ test('adds, completes, and restores Bring items with a responsive fourth navigat
 		'aria-current',
 		'page'
 	);
-	await expect(page.locator('nav > a')).toHaveCount(4);
+	await expect(page.locator('nav > a')).toHaveCount(5);
 
 	const itemInput = page.getByRole('textbox', { name: 'Vare' });
 	const specificationInput = page.getByRole('textbox', { name: 'Detaljer' });

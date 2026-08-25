@@ -44,7 +44,9 @@ describe('module catalog', (): void => {
 			'src/lib/modules/map/ui/MapPage.svelte',
 			'src/lib/modules/map/ui/MapView.svelte',
 			'src/lib/modules/logbook/domain/map-overlay.ts',
-			'src/lib/modules/logbook/ui/LogbookView.svelte'
+			'src/lib/modules/logbook/ui/LogbookView.svelte',
+			'src/lib/modules/menu/domain/shopping.ts',
+			'src/lib/modules/menu/server/shopping.ts'
 		];
 		for (const file of files) {
 			const sourceModule = file.split('/')[3];
@@ -54,7 +56,10 @@ describe('module catalog', (): void => {
 			for (const match of imports) {
 				const [, targetModule, targetPath] = match;
 				if (targetModule !== sourceModule) {
-					expect(targetPath, `${file} imports ${targetModule}/${targetPath}`).toBe('public');
+					expect(
+						['public', 'server-public'],
+						`${file} imports ${targetModule}/${targetPath}`
+					).toContain(targetPath);
 				}
 			}
 		}

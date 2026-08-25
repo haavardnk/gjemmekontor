@@ -8,7 +8,7 @@ import {
 
 describe('module activation', (): void => {
 	test('enables every bundled module by default in navigation order', (): void => {
-		expect(resolveEnabledModuleIds()).toEqual(['map', 'shots', 'logbook', 'shopping-list']);
+		expect(resolveEnabledModuleIds()).toEqual(['map', 'shots', 'logbook', 'shopping-list', 'menu']);
 	});
 
 	test('uses catalog order rather than configuration order', (): void => {

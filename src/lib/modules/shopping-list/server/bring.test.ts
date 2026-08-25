@@ -200,6 +200,42 @@ describe('Bring service', (): void => {
 		expect(maximumActive).toBe(1);
 	});
 
+	test('applies a menu batch as absolute values and verifies one final snapshot', async (): Promise<void> => {
+		const client = fakeClient([{ name: 'Zucker', specification: '300 g' }]);
+		const service = new BringService(config, () => client);
+
+		const planning = await service.planningSnapshot();
+		const snapshot = await service.applyAbsolute([
+			{ sourceName: 'Zucker', specification: 'totalt 1 kg' },
+			{ sourceName: 'Melk', specification: 'totalt 2 l' }
+		]);
+
+		expect(planning.catalog).toContainEqual({ sourceName: 'Milch', name: 'Melk' });
+		expect(snapshot.items).toEqual([
+			{ sourceName: 'Milch', name: 'Melk', specification: 'totalt 2 l' },
+			{ sourceName: 'Zucker', name: 'Zucker', specification: 'totalt 1 kg' }
+		]);
+		expect(client.getItems).toHaveBeenCalledTimes(2);
+		expect(client.saveItem).toHaveBeenCalledWith('trip-list', 'Milch', 'totalt 2 l');
+	});
+
+	test('prefers an exact existing custom item over a similarly named catalog item', async (): Promise<void> => {
+		const client = fakeClient([{ name: 'Melk', specification: '1 l' }]);
+		const service = new BringService(config, () => client);
+
+		await service.planningSnapshot();
+		const snapshot = await service.applyAbsolute([
+			{ sourceName: 'Melk', specification: 'totalt 2 l' }
+		]);
+
+		expect(client.saveItem).toHaveBeenCalledWith('trip-list', 'Melk', 'totalt 2 l');
+		expect(snapshot.items).toContainEqual({
+			sourceName: 'Melk',
+			name: 'Melk',
+			specification: 'totalt 2 l'
+		});
+	});
+
 	test('validates handlers and returns stable errors', async (): Promise<void> => {
 		const service = new BringService(config, () => fakeClient([]));
 		const invalid = await handleAddShoppingListItem(

@@ -1,4 +1,4 @@
-export type ModuleIconName = 'book-open' | 'map' | 'shopping-basket' | 'video';
+export type ModuleIconName = 'book-open' | 'map' | 'shopping-basket' | 'utensils' | 'video';
 
 export type AppModuleManifest<Id extends string = string> = {
 	id: Id;
