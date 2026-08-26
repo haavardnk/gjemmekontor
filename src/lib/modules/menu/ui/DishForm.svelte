@@ -195,7 +195,7 @@
 	}
 
 	function addInstructionSection(): void {
-		const section = uniqueLabel('Ny del', instructionSections);
+		const section = uniqueLabel('Ny gruppe', instructionSections);
 		instructionSections = [...instructionSections, section];
 		void addInstruction(section);
 	}
@@ -593,7 +593,7 @@
 					<button
 						class="btn min-h-10 btn-outline btn-sm"
 						type="button"
-						onclick={addInstructionSection}><Plus size={16} /> Del</button
+						onclick={addInstructionSection}><Plus size={16} /> Gruppe</button
 					>
 				</div>
 				<div class="space-y-3">
@@ -604,7 +604,7 @@
 						<div
 							class="rounded-box border border-base-300 bg-base-200/45 p-2.5 sm:p-3"
 							role="group"
-							aria-label={section ? `Oppskriftsdel ${section}` : 'Steg uten del'}
+							aria-label={section ? `Oppskriftsgruppe ${section}` : 'Steg uten gruppe'}
 							class:ring-2={draggedInstructionId}
 							class:ring-primary={draggedInstructionId}
 							ondragover={(event) => event.preventDefault()}
@@ -616,15 +616,15 @@
 										value={section}
 										onchange={(event) =>
 											renameInstructionSection(section, event.currentTarget.value)}
-										aria-label={`Navn på oppskriftsdel ${section}`}
+										aria-label={`Navn på oppskriftsgruppe ${section}`}
 									/>{:else}<p class="min-w-0 flex-1 text-sm font-bold text-base-content/60">
-										Uten del
+										Uten gruppe
 									</p>{/if}
 								{#if section}<button
 										class="btn btn-square h-10 min-h-10 w-10 min-w-10 btn-ghost text-error btn-sm"
 										type="button"
 										onclick={() => removeInstructionSection(section)}
-										aria-label={`Fjern oppskriftsdel ${section}`}><Trash2 size={17} /></button
+										aria-label={`Fjern oppskriftsgruppe ${section}`}><Trash2 size={17} /></button
 									>{/if}
 							</div>
 							<div class="space-y-2">
@@ -640,7 +640,7 @@
 												draggable="true"
 												ondragstart={() => (draggedInstructionId = instruction.id)}
 												ondragend={() => (draggedInstructionId = undefined)}
-												aria-label="Dra steg til en annen del"><GripVertical size={17} /></button
+												aria-label="Dra steg til en annen gruppe"><GripVertical size={17} /></button
 											>
 											<p class="min-w-0 flex-1 text-sm font-bold text-base-content/55">
 												Steg {index + 1}
@@ -683,8 +683,8 @@
 												value={instruction.section}
 												onchange={(event) =>
 													updateInstruction(instruction.id, 'section', event.currentTarget.value)}
-												aria-label="Flytt steg til del"
-												><option value="">Uten del</option
+												aria-label="Flytt steg til gruppe"
+												><option value="">Uten gruppe</option
 												>{#each instructionSections as candidate (candidate)}<option
 														value={candidate}>{candidate}</option
 													>{/each}</select
