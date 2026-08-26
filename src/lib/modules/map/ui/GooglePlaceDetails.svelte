@@ -30,6 +30,8 @@
 
 <ProviderRatingCard
 	provider="Google"
+	category={details?.category}
+	priceLevel={details?.priceLevel}
 	rating={details?.rating}
 	reviewCount={details?.reviewCount}
 	webUrl={details?.webUrl}

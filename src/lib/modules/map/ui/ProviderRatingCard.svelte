@@ -14,6 +14,8 @@
 
 	let {
 		provider,
+		category,
+		priceLevel,
 		rating,
 		reviewCount,
 		webUrl,
@@ -25,6 +27,8 @@
 		divided = false
 	}: {
 		provider: Provider;
+		category?: string;
+		priceLevel?: string;
 		rating?: number;
 		reviewCount?: number;
 		webUrl?: string;
@@ -46,7 +50,7 @@
 >
 	<div class="flex items-start gap-3">
 		<div class="min-w-0 flex-1">
-			<div class="flex items-baseline gap-2">
+			<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
 				{#if provider === 'Google'}
 					<img
 						class="h-4 w-auto"
@@ -56,9 +60,15 @@
 				{:else}
 					<h4 class="text-sm font-bold">Tripadvisor</h4>
 				{/if}
-				{#if reviewCount !== undefined}
-					<span class="truncate text-xs text-base-content/55">
-						{reviewCount.toLocaleString('nb-NO')} vurderinger
+				{#if category}
+					<span class="text-xs text-base-content/65">{category}</span>
+				{/if}
+				{#if priceLevel}
+					<span
+						class="font-mono text-xs font-semibold tracking-wide"
+						aria-label={`Prisnivå ${priceLevel}`}
+					>
+						{priceLevel}
 					</span>
 				{/if}
 			</div>
@@ -96,9 +106,21 @@
 			{/if}
 		</div>
 		{#if rating !== undefined}
-			<span class="flex items-center gap-1 text-lg font-bold" aria-label={`${rating} av 5`}>
+			<span
+				class="flex shrink-0 items-center gap-1 text-lg font-bold"
+				aria-label={`${rating} av 5${reviewCount !== undefined ? `, ${reviewCount} vurderinger` : ''}`}
+			>
 				<Star class="text-warning" size={17} fill="currentColor" />
 				{rating.toLocaleString('nb-NO', { maximumFractionDigits: 1 })}
+				{#if reviewCount !== undefined}
+					<span class="text-xs font-medium text-base-content/55">
+						({reviewCount.toLocaleString('nb-NO')})
+					</span>
+				{/if}
+			</span>
+		{:else if reviewCount !== undefined}
+			<span class="shrink-0 text-xs text-base-content/55">
+				({reviewCount.toLocaleString('nb-NO')})
 			</span>
 		{/if}
 		{#if webUrl}

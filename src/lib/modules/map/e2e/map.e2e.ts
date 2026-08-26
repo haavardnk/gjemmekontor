@@ -535,6 +535,8 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 						window.__googlePlaceFetches = (window.__googlePlaceFetches || 0) + 1;
 						this.rating = 4.5;
 						this.userRatingCount = 238;
+						this.priceLevel = 'MODERATE';
+						this.primaryTypeDisplayName = 'Italiensk restaurant';
 						this.googleMapsURI = 'https://www.google.com/maps/place/test';
 						this.attributions = [];
 						this.utcOffsetMinutes = 120;
@@ -567,7 +569,7 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Marina Kaštela');
 	await page.getByRole('button', { name: /Marina Kaštela/ }).click();
 	await expect(page.locator('[data-tripadvisor-details]')).toContainText('4,7');
-	await expect(page.locator('[data-tripadvisor-details]')).toContainText('321 vurderinger');
+	await expect(page.locator('[data-tripadvisor-details]')).toContainText(/4,7\s*\(321\)/);
 	await expect(page.getByRole('link', { name: 'Åpne stedet på Tripadvisor' })).toHaveAttribute(
 		'href',
 		'https://www.tripadvisor.com/test'
@@ -576,7 +578,9 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 	expect(googleRequestFailures).toEqual([]);
 	expect(pageErrors).toEqual([]);
 	await expect(page.locator('[data-google-place-details]')).toContainText('4,5');
-	await expect(page.locator('[data-google-place-details]')).toContainText('238 vurderinger');
+	await expect(page.locator('[data-google-place-details]')).toContainText(/4,5\s*\(238\)/);
+	await expect(page.locator('[data-google-place-details]')).toContainText('Italiensk restaurant');
+	await expect(page.locator('[data-google-place-details]')).toContainText('$$');
 	const googleOpeningHours = page.locator('[data-google-opening-hours]');
 	await expect(googleOpeningHours).toContainText('Åpent nå');
 	await expect(googleOpeningHours).toContainText('I dag Døgnåpent');

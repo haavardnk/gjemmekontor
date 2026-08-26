@@ -18,11 +18,14 @@ type GoogleOpeningHoursPeriod = {
 type GoogleOpeningHours = {
 	periods: GoogleOpeningHoursPeriod[];
 };
+type GooglePriceLevel = 'FREE' | 'INEXPENSIVE' | 'MODERATE' | 'EXPENSIVE' | 'VERY_EXPENSIVE';
 type GooglePlaceInstance = {
 	attributions?: string[];
 	currentOpeningHours?: GoogleOpeningHours;
 	googleMapsURI?: string;
 	photos?: GooglePhoto[];
+	priceLevel?: GooglePriceLevel;
+	primaryTypeDisplayName?: string;
 	rating?: number;
 	regularOpeningHours?: GoogleOpeningHours;
 	utcOffsetMinutes?: number;
@@ -41,6 +44,8 @@ export type GoogleOpeningHoursPresentation = {
 };
 
 export type GooglePlacePresentation = {
+	category?: string;
+	priceLevel?: string;
 	rating?: number;
 	reviewCount?: number;
 	webUrl?: string;
@@ -57,6 +62,13 @@ const weekdayLabels = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fre
 const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
 const minutesPerDay = 24 * 60;
 const minutesPerWeek = 7 * minutesPerDay;
+const priceLevelLabels: Record<GooglePriceLevel, string> = {
+	FREE: 'Gratis',
+	INEXPENSIVE: '$',
+	MODERATE: '$$',
+	EXPENSIVE: '$$$',
+	VERY_EXPENSIVE: '$$$$'
+};
 
 function pointMinutes(point: GoogleOpeningHoursPoint): number {
 	return point.day * minutesPerDay + point.hour * 60 + point.minute;
@@ -181,6 +193,8 @@ export async function fetchGooglePlacePresentation(
 			'currentOpeningHours',
 			'googleMapsURI',
 			'photos',
+			'priceLevel',
+			'primaryTypeDisplayName',
 			'rating',
 			'regularOpeningHours',
 			'userRatingCount',
@@ -189,6 +203,8 @@ export async function fetchGooglePlacePresentation(
 	});
 	const openingHours = openingHoursPresentation(place);
 	return {
+		...(place.primaryTypeDisplayName ? { category: place.primaryTypeDisplayName } : {}),
+		...(place.priceLevel ? { priceLevel: priceLevelLabels[place.priceLevel] } : {}),
 		...(place.rating !== undefined ? { rating: place.rating } : {}),
 		...(place.userRatingCount !== undefined ? { reviewCount: place.userRatingCount } : {}),
 		...(place.googleMapsURI ? { webUrl: place.googleMapsURI } : {}),

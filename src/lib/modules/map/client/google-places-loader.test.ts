@@ -45,16 +45,19 @@ describe('Google Places UI Kit loader', (): void => {
 
 	test('normalizes ratings, links, and ten fresh photos for the custom card', async (): Promise<void> => {
 		const getURI = vi.fn(() => 'https://lh3.googleusercontent.com/photo.jpg');
+		const fetchFields = vi.fn(async () => ({}));
 		class Place {
 			rating = 4.5;
 			userRatingCount = 238;
+			priceLevel = 'MODERATE' as const;
+			primaryTypeDisplayName = 'Italiensk restaurant';
 			googleMapsURI = 'https://www.google.com/maps/place/test';
 			attributions = ['Partner data'];
 			photos = Array.from({ length: 12 }, () => ({
 				getURI,
 				authorAttributions: [{ displayName: 'Traveler' }]
 			}));
-			fetchFields = vi.fn(async () => ({}));
+			fetchFields = fetchFields;
 		}
 		const importLibrary = vi.fn(async () => ({ Place }));
 		vi.stubGlobal('google', { maps: { importLibrary } });
@@ -63,6 +66,8 @@ describe('Google Places UI Kit loader', (): void => {
 		const result = await fetchGooglePlacePresentation('ChIJ1234567890_test', 'browser-test-key');
 
 		expect(result).toMatchObject({
+			category: 'Italiensk restaurant',
+			priceLevel: '$$',
 			rating: 4.5,
 			reviewCount: 238,
 			webUrl: 'https://www.google.com/maps/place/test',
@@ -71,6 +76,9 @@ describe('Google Places UI Kit loader', (): void => {
 		expect(result.photos).toHaveLength(10);
 		expect(result.photos[0]).toMatchObject({ contributor: 'Traveler' });
 		expect(getURI).toHaveBeenCalledTimes(10);
+		expect(fetchFields).toHaveBeenCalledWith({
+			fields: expect.arrayContaining(['priceLevel', 'primaryTypeDisplayName'])
+		});
 	});
 
 	test('normalizes current opening hours and calculates open now in the place timezone', async (): Promise<void> => {
