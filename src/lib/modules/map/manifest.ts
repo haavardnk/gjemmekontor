@@ -5,6 +5,7 @@ export const mapManifest = {
 	label: 'Kart',
 	icon: 'map',
 	order: 10,
+	mobileNavigation: 'quick',
 	primaryPath: '/map',
 	pagePrefixes: ['/map'],
 	apiPrefixes: ['/api/map'],

@@ -1,0 +1,905 @@
+<script lang="ts">
+	import {
+		ArrowDown,
+		ArrowUp,
+		Backpack,
+		Check,
+		CircleAlert,
+		GripVertical,
+		Pencil,
+		Plus,
+		RotateCcw,
+		Search,
+		ShoppingCart,
+		SlidersHorizontal,
+		Trash2,
+		Users,
+		X
+	} from '@lucide/svelte';
+
+	import { sharedState } from '$lib/client/state.svelte';
+	import {
+		filterGearItems,
+		type GearAvailability,
+		gearCategories,
+		gearCategoryKey,
+		gearCategorySchema,
+		gearItemKey,
+		gearItems,
+		gearItemSchema,
+		type GearItemSort,
+		gearOwnerKey,
+		gearOwners,
+		gearOwnerSchema,
+		gearPackedKey,
+		gearProgress,
+		isGearItemPacked,
+		type KeyedGearCategory,
+		type KeyedGearItem,
+		type KeyedGearOwner,
+		repositionGearCategory,
+		serializeGearCategory,
+		serializeGearItem,
+		serializeGearOwner,
+		sortGearItems
+	} from '$lib/modules/gear/domain/gear';
+	import SyncStatus from '$lib/ui/SyncStatus.svelte';
+
+	let mode = $state<'plan' | 'pack'>('plan');
+	let query = $state('');
+	let ownerFilter = $state('');
+	let availabilityFilter = $state<'' | GearAvailability>('');
+	let sort = $state<GearItemSort>('name');
+	let errorMessage = $state('');
+	let saving = $state(false);
+	let draggedCategoryId = $state<string>();
+	let dragTargetCategoryId = $state<string>();
+
+	let categoryDialog: HTMLDialogElement;
+	let editingCategory = $state<KeyedGearCategory>();
+	let categoryName = $state('');
+
+	let itemDialog: HTMLDialogElement;
+	let editingItem = $state<KeyedGearItem>();
+	let itemCategoryId = $state('');
+	let itemName = $state('');
+	let itemQuantity = $state(1);
+	let itemOwnerId = $state('');
+	let itemAvailability = $state<GearAvailability>('available');
+	let itemNotes = $state('');
+
+	let ownersDialog: HTMLDialogElement;
+	let newOwnerName = $state('');
+	let filtersDialog: HTMLDialogElement;
+
+	const owners = $derived(gearOwners(sharedState.values));
+	const categories = $derived(gearCategories(sharedState.values));
+	const items = $derived(gearItems(sharedState.values));
+	const ownerNames = $derived(new Map(owners.map((owner) => [owner.id, owner.name])));
+	const categoryNames = $derived(
+		new Map(categories.map((category) => [category.id, category.name]))
+	);
+	const activeItems = $derived(
+		filterGearItems(items, {
+			query,
+			...(ownerFilter ? { ownerId: ownerFilter } : {}),
+			...(availabilityFilter ? { availability: availabilityFilter } : {}),
+			categoryNames,
+			ownerNames
+		})
+	);
+	const progress = $derived(gearProgress(items, sharedState.values));
+	const activeFilterCount = $derived(
+		Number(Boolean(ownerFilter)) + Number(Boolean(availabilityFilter)) + Number(sort !== 'name')
+	);
+	const selectedOwnerName = $derived(ownerFilter ? (ownerNames.get(ownerFilter) ?? '') : '');
+	const hasFilters = $derived(Boolean(query.trim() || ownerFilter || availabilityFilter));
+	const visibleCategories = $derived(
+		hasFilters
+			? categories.filter((category) => activeItems.some((item) => item.categoryId === category.id))
+			: categories
+	);
+
+	function itemsForCategory(categoryId: string): KeyedGearItem[] {
+		return sortGearItems(
+			activeItems.filter((item) => item.categoryId === categoryId),
+			sort,
+			sharedState.values,
+			ownerNames
+		);
+	}
+
+	function openCategory(category?: KeyedGearCategory): void {
+		editingCategory = category;
+		categoryName = category?.name ?? '';
+		errorMessage = '';
+		categoryDialog.showModal();
+	}
+
+	async function saveCategory(event: SubmitEvent): Promise<void> {
+		event.preventDefault();
+		const name = categoryName.trim();
+		if (!name || saving) return;
+		if (
+			categories.some(
+				(category) =>
+					category.id !== editingCategory?.id &&
+					category.name.toLocaleLowerCase('nb-NO') === name.toLocaleLowerCase('nb-NO')
+			)
+		) {
+			errorMessage = 'Det finnes allerede en kategori med dette navnet.';
+			return;
+		}
+		saving = true;
+		try {
+			const now = new Date().toISOString();
+			const clientId = await sharedState.clientId();
+			const category = gearCategorySchema.parse({
+				version: 1,
+				id: editingCategory?.id ?? crypto.randomUUID(),
+				name,
+				position: editingCategory?.position ?? categories.length,
+				createdAt: editingCategory?.createdAt ?? now,
+				createdBy: editingCategory?.createdBy ?? clientId,
+				tombstone: false
+			});
+			await sharedState.set(gearCategoryKey(category.id), serializeGearCategory(category));
+			categoryDialog.close();
+		} finally {
+			saving = false;
+		}
+	}
+
+	function openItem(categoryId: string, item?: KeyedGearItem): void {
+		editingItem = item;
+		itemCategoryId = item?.categoryId ?? categoryId;
+		itemName = item?.name ?? '';
+		itemQuantity = item?.quantity ?? 1;
+		itemOwnerId = item?.ownerId ?? '';
+		itemAvailability = item?.availability ?? 'available';
+		itemNotes = item?.notes ?? '';
+		errorMessage = '';
+		itemDialog.showModal();
+	}
+
+	async function saveItem(event: SubmitEvent): Promise<void> {
+		event.preventDefault();
+		if (!itemName.trim() || !itemCategoryId || saving) return;
+		saving = true;
+		try {
+			const now = new Date().toISOString();
+			const clientId = await sharedState.clientId();
+			const item = gearItemSchema.parse({
+				version: 1,
+				id: editingItem?.id ?? crypto.randomUUID(),
+				categoryId: itemCategoryId,
+				name: itemName,
+				quantity: itemQuantity,
+				...(itemOwnerId ? { ownerId: itemOwnerId } : {}),
+				availability: itemAvailability,
+				notes: itemNotes,
+				createdAt: editingItem?.createdAt ?? now,
+				createdBy: editingItem?.createdBy ?? clientId,
+				tombstone: false
+			});
+			const writes = [{ key: gearItemKey(item.id), value: serializeGearItem(item) }];
+			if (item.availability === 'need-to-buy') {
+				writes.push({ key: gearPackedKey(item.id), value: false });
+			}
+			await sharedState.setMany(writes);
+			itemDialog.close();
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function deleteItem(item: KeyedGearItem): Promise<void> {
+		if (!window.confirm(`Slette ${item.name} fra utstyrslisten?`)) return;
+		await sharedState.set(item.key, serializeGearItem({ ...item, tombstone: true }));
+	}
+
+	async function deleteCategory(category: KeyedGearCategory): Promise<void> {
+		const categoryItems = items.filter((item) => item.categoryId === category.id);
+		const detail = categoryItems.length ? ` og ${categoryItems.length} ting i kategorien` : '';
+		if (!window.confirm(`Slette ${category.name}${detail}?`)) return;
+		await sharedState.setMany([
+			{ key: category.key, value: serializeGearCategory({ ...category, tombstone: true }) },
+			...categoryItems.map((item) => ({
+				key: item.key,
+				value: serializeGearItem({ ...item, tombstone: true })
+			}))
+		]);
+	}
+
+	async function setPacked(item: KeyedGearItem, packed: boolean): Promise<void> {
+		if (item.availability !== 'available') return;
+		await sharedState.set(gearPackedKey(item.id), packed);
+	}
+
+	async function markAvailable(item: KeyedGearItem): Promise<void> {
+		await sharedState.setMany([
+			{
+				key: item.key,
+				value: serializeGearItem({ ...item, availability: 'available' })
+			},
+			{ key: gearPackedKey(item.id), value: false }
+		]);
+	}
+
+	async function resetPacking(): Promise<void> {
+		const packedItems = items.filter((item) => isGearItemPacked(sharedState.values, item.id));
+		if (!packedItems.length || !window.confirm('Nullstille alle avhukinger i pakkelisten?')) return;
+		await sharedState.setMany(
+			packedItems.map((item) => ({ key: gearPackedKey(item.id), value: false }))
+		);
+	}
+
+	async function persistCategoryOrder(reordered: ReturnType<typeof repositionGearCategory>) {
+		await sharedState.setMany(
+			reordered.map((category) => ({
+				key: gearCategoryKey(category.id),
+				value: serializeGearCategory(category)
+			}))
+		);
+	}
+
+	async function moveCategory(category: KeyedGearCategory, offset: -1 | 1): Promise<void> {
+		const currentIndex = categories.findIndex((candidate) => candidate.id === category.id);
+		const targetIndex = currentIndex + offset;
+		if (targetIndex < 0 || targetIndex >= categories.length) return;
+		await persistCategoryOrder(repositionGearCategory(categories, category.id, targetIndex));
+	}
+
+	async function dropCategory(targetCategoryId: string): Promise<void> {
+		const sourceId = draggedCategoryId;
+		draggedCategoryId = undefined;
+		dragTargetCategoryId = undefined;
+		if (!sourceId || sourceId === targetCategoryId) return;
+		const targetIndex = categories.findIndex((category) => category.id === targetCategoryId);
+		if (targetIndex < 0) return;
+		await persistCategoryOrder(repositionGearCategory(categories, sourceId, targetIndex));
+	}
+
+	async function addOwner(event: SubmitEvent): Promise<void> {
+		event.preventDefault();
+		const name = newOwnerName.trim();
+		if (!name || saving) return;
+		if (
+			owners.some(
+				(owner) => owner.name.toLocaleLowerCase('nb-NO') === name.toLocaleLowerCase('nb-NO')
+			)
+		) {
+			errorMessage = 'Denne personen finnes allerede.';
+			return;
+		}
+		saving = true;
+		try {
+			const owner = gearOwnerSchema.parse({
+				version: 1,
+				id: crypto.randomUUID(),
+				name,
+				createdAt: new Date().toISOString(),
+				createdBy: await sharedState.clientId(),
+				tombstone: false
+			});
+			await sharedState.set(gearOwnerKey(owner.id), serializeGearOwner(owner));
+			newOwnerName = '';
+			errorMessage = '';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function renameOwner(owner: KeyedGearOwner, name: string): Promise<void> {
+		const trimmed = name.trim();
+		if (!trimmed || trimmed === owner.name) return;
+		if (
+			owners.some(
+				(candidate) =>
+					candidate.id !== owner.id &&
+					candidate.name.toLocaleLowerCase('nb-NO') === trimmed.toLocaleLowerCase('nb-NO')
+			)
+		) {
+			errorMessage = 'Denne personen finnes allerede.';
+			return;
+		}
+		await sharedState.set(owner.key, serializeGearOwner({ ...owner, name: trimmed }));
+		errorMessage = '';
+	}
+
+	async function deleteOwner(owner: KeyedGearOwner): Promise<void> {
+		const ownedItems = items.filter((item) => item.ownerId === owner.id);
+		if (
+			!window.confirm(
+				`Slette ${owner.name}? ${ownedItems.length ? 'Personen fjernes fra tilknyttet utstyr.' : ''}`
+			)
+		)
+			return;
+		await sharedState.setMany([
+			{ key: owner.key, value: serializeGearOwner({ ...owner, tombstone: true }) },
+			...ownedItems.map((item) => {
+				const withoutOwner = { ...item };
+				delete withoutOwner.ownerId;
+				return { key: item.key, value: serializeGearItem(withoutOwner) };
+			})
+		]);
+		if (ownerFilter === owner.id) ownerFilter = '';
+	}
+</script>
+
+<svelte:head><title>Utstyr · Gjemmekontor</title></svelte:head>
+
+<section class="mx-auto max-w-4xl px-4 py-5 pb-10 lg:py-7">
+	<header class="mb-4">
+		<div class="flex min-h-5 items-center justify-between gap-3">
+			<p class="flex items-center gap-1.5 text-sm font-semibold text-primary">
+				<Backpack size={16} /> Turutstyr
+			</p>
+			<SyncStatus />
+		</div>
+		<h1 class="font-display mt-1 text-3xl font-bold text-neutral">Utstyr</h1>
+	</header>
+
+	<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+		<div class="join" role="group" aria-label="Visning">
+			<button
+				class="btn join-item btn-sm"
+				class:btn-primary={mode === 'plan'}
+				class:btn-ghost={mode !== 'plan'}
+				type="button"
+				onclick={() => (mode = 'plan')}>Planlegg</button
+			>
+			<button
+				class="btn join-item btn-sm"
+				class:btn-primary={mode === 'pack'}
+				class:btn-ghost={mode !== 'pack'}
+				type="button"
+				onclick={() => (mode = 'pack')}>Pakk</button
+			>
+		</div>
+		<div class="flex gap-2">
+			{#if mode === 'plan'}
+				<button
+					class="btn btn-outline btn-sm"
+					type="button"
+					onclick={() => ownersDialog.showModal()}
+				>
+					<Users size={16} /> Personer
+				</button>
+				<button class="btn btn-primary btn-sm" type="button" onclick={() => openCategory()}>
+					<Plus size={16} /> Kategori
+				</button>
+			{:else}
+				<span
+					class="badge h-8 gap-1.5 border-primary/25 bg-primary/10 px-3 font-semibold text-primary"
+				>
+					<Check size={14} />
+					{progress.packed}/{progress.total} pakket
+					{#if progress.needToBuy}
+						· {progress.needToBuy} kjøp{/if}
+				</span>
+				<button
+					class="btn btn-square btn-ghost btn-sm"
+					type="button"
+					onclick={resetPacking}
+					disabled={progress.packed === 0}
+					aria-label="Nullstill pakkelisten"
+					title="Nullstill pakkelisten"><RotateCcw size={16} /></button
+				>
+			{/if}
+		</div>
+	</div>
+
+	<div class="mb-4 flex gap-2">
+		<label class="input flex min-w-0 flex-1 items-center gap-2 bg-base-100">
+			<Search size={17} />
+			<input
+				class="min-w-0 grow"
+				type="search"
+				placeholder="Søk i utstyr"
+				aria-label="Søk i utstyr"
+				bind:value={query}
+			/>
+			{#if query}<button
+					class="btn btn-square btn-ghost btn-xs"
+					type="button"
+					onclick={() => (query = '')}
+					aria-label="Tøm søket"><X size={15} /></button
+				>{/if}
+		</label>
+		<button
+			class="btn relative shrink-0 btn-outline"
+			type="button"
+			onclick={() => filtersDialog.showModal()}
+			aria-label="Filter og sortering"
+		>
+			<SlidersHorizontal size={17} /><span class="hidden sm:inline">Filter</span>
+			{#if activeFilterCount}<span class="badge badge-sm badge-primary">{activeFilterCount}</span
+				>{/if}
+		</button>
+	</div>
+	{#if activeFilterCount}
+		<div class="mb-4 flex flex-wrap gap-1.5" aria-label="Aktive filtre">
+			{#if selectedOwnerName}<button
+					class="badge h-7 gap-1 badge-outline"
+					type="button"
+					onclick={() => (ownerFilter = '')}
+					aria-label={`Fjern personfilter ${selectedOwnerName}`}
+					>{selectedOwnerName} <X size={13} /></button
+				>{/if}
+			{#if availabilityFilter}<button
+					class="badge h-7 gap-1 badge-outline"
+					type="button"
+					onclick={() => (availabilityFilter = '')}
+					aria-label="Fjern tilgjengelighetsfilter"
+					>{availabilityFilter === 'available' ? 'Tilgjengelig' : 'Må kjøpes'}
+					<X size={13} /></button
+				>{/if}
+			{#if sort !== 'name'}<button
+					class="badge h-7 gap-1 badge-outline"
+					type="button"
+					onclick={() => (sort = 'name')}
+					aria-label="Tilbakestill sortering"
+					>Sortert: {sort === 'owner'
+						? 'person'
+						: sort === 'availability'
+							? 'må kjøpes'
+							: 'upakket'}
+					<X size={13} /></button
+				>{/if}
+		</div>
+	{/if}
+
+	{#if errorMessage}
+		<div class="mb-4 alert alert-error" role="alert">
+			<CircleAlert size={18} /><span>{errorMessage}</span>
+		</div>
+	{/if}
+
+	{#if categories.length === 0}
+		<div
+			class="grid min-h-64 place-items-center rounded-box border border-dashed border-base-300 bg-base-100/45 p-8 text-center"
+		>
+			<div>
+				<Backpack class="mx-auto mb-3 text-primary" size={38} />
+				<h2 class="font-display text-2xl font-bold">Start med en kategori</h2>
+				<p class="mt-1 text-sm text-base-content/60">
+					For eksempel klær, sikkerhet eller elektronikk.
+				</p>
+				<button class="btn mt-5 btn-primary" type="button" onclick={() => openCategory()}>
+					<Plus size={17} /> Legg til kategori
+				</button>
+			</div>
+		</div>
+	{:else if visibleCategories.length === 0}
+		<div
+			class="grid min-h-48 place-items-center border-y border-dashed border-base-300 text-center"
+		>
+			<p class="text-sm font-semibold text-base-content/55">Ingen utstyr matcher filtrene.</p>
+		</div>
+	{:else}
+		<div class="space-y-4">
+			{#each visibleCategories as category (category.id)}
+				{@const categoryItems = itemsForCategory(category.id)}
+				{@const fullCategoryIndex = categories.findIndex(
+					(candidate) => candidate.id === category.id
+				)}
+				{@const categoryProgress = gearProgress(
+					items.filter((item) => item.categoryId === category.id),
+					sharedState.values
+				)}
+				<section
+					class="overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-sm"
+					role="group"
+					aria-label={category.name}
+					class:ring-2={dragTargetCategoryId === category.id}
+					class:ring-primary={dragTargetCategoryId === category.id}
+					ondragover={(event) => {
+						event.preventDefault();
+						dragTargetCategoryId = category.id;
+					}}
+					ondragleave={() => {
+						if (dragTargetCategoryId === category.id) dragTargetCategoryId = undefined;
+					}}
+					ondrop={(event) => {
+						event.preventDefault();
+						void dropCategory(category.id);
+					}}
+				>
+					<header
+						class="flex min-h-14 items-center gap-1 border-b border-base-300 bg-base-200/55 px-2 sm:px-3"
+					>
+						{#if mode === 'plan'}
+							<button
+								class="btn hidden btn-square cursor-grab btn-ghost btn-sm sm:inline-flex"
+								type="button"
+								draggable="true"
+								ondragstart={(event) => {
+									draggedCategoryId = category.id;
+									event.dataTransfer?.setData('text/plain', category.id);
+									if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+								}}
+								ondragend={() => {
+									draggedCategoryId = undefined;
+									dragTargetCategoryId = undefined;
+								}}
+								aria-label={`Dra kategorien ${category.name}`}><GripVertical size={17} /></button
+							>
+						{/if}
+						<div class="min-w-0 flex-1 px-1">
+							<h2 class="truncate font-bold">{category.name}</h2>
+							<p class="text-xs text-base-content/55">
+								{#if mode === 'pack'}
+									{categoryProgress.packed}/{categoryProgress.total} pakket
+								{:else}
+									{items.filter((item) => item.categoryId === category.id).length} ting
+								{/if}
+								{#if categoryProgress.needToBuy}
+									· {categoryProgress.needToBuy} må kjøpes{/if}
+							</p>
+						</div>
+						{#if mode === 'plan'}
+							<button
+								class="btn btn-square btn-ghost btn-sm"
+								type="button"
+								disabled={fullCategoryIndex === 0}
+								onclick={() => moveCategory(category, -1)}
+								aria-label={`Flytt ${category.name} opp`}><ArrowUp size={16} /></button
+							>
+							<button
+								class="btn btn-square btn-ghost btn-sm"
+								type="button"
+								disabled={fullCategoryIndex === categories.length - 1}
+								onclick={() => moveCategory(category, 1)}
+								aria-label={`Flytt ${category.name} ned`}><ArrowDown size={16} /></button
+							>
+							<button
+								class="btn btn-square btn-ghost btn-sm"
+								type="button"
+								onclick={() => openCategory(category)}
+								aria-label={`Endre kategorien ${category.name}`}><Pencil size={16} /></button
+							>
+							<button
+								class="btn btn-square btn-ghost text-error btn-sm"
+								type="button"
+								onclick={() => deleteCategory(category)}
+								aria-label={`Slett kategorien ${category.name}`}><Trash2 size={16} /></button
+							>
+						{/if}
+					</header>
+
+					{#if categoryItems.length}
+						<ul class="divide-y divide-base-300" aria-label={`Utstyr i ${category.name}`}>
+							{#each categoryItems as item (item.id)}
+								<li class="flex min-h-16 items-center gap-3 px-3 py-2.5 sm:px-4">
+									{#if mode === 'pack' && item.availability === 'available'}
+										<input
+											class="checkbox shrink-0 checkbox-success"
+											type="checkbox"
+											checked={isGearItemPacked(sharedState.values, item.id)}
+											onchange={(event) => setPacked(item, event.currentTarget.checked)}
+											aria-label={`Pakket ${item.name}`}
+										/>
+									{:else if mode === 'pack'}
+										<ShoppingCart class="shrink-0 text-warning" size={21} />
+									{/if}
+									<div class="min-w-0 flex-1">
+										<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+											<p
+												class="font-semibold"
+												class:line-through={isGearItemPacked(sharedState.values, item.id)}
+												class:opacity-50={isGearItemPacked(sharedState.values, item.id)}
+											>
+												{item.name}
+											</p>
+											{#if item.quantity > 1}<span class="badge badge-ghost badge-sm"
+													>{item.quantity} stk.</span
+												>{/if}
+											{#if item.availability === 'need-to-buy'}<span
+													class="badge badge-sm badge-warning">Må kjøpes</span
+												>{/if}
+											{#if item.ownerId && ownerNames.get(item.ownerId)}<span
+													class="badge badge-outline badge-sm">{ownerNames.get(item.ownerId)}</span
+												>{/if}
+										</div>
+										{#if item.notes}<p class="mt-0.5 text-sm text-base-content/55">
+												{item.notes}
+											</p>{/if}
+									</div>
+									{#if mode === 'plan'}
+										<button
+											class="btn btn-square btn-ghost btn-sm"
+											type="button"
+											onclick={() => openItem(category.id, item)}
+											aria-label={`Endre ${item.name}`}><Pencil size={16} /></button
+										>
+										<button
+											class="btn btn-square btn-ghost text-error btn-sm"
+											type="button"
+											onclick={() => deleteItem(item)}
+											aria-label={`Slett ${item.name}`}><Trash2 size={16} /></button
+										>
+									{:else if item.availability === 'need-to-buy'}
+										<button
+											class="btn btn-outline btn-xs"
+											type="button"
+											onclick={() => markAvailable(item)}
+										>
+											<Check size={14} /> Kjøpt inn
+										</button>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{:else if !hasFilters}
+						<p class="px-4 py-5 text-center text-sm text-base-content/50">
+							Ingen utstyr i kategorien ennå.
+						</p>
+					{/if}
+					{#if mode === 'plan'}
+						<button
+							class="btn m-2 min-h-11 w-[calc(100%-1rem)] border-dashed border-base-300 btn-ghost btn-sm"
+							type="button"
+							onclick={() => openItem(category.id)}><Plus size={16} /> Legg til utstyr</button
+						>
+					{/if}
+				</section>
+			{/each}
+		</div>
+	{/if}
+</section>
+
+<dialog
+	bind:this={filtersDialog}
+	class="modal modal-bottom sm:modal-middle"
+	aria-labelledby="gear-filters-dialog-title"
+>
+	<div class="modal-box max-w-md rounded-t-2xl sm:rounded-box">
+		<h2 id="gear-filters-dialog-title" class="font-display text-2xl font-bold">
+			Filter og sortering
+		</h2>
+		<div class="mt-5 space-y-5">
+			<label class="form-control block">
+				<span class="mb-2 block text-sm font-semibold">Person</span>
+				<select class="select w-full" bind:value={ownerFilter} aria-label="Filtrer på person">
+					<option value="">Alle personer</option>
+					{#each owners as owner (owner.id)}<option value={owner.id}>{owner.name}</option>{/each}
+				</select>
+			</label>
+			<div>
+				<p class="mb-2 text-sm font-semibold">Tilgjengelighet</p>
+				<div class="join grid grid-cols-3" role="group" aria-label="Filtrer på tilgjengelighet">
+					{#each [{ value: '', label: 'Alle' }, { value: 'available', label: 'Har' }, { value: 'need-to-buy', label: 'Må kjøpes' }] as option (option.value)}
+						<button
+							class="btn join-item btn-sm"
+							class:btn-primary={availabilityFilter === option.value}
+							class:btn-ghost={availabilityFilter !== option.value}
+							type="button"
+							onclick={() => (availabilityFilter = option.value as '' | GearAvailability)}
+							aria-pressed={availabilityFilter === option.value}>{option.label}</button
+						>
+					{/each}
+				</div>
+			</div>
+			<label class="form-control block">
+				<span class="mb-2 block text-sm font-semibold">Sorter etter</span>
+				<select class="select w-full" bind:value={sort} aria-label="Sorter utstyr">
+					<option value="name">Navn</option>
+					<option value="owner">Person</option>
+					<option value="availability">Må kjøpes først</option>
+					<option value="unpacked">Upakket først</option>
+				</select>
+			</label>
+		</div>
+		<div class="mt-6 grid grid-cols-2 gap-2">
+			<button
+				class="btn btn-ghost"
+				type="button"
+				onclick={() => {
+					ownerFilter = '';
+					availabilityFilter = '';
+					sort = 'name';
+				}}
+				disabled={activeFilterCount === 0}>Nullstill</button
+			>
+			<button class="btn btn-primary" type="button" onclick={() => filtersDialog.close()}>
+				Ferdig
+			</button>
+		</div>
+	</div>
+	<form method="dialog" class="modal-backdrop">
+		<button type="submit" aria-label="Lukk filter og sortering">Lukk</button>
+	</form>
+</dialog>
+
+<dialog
+	bind:this={categoryDialog}
+	class="modal"
+	aria-labelledby="gear-category-dialog-title"
+	onclose={() => {
+		editingCategory = undefined;
+		errorMessage = '';
+	}}
+>
+	<div class="modal-box max-w-md rounded-box">
+		<h2 id="gear-category-dialog-title" class="font-display text-2xl font-bold">
+			{editingCategory ? 'Endre kategori' : 'Ny kategori'}
+		</h2>
+		<form class="mt-5" onsubmit={saveCategory}>
+			<label class="form-control block">
+				<span class="mb-2 block text-sm font-semibold">Navn</span>
+				<input
+					class="input w-full"
+					bind:value={categoryName}
+					maxlength="100"
+					required
+					aria-label="Kategorinavn"
+				/>
+			</label>
+			{#if errorMessage}<p class="mt-2 text-sm text-error" role="alert">{errorMessage}</p>{/if}
+			<div class="mt-6 grid grid-cols-2 gap-2">
+				<button
+					class="btn btn-ghost"
+					type="button"
+					onclick={() => categoryDialog.close()}
+					disabled={saving}>Avbryt</button
+				>
+				<button class="btn btn-primary" type="submit" disabled={saving || !categoryName.trim()}
+					>Lagre</button
+				>
+			</div>
+		</form>
+	</div>
+	<form method="dialog" class="modal-backdrop">
+		<button type="submit" aria-label="Lukk kategoridialogen">Lukk</button>
+	</form>
+</dialog>
+
+<dialog
+	bind:this={itemDialog}
+	class="modal"
+	aria-labelledby="gear-item-dialog-title"
+	onclose={() => {
+		editingItem = undefined;
+		errorMessage = '';
+	}}
+>
+	<div class="modal-box max-w-lg rounded-box">
+		<h2 id="gear-item-dialog-title" class="font-display text-2xl font-bold">
+			{editingItem ? 'Endre utstyr' : 'Nytt utstyr'}
+		</h2>
+		<form class="mt-5 space-y-4" onsubmit={saveItem}>
+			<label class="form-control block">
+				<span class="mb-2 block text-sm font-semibold">Navn</span>
+				<input
+					class="input w-full"
+					bind:value={itemName}
+					maxlength="150"
+					required
+					aria-label="Utstyrsnavn"
+				/>
+			</label>
+			<div class="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Kategori</span>
+					<select class="select w-full" bind:value={itemCategoryId} aria-label="Kategori" required>
+						{#each categories as category (category.id)}<option value={category.id}
+								>{category.name}</option
+							>{/each}
+					</select>
+				</label>
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Antall</span>
+					<input
+						class="input w-full"
+						type="number"
+						min="1"
+						max="999"
+						bind:value={itemQuantity}
+						aria-label="Antall"
+						required
+					/>
+				</label>
+			</div>
+			<div class="grid gap-3 sm:grid-cols-2">
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold"
+						>Person <span class="font-normal text-base-content/50">(valgfritt)</span></span
+					>
+					<select class="select w-full" bind:value={itemOwnerId} aria-label="Person">
+						<option value="">Ingen valgt</option>
+						{#each owners as owner (owner.id)}<option value={owner.id}>{owner.name}</option>{/each}
+					</select>
+				</label>
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Tilgjengelighet</span>
+					<select class="select w-full" bind:value={itemAvailability} aria-label="Tilgjengelighet">
+						<option value="available">Tilgjengelig</option>
+						<option value="need-to-buy">Må kjøpes</option>
+					</select>
+				</label>
+			</div>
+			<label class="form-control block">
+				<span class="mb-2 block text-sm font-semibold"
+					>Notater <span class="font-normal text-base-content/50">(valgfritt)</span></span
+				>
+				<textarea
+					class="textarea min-h-24 w-full"
+					bind:value={itemNotes}
+					maxlength="500"
+					aria-label="Notater"></textarea>
+			</label>
+			<div class="grid grid-cols-2 gap-2 pt-2">
+				<button
+					class="btn btn-ghost"
+					type="button"
+					onclick={() => itemDialog.close()}
+					disabled={saving}>Avbryt</button
+				>
+				<button class="btn btn-primary" type="submit" disabled={saving || !itemName.trim()}
+					>Lagre</button
+				>
+			</div>
+		</form>
+	</div>
+	<form method="dialog" class="modal-backdrop">
+		<button type="submit" aria-label="Lukk utstyrsdialogen">Lukk</button>
+	</form>
+</dialog>
+
+<dialog
+	bind:this={ownersDialog}
+	class="modal"
+	aria-labelledby="gear-owners-dialog-title"
+	onclose={() => (errorMessage = '')}
+>
+	<div class="modal-box max-w-md rounded-box">
+		<h2 id="gear-owners-dialog-title" class="font-display text-2xl font-bold">Personer</h2>
+		<p class="mt-1 text-sm text-base-content/55">Personer kan velges som eier av utstyr.</p>
+		<form class="mt-5 flex gap-2" onsubmit={addOwner}>
+			<input
+				class="input min-w-0 flex-1"
+				bind:value={newOwnerName}
+				maxlength="100"
+				placeholder="Navn"
+				aria-label="Navn på person"
+			/>
+			<button class="btn btn-primary" type="submit" disabled={saving || !newOwnerName.trim()}
+				><Plus size={16} /> Legg til</button
+			>
+		</form>
+		{#if errorMessage}<p class="mt-2 text-sm text-error" role="alert">{errorMessage}</p>{/if}
+		{#if owners.length}
+			<ul
+				class="mt-5 divide-y divide-base-300 rounded-box border border-base-300"
+				aria-label="Personer"
+			>
+				{#each owners as owner (owner.id)}
+					<li class="flex items-center gap-2 p-2">
+						<input
+							class="input min-w-0 flex-1 input-ghost"
+							value={owner.name}
+							onchange={(event) => renameOwner(owner, event.currentTarget.value)}
+							aria-label={`Navn på ${owner.name}`}
+							maxlength="100"
+						/>
+						<button
+							class="btn btn-square btn-ghost text-error btn-sm"
+							type="button"
+							onclick={() => deleteOwner(owner)}
+							aria-label={`Slett ${owner.name}`}><Trash2 size={16} /></button
+						>
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<p class="mt-6 text-center text-sm text-base-content/50">Ingen personer lagt til.</p>
+		{/if}
+		<div class="modal-action">
+			<button class="btn" type="button" onclick={() => ownersDialog.close()}>Ferdig</button>
+		</div>
+	</div>
+	<form method="dialog" class="modal-backdrop">
+		<button type="submit" aria-label="Lukk persondialogen">Lukk</button>
+	</form>
+</dialog>

@@ -47,7 +47,9 @@ test('creates and reads an offline recipe with compact responsive controls', asy
 
 	await expect(page).toHaveURL(/\/menu$/);
 	await expect(page.getByRole('heading', { name: 'Meny', exact: true })).toBeVisible();
-	await expect(page.locator('nav > a')).toHaveCount(5);
+	const mobileNavigation = page.getByRole('navigation', { name: 'Hovednavigasjon' });
+	await expect(mobileNavigation.locator(':scope > a:visible')).toHaveCount(4);
+	await expect(mobileNavigation.getByRole('button', { name: 'Mer' })).toBeVisible();
 	const menuTab = page.getByRole('tab', { name: 'Meny', exact: true });
 	const archiveTab = page.getByRole('tab', { name: 'Arkiv', exact: true });
 	expect(

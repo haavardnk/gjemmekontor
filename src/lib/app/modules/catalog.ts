@@ -1,3 +1,4 @@
+import { gearManifest } from '$lib/modules/gear/manifest';
 import { logbookManifest } from '$lib/modules/logbook/manifest';
 import { mapManifest } from '$lib/modules/map/manifest';
 import { menuManifest } from '$lib/modules/menu/manifest';
@@ -11,7 +12,8 @@ export const moduleCatalog = [
 	shotsManifest,
 	logbookManifest,
 	shoppingListManifest,
-	menuManifest
+	menuManifest,
+	gearManifest
 ] as const satisfies readonly AppModuleManifest[];
 
 export type ModuleId = (typeof moduleCatalog)[number]['id'];

@@ -5,6 +5,7 @@ export const menuManifest = {
 	label: 'Meny',
 	icon: 'utensils',
 	order: 50,
+	mobileNavigation: 'quick',
 	primaryPath: '/menu',
 	pagePrefixes: ['/menu'],
 	apiPrefixes: ['/api/menu'],

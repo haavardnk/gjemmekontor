@@ -10,6 +10,19 @@ describe('module catalog', (): void => {
 		expect(() => validateModuleCatalog(moduleCatalog)).not.toThrow();
 	});
 
+	test('keeps primary mobile destinations quick and secondary destinations under More', (): void => {
+		expect(
+			moduleCatalog
+				.filter((module) => module.mobileNavigation === 'quick')
+				.map((module) => module.id)
+		).toEqual(['map', 'shots', 'shopping-list', 'menu']);
+		expect(
+			moduleCatalog
+				.filter((module) => module.mobileNavigation === 'more')
+				.map((module) => module.id)
+		).toEqual(['logbook', 'gear']);
+	});
+
 	test('rejects duplicate state prefixes', (): void => {
 		const duplicate = [
 			...moduleCatalog,

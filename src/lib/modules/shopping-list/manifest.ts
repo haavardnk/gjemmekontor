@@ -5,6 +5,7 @@ export const shoppingListManifest = {
 	label: 'Handleliste',
 	icon: 'shopping-basket',
 	order: 40,
+	mobileNavigation: 'quick',
 	primaryPath: '/shopping-list',
 	pagePrefixes: ['/shopping-list'],
 	apiPrefixes: ['/api/shopping-list'],

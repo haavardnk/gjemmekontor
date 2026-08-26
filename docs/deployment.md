@@ -9,7 +9,7 @@ Copy `docker-compose.example.yml` and create a sibling `.env`:
 ```env
 APP_PASSWORD=replace-with-a-strong-password
 SESSION_SECRET=replace-with-32-random-bytes
-ENABLED_MODULES=map,shots,logbook,shopping-list,menu
+ENABLED_MODULES=map,shots,logbook,shopping-list,menu,gear
 GOOGLE_MY_MAPS_ID=replace-with-a-public-map-id
 GOOGLE_PLACES_SERVER_API_KEY=
 GOOGLE_PLACES_UI_KIT_API_KEY=
@@ -59,7 +59,7 @@ Health endpoint: `GET /api/health`.
 | `HOST`                             | Listen address; image default is `0.0.0.0`                              |
 | `PORT`                             | Listen port; image default is `3000`                                    |
 
-Available module IDs are `map`, `shots`, `logbook`, `shopping-list`, and `menu`. At least one must be enabled. Unknown or duplicate IDs fail configuration validation. Map configuration is required only when `map` is enabled. Bring configuration remains optional for `shopping-list`; without it, the module shows its provider-unavailable state.
+Available module IDs are `map`, `shots`, `logbook`, `shopping-list`, `menu`, and `gear`. At least one must be enabled. Unknown or duplicate IDs fail configuration validation. Map configuration is required only when `map` is enabled. Bring configuration remains optional for `shopping-list`; without it, the module shows its provider-unavailable state.
 
 ## Maps
 

@@ -269,6 +269,11 @@ async function login(page: Page): Promise<void> {
 	await expect(page).toHaveURL(/\/map$/);
 }
 
+async function openMoreModule(page: Page, name: 'Loggbok' | 'Utstyr'): Promise<void> {
+	await page.getByRole('button', { name: 'Mer' }).click();
+	await page.getByRole('dialog').getByRole('link', { name }).click();
+}
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 const actualLeg = {
@@ -340,7 +345,11 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 
 	await expect(page.getByRole('link', { name: 'Kart' })).toHaveAttribute('aria-current', 'page');
 	await expect(page.getByRole('link', { name: 'Opptak' })).toBeVisible();
-	await expect(page.getByRole('link', { name: 'Loggbok' })).toBeVisible();
+	await page.getByRole('button', { name: 'Mer' }).click();
+	const moreDialog = page.getByRole('dialog');
+	await expect(moreDialog.getByRole('link', { name: 'Loggbok' })).toBeVisible();
+	await expect(moreDialog.getByRole('link', { name: 'Utstyr' })).toBeVisible();
+	await page.keyboard.press('Escape');
 	const attribution = page.locator('.maplibregl-ctrl-attrib');
 	await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
 	await page.locator('.maplibregl-ctrl-attrib-button').click();
@@ -840,7 +849,7 @@ test('restores map position and zoom after app navigation', async ({ page }) => 
 test('shows all map points after the Google day folders end', async ({ page }) => {
 	await mockMap(page);
 	await login(page);
-	await page.getByRole('link', { name: 'Loggbok' }).click();
+	await openMoreModule(page, 'Loggbok');
 	await page.getByRole('combobox', { name: 'Velg dag' }).selectOption({ index: 15 });
 	await page.getByRole('link', { name: 'Kart' }).click();
 	await page.getByRole('button', { name: 'Velg kartlag' }).click();
@@ -870,7 +879,7 @@ test('uses the device date for today instead of another page selection', async (
 		]
 	});
 	await login(page);
-	await page.getByRole('link', { name: 'Loggbok' }).click();
+	await openMoreModule(page, 'Loggbok');
 	const day = page.getByRole('combobox', { name: 'Velg dag' });
 	await expect(day).toHaveValue('5');
 	await day.selectOption({ index: 15 });

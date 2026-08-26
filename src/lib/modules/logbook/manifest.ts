@@ -5,6 +5,7 @@ export const logbookManifest = {
 	label: 'Loggbok',
 	icon: 'book-open',
 	order: 30,
+	mobileNavigation: 'more',
 	primaryPath: '/logbook',
 	pagePrefixes: ['/logbook'],
 	apiPrefixes: ['/api/logbook'],

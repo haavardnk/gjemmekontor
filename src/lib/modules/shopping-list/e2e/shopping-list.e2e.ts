@@ -98,7 +98,9 @@ test('adds, completes, and restores Bring items with responsive module navigatio
 		'aria-current',
 		'page'
 	);
-	await expect(page.locator('nav > a')).toHaveCount(5);
+	const mobileNavigation = page.getByRole('navigation', { name: 'Hovednavigasjon' });
+	await expect(mobileNavigation.locator(':scope > a:visible')).toHaveCount(4);
+	await expect(mobileNavigation.getByRole('button', { name: 'Mer' })).toBeVisible();
 
 	const itemInput = page.getByRole('textbox', { name: 'Vare' });
 	const specificationInput = page.getByRole('textbox', { name: 'Detaljer' });

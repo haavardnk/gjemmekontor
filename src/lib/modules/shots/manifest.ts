@@ -5,6 +5,7 @@ export const shotsManifest = {
 	label: 'Opptak',
 	icon: 'video',
 	order: 20,
+	mobileNavigation: 'quick',
 	primaryPath: '/shots',
 	pagePrefixes: ['/shots'],
 	apiPrefixes: [],
