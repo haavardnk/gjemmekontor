@@ -25,7 +25,10 @@ function isPublicPath(pathname: string): boolean {
 
 function applySecurityHeaders(response: Response, pathname: string): void {
 	response.headers.set('X-Content-Type-Options', 'nosniff');
-	response.headers.set('Referrer-Policy', 'no-referrer');
+	response.headers.set(
+		'Referrer-Policy',
+		pathname === '/map' ? 'strict-origin-when-cross-origin' : 'no-referrer'
+	);
 	response.headers.set('X-Frame-Options', 'DENY');
 	if (
 		/^\/api\/(auth|state)(\/|$)/.test(pathname) ||

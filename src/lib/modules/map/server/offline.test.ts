@@ -26,7 +26,9 @@ async function fixture(): Promise<{
 		aisStreamApiKey: 'ais-key',
 		dataDir: directory,
 		bundledOfflineMapDir: bundledDirectory,
-		googleMyMapsId: 'map-id'
+		googleMyMapsId: 'map-id',
+		tripadvisorTerraPhotosEnabled: false,
+		tripadvisorCacheDays: 30
 	};
 	await mkdir(join(directory, 'map', 'offline'), { recursive: true });
 	await mkdir(bundledDirectory, { recursive: true });

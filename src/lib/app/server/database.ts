@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 
 import { logbookDatabaseMigrations } from '$lib/modules/logbook/server/migrations';
+import { mapDatabaseMigrations } from '$lib/modules/map/server/migrations';
 import {
 	coreDatabaseMigrations,
 	createDatabase as createCoreDatabase,
@@ -19,7 +20,8 @@ function combineMigrations(
 
 export const applicationDatabaseMigrations = combineMigrations(
 	coreDatabaseMigrations,
-	logbookDatabaseMigrations
+	logbookDatabaseMigrations,
+	mapDatabaseMigrations
 );
 
 export function createApplicationDatabase(dataDir: string): Database.Database {

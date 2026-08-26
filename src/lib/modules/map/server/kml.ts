@@ -283,6 +283,40 @@ function placemarkDescription(
 	return /^(?:description|naziv|opis):/im.test(plain) ? '' : description;
 }
 
+function anchorageDetails(
+	description: string,
+	data: Record<string, string>
+): { description: string; data: Record<string, string> } {
+	const body: string[] = [];
+	let seaBed: string | undefined;
+	let windProtection: string | undefined;
+	for (const line of description.split(/<br\s*\/?\s*>|\r?\n/gi)) {
+		const value = sanitizeHtml(line, { allowedTags: [], allowedAttributes: {} }).trim();
+		if (!value || /^coordinates:\s*/i.test(value)) continue;
+		const seaBedMatch = value.match(/^sea bed:\s*(.+)$/i);
+		if (seaBedMatch) {
+			seaBed = seaBedMatch[1];
+			continue;
+		}
+		const windProtectionMatch = value.match(/^wind protection:\s*(.+)$/i);
+		if (windProtectionMatch) {
+			windProtection = windProtectionMatch[1];
+			continue;
+		}
+		body.push(line.trim());
+	}
+	const normalizedDescription = body.join('<br>');
+	return {
+		description: normalizedDescription,
+		data: {
+			...data,
+			...(data.opis !== undefined ? { opis: normalizedDescription } : {}),
+			...(seaBed ? { 'Sea bed': seaBed } : {}),
+			...(windProtection ? { 'Wind Protection': windProtection } : {})
+		}
+	};
+}
+
 export function parseKml(kml: string, fetchedAt = new Date().toISOString()): MapSnapshot {
 	if (XMLValidator.validate(kml) !== true) {
 		throw new Error('INVALID_KML');
@@ -315,6 +349,7 @@ export function parseKml(kml: string, fetchedAt = new Date().toISOString()): Map
 	}
 
 	const features: MapFeature[] = [];
+	const featureIds = new Set<string>();
 	const layers: MapLayer[] = [];
 	const sourceStyleCounts = new Map<MapSourceStyleKey, MapSourceStyleLegend>();
 	function visitFolder(folderValue: unknown, parentPath: string[]): void {
@@ -340,6 +375,16 @@ export function parseKml(kml: string, fetchedAt = new Date().toISOString()): Map
 			const styleId = text(placemark.styleUrl).replace(/^#/, '');
 			const style = { ...styles.get(styleId), ...parseStyle(placemark.Style) };
 			const data = extendedData(placemark.ExtendedData);
+			const description = placemarkDescription(placemark, data);
+			const details =
+				path[0] === 'Anker, bøye og marina' ||
+				(/(?:^|<br\s*\/?\s*>|\r?\n)sea bed:/i.test(description) &&
+					/(?:^|<br\s*\/?\s*>|\r?\n)wind protection:/i.test(description))
+					? anchorageDetails(description, data)
+					: { description, data };
+			const parsedFeatureId = featureId(path, title, geometry);
+			if (featureIds.has(parsedFeatureId)) continue;
+			featureIds.add(parsedFeatureId);
 			const pointSourceStyle = geometry.type === 'Point' ? sourceStyle(style) : undefined;
 			if (pointSourceStyle) {
 				const existing = sourceStyleCounts.get(pointSourceStyle.key);
@@ -350,17 +395,17 @@ export function parseKml(kml: string, fetchedAt = new Date().toISOString()): Map
 			}
 			const feature: MapFeature = {
 				type: 'Feature',
-				id: featureId(path, title, geometry),
+				id: parsedFeatureId,
 				geometry,
 				properties: {
 					title,
-					description: placemarkDescription(placemark, data),
+					description: details.description,
 					snippet: safeHtml(placemark.Snippet ?? placemark.snippet),
 					address: text(placemark.address),
 					layerId: id,
 					layerName: name,
 					layerPath: path,
-					extendedData: data,
+					extendedData: details.data,
 					style,
 					sourceStyleKey: pointSourceStyle?.key
 				}

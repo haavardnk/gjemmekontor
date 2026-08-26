@@ -334,7 +334,7 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await page.getByRole('button', { name: /Stiniva-bukten/ }).click();
 	await expect(page.getByRole('heading', { name: 'Stiniva-bukten' })).toBeVisible();
 	await expect(page.getByText('En smal bukt med klart vann.')).toBeVisible();
-	await expect(page.getByText('Navn', { exact: true })).toBeVisible();
+	await expect(page.getByText('Navn', { exact: true })).toHaveCount(0);
 	await expect(page.getByText('Beskrivelse', { exact: true })).toBeVisible();
 	await expect(page.getByText('naziv', { exact: true })).toHaveCount(0);
 	await expect(page.getByText('opis', { exact: true })).toHaveCount(0);
@@ -342,14 +342,11 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await expect(
 		page.locator('div[data-source-icon-href]', { hasText: 'Ankerplasser og fortøyninger' })
 	).toHaveAttribute('data-source-icon-href', googleIconHref);
-	await expect(page.getByRole('link', { name: 'Finn stedet i Google Maps' })).toHaveAttribute(
+	await expect(page.getByRole('link', { name: 'Åpne i Google Maps' })).toHaveAttribute(
 		'href',
 		'https://www.google.com/maps/search/?api=1&query=Stiniva-bukten%2C%20Vis%2C%20Kroatia'
 	);
-	await expect(page.getByRole('link', { name: 'Vis posisjonen i Google Maps' })).toHaveAttribute(
-		'href',
-		'https://www.google.com/maps/search/?api=1&query=43.25%2C16.25'
-	);
+	await expect(page.getByRole('link', { name: 'Vis posisjonen i Google Maps' })).toHaveCount(0);
 
 	await page.getByRole('button', { name: 'Oppdater kartet' }).click();
 	await expect(page.getByRole('heading', { name: 'Stiniva-bukten' })).toBeVisible();
@@ -432,6 +429,160 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	expect(pageErrors).toEqual([]);
 });
 
+test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ page }) => {
+	let enrichmentRequests = 0;
+	let photoRequests = 0;
+	let photosHaveLoaded = false;
+	let googleScriptRequests = 0;
+	const tripadvisorPhotos = Array.from({ length: 5 }, (_, index) => ({
+		thumbnailUrl: `https://dynamic-media-cdn.tripadvisor.com/tripadvisor-thumb-${index}.jpg`,
+		imageUrl: `https://dynamic-media-cdn.tripadvisor.com/tripadvisor-large-${index}.jpg`,
+		caption: `Marina sett fra sjøen ${index + 1}`
+	}));
+	const googleRequestFailures: string[] = [];
+	const pageErrors: string[] = [];
+	page.on('requestfailed', (request) => {
+		if (request.url().includes('maps.googleapis.com')) {
+			googleRequestFailures.push(`${request.url()}: ${request.failure()?.errorText}`);
+		}
+	});
+	page.on('pageerror', (error) => pageErrors.push(error.message));
+	await mockMap(page);
+	await page.route('**/api/map/poi/poi-two/enrichment', async (route) => {
+		enrichmentRequests += 1;
+		await route.fulfill({
+			json: {
+				featureId: 'poi-two',
+				google: {
+					status: 'available',
+					placeId: 'ChIJ1234567890_test',
+					uiKitKey: 'browser-test-key'
+				},
+				tripadvisor: {
+					status: 'available',
+					locationId: '123456',
+					rating: 4.7,
+					reviewCount: 321,
+					webUrl: 'https://www.tripadvisor.com/test',
+					photosUrl: 'https://www.tripadvisor.com/test/photos',
+					photos: photosHaveLoaded ? tripadvisorPhotos : [],
+					photosLoaded: photosHaveLoaded,
+					cachedAt: '2026-08-25T10:00:00.000Z',
+					expiresAt: '2026-09-24T10:00:00.000Z'
+				}
+			}
+		});
+	});
+	await page.route('**/api/map/poi/poi-two/enrichment/photos', async (route) => {
+		photoRequests += 1;
+		photosHaveLoaded = true;
+		await route.fulfill({
+			json: {
+				featureId: 'poi-two',
+				tripadvisor: {
+					status: 'available',
+					locationId: '123456',
+					rating: 4.7,
+					reviewCount: 321,
+					webUrl: 'https://www.tripadvisor.com/test',
+					photosUrl: 'https://www.tripadvisor.com/test/photos',
+					photos: tripadvisorPhotos,
+					photosLoaded: true,
+					cachedAt: '2026-08-25T10:01:00.000Z',
+					expiresAt: '2026-09-24T10:01:00.000Z'
+				}
+			}
+		});
+	});
+	await page.route(/https:\/\/maps\.googleapis\.com\/maps\/api\/js\?.*/, async (route) => {
+		googleScriptRequests += 1;
+		await route.fulfill({
+			contentType: 'application/javascript',
+			body: `
+				class TestPlace {
+					async fetchFields() {
+						window.__googlePlaceFetches = (window.__googlePlaceFetches || 0) + 1;
+						this.rating = 4.5;
+						this.userRatingCount = 238;
+						this.googleMapsURI = 'https://www.google.com/maps/place/test';
+						this.attributions = [];
+						this.photos = Array.from({ length: 5 }, (_, index) => ({
+							authorAttributions: [{ displayName: 'Google traveler' }],
+							getURI: () => 'https://lh3.googleusercontent.com/google-place-photo-' + index + '.jpg'
+						}));
+					}
+				}
+				window.google = { maps: { importLibrary: async () => ({ Place: TestPlace }) } };
+				const callback = new URL(document.currentScript.src).searchParams.get('callback');
+				if (callback && typeof window[callback] === 'function') window[callback]();
+			`
+		});
+	});
+	await page.route('https://dynamic-media-cdn.tripadvisor.com/**', async (route) => {
+		await route.fulfill({ body: transparentPng, contentType: 'image/png' });
+	});
+	await page.route('https://lh3.googleusercontent.com/**', async (route) => {
+		await route.fulfill({ body: transparentPng, contentType: 'image/png' });
+	});
+	await page.route('https://www.gstatic.com/images/branding/googlelogo/**', async (route) => {
+		await route.fulfill({ body: transparentPng, contentType: 'image/png' });
+	});
+
+	await login(page);
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Marina Kaštela');
+	await page.getByRole('button', { name: /Marina Kaštela/ }).click();
+	await expect(page.locator('[data-tripadvisor-details]')).toContainText('4,7');
+	await expect(page.locator('[data-tripadvisor-details]')).toContainText('321 vurderinger');
+	await expect(page.getByRole('link', { name: 'Åpne stedet på Tripadvisor' })).toHaveAttribute(
+		'href',
+		'https://www.tripadvisor.com/test'
+	);
+	await expect.poll(() => googleScriptRequests).toBe(1);
+	expect(googleRequestFailures).toEqual([]);
+	expect(pageErrors).toEqual([]);
+	await expect(page.locator('[data-google-place-details]')).toContainText('4,5');
+	await expect(page.locator('[data-google-place-details]')).toContainText('238 vurderinger');
+	await expect(page.getByRole('link', { name: 'Åpne stedet i Google Maps' })).toHaveAttribute(
+		'href',
+		'https://www.google.com/maps/place/test'
+	);
+	await expect(page.getByRole('button', { name: /Vis Google-bilde/ })).toHaveCount(3);
+	await expect(page.getByRole('button', { name: 'Vis Google-bilde 1 av 5' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Åpne i Google Maps' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: /Vis Tripadvisor-bilde/ })).toHaveCount(3);
+	const tripadvisorPhoto = page.getByRole('img', { name: 'Marina sett fra sjøen 1' });
+	await expect(tripadvisorPhoto).toBeVisible();
+	await expect
+		.poll(() => tripadvisorPhoto.evaluate((image) => (image as HTMLImageElement).naturalWidth))
+		.toBe(1);
+	await page.getByRole('button', { name: 'Vis Tripadvisor-bilde 1 av 5' }).click();
+	await expect(page.getByRole('dialog', { name: 'Tripadvisor-bildevisning' })).toContainText(
+		'1 / 5'
+	);
+	for (let photoIndex = 1; photoIndex < 5; photoIndex += 1) {
+		await page.getByRole('button', { name: 'Neste bilde' }).click();
+	}
+	await expect(page.getByRole('dialog', { name: 'Tripadvisor-bildevisning' })).toContainText(
+		'5 / 5'
+	);
+	await page.getByRole('button', { name: 'Lukk bildevisning' }).last().click();
+	await expect(page.locator('[data-photo-viewer="Tripadvisor"]')).toHaveCount(0);
+
+	await page.getByRole('button', { name: 'Lukk detaljer' }).click();
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Marina Kaštela');
+	await page.getByRole('button', { name: /Marina Kaštela/ }).click();
+	await expect(page.locator('[data-google-place-details]')).toContainText('4,5');
+
+	expect(enrichmentRequests).toBe(2);
+	expect(photoRequests).toBe(1);
+	expect(googleScriptRequests).toBe(1);
+	expect(
+		await page.evaluate(
+			() => (window as typeof window & { __googlePlaceFetches?: number }).__googlePlaceFetches
+		)
+	).toBe(2);
+});
+
 test('shows, selects, and toggles the live AIS vessel layer', async ({ page }) => {
 	const aisStyleErrors: string[] = [];
 	page.on('console', (message) => {
@@ -485,6 +636,34 @@ test('shows map bearing and resets north from the compass', async ({ page }) => 
 	await expect(compass).toBeVisible();
 	await compass.click();
 	await expect(compass).toHaveCount(0);
+});
+
+test('centers the selected POI after closing the mobile sheet', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await mockMap(page);
+	await login(page);
+	await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready', 'true');
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Stiniva');
+	await page.getByRole('button', { name: /Stiniva-bukten/ }).click();
+	await expect(page.getByRole('heading', { name: 'Stiniva-bukten' })).toBeVisible();
+	await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapCamera'))).not.toBeNull();
+	const openedCenter = await page.evaluate(() => {
+		const value = sessionStorage.getItem('mapCamera');
+		if (!value) throw new Error('MAP_CAMERA_MISSING');
+		return (JSON.parse(value) as { center: [number, number] }).center;
+	});
+	expect(openedCenter).not.toEqual([16.25, 43.25]);
+	await page.getByRole('button', { name: 'Lukk detaljer' }).click();
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const value = sessionStorage.getItem('mapCamera');
+				if (!value) return Number.POSITIVE_INFINITY;
+				const center = (JSON.parse(value) as { center: [number, number] }).center;
+				return Math.max(Math.abs(center[0] - 16.25), Math.abs(center[1] - 43.25));
+			})
+		)
+		.toBeLessThan(1e-10);
 });
 
 test('restores map position and zoom after app navigation', async ({ page }) => {

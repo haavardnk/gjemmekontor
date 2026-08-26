@@ -438,7 +438,10 @@
 		</div>
 	{/if}
 
-	<div class="absolute inset-x-3 top-3 z-20 flex flex-col gap-2 lg:right-auto lg:w-[32rem]">
+	<div
+		class="absolute inset-x-3 top-3 z-20 flex flex-col gap-2 lg:right-auto lg:w-[32rem]"
+		data-map-controls
+	>
 		<div class="flex items-start gap-2">
 			<div class="relative min-w-0 flex-1">
 				<label class="input flex w-full items-center gap-2 bg-base-100 shadow">
@@ -788,6 +791,7 @@
 			feature={selected}
 			sourceStyle={selectedSourceStyle}
 			fetchedAt={snapshot.fetchedAt}
+			{online}
 			onclose={() => (selectedId = undefined)}
 		/>
 	{/if}

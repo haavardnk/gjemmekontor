@@ -76,6 +76,7 @@
 	let aisMarkerImage: ImageData | undefined;
 	let aisMarkerImageFlipped: ImageData | undefined;
 	let resettingCamera = false;
+	let selectedPoint: Position | undefined;
 	const protocol = new Protocol({ metadata: true });
 	const cameraStorageKey = 'mapCamera';
 	const minimumMovingSpeedKnots = 0.3;
@@ -890,10 +891,61 @@
 		}
 	});
 
-	$effect((): void => {
+	$effect(() => {
 		const feature = snapshot.features.find((candidate) => candidate.id === selectedId);
 		if (feature?.geometry.type === 'Point') {
-			map?.easeTo({ center: feature.geometry.coordinates, zoom: Math.max(map.getZoom(), 13) });
+			if (!map) return;
+			if (window.innerWidth >= 1024) {
+				map.easeTo({ center: feature.geometry.coordinates, zoom: Math.max(map.getZoom(), 13) });
+				return;
+			}
+			const coordinates = feature.geometry.coordinates;
+			selectedPoint = coordinates;
+			let frame: number | undefined;
+			let observer: ResizeObserver | undefined;
+			const centerInVisibleBand = (): void => {
+				if (!map || selectedId !== feature.id) return;
+				const mapBounds = container.getBoundingClientRect();
+				const controls = document.querySelector<HTMLElement>('[data-map-controls]');
+				const sheet = document.querySelector<HTMLElement>('[data-poi-sheet]');
+				const visibleTop = Math.max(
+					(controls?.getBoundingClientRect().bottom ?? mapBounds.top) - mapBounds.top,
+					0
+				);
+				const sheetTop = sheet?.getBoundingClientRect().top ?? mapBounds.bottom;
+				const visibleBottom = Math.min(sheetTop - mapBounds.top, mapBounds.height);
+				const targetY = visibleTop + Math.max(0, visibleBottom - visibleTop) / 2;
+				map.easeTo({
+					center: coordinates,
+					offset: [0, targetY - mapBounds.height / 2]
+				});
+			};
+			const observeVisibleBand = (): void => {
+				centerInVisibleBand();
+				const controls = document.querySelector<HTMLElement>('[data-map-controls]');
+				const sheet = document.querySelector<HTMLElement>('[data-poi-sheet]');
+				if (!sheet) {
+					frame = requestAnimationFrame(observeVisibleBand);
+					return;
+				}
+				observer = new ResizeObserver((): void => {
+					if (frame !== undefined) cancelAnimationFrame(frame);
+					frame = requestAnimationFrame(centerInVisibleBand);
+				});
+				if (controls) observer.observe(controls);
+				observer.observe(sheet);
+				observer.observe(container);
+			};
+			frame = requestAnimationFrame(observeVisibleBand);
+			return (): void => {
+				if (frame !== undefined) cancelAnimationFrame(frame);
+				observer?.disconnect();
+			};
+		}
+		if (selectedPoint && map) {
+			const point = selectedPoint;
+			selectedPoint = undefined;
+			map.easeTo({ center: point });
 		}
 	});
 

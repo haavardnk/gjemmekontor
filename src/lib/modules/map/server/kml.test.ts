@@ -33,6 +33,9 @@ describe('KML parser', (): void => {
 		const boatBar = snapshot.features.find(
 			(feature) => feature.properties.title === 'Båt med bar :)'
 		);
+		const maslinicaAnchorage = snapshot.features.find((feature) =>
+			feature.properties.title.startsWith('6 Islands in front of Maslinica')
+		);
 
 		expect(snapshot.title).toBe('Croatia seiltur! V2');
 		expect(snapshot.version).toBe(1);
@@ -87,29 +90,46 @@ describe('KML parser', (): void => {
 				iconCode: '1517',
 				symbol: 'bar',
 				label: 'Barer',
-				count: 3
+				count: 2
 			}
 		]);
 		expect(snapshot.sourceStyles).toHaveLength(6);
-		expect(snapshot.sourceStyles.reduce((total, style) => total + style.count, 0)).toBe(141);
+		expect(snapshot.sourceStyles.reduce((total, style) => total + style.count, 0)).toBe(140);
 		expect(
 			points.every((feature) =>
 				snapshot.sourceStyles.some((style) => style.key === feature.properties.sourceStyleKey)
 			)
 		).toBe(true);
-		expect(snapshot.features).toHaveLength(150);
-		expect(points).toHaveLength(141);
+		expect(snapshot.features).toHaveLength(149);
+		expect(points).toHaveLength(140);
 		expect(lines).toHaveLength(9);
-		expect(withExtendedData).toHaveLength(141);
+		expect(withExtendedData).toHaveLength(146);
 		expect(snapshot.bounds[0]).toBeLessThan(snapshot.bounds[2]);
 		expect(snapshot.bounds[1]).toBeLessThan(snapshot.bounds[3]);
 		expect(snapshot.features[0]?.properties.style.color).toBe('#f57c00');
 		expect(snapshot.layers[0]?.color).toBe('#f57c00');
 		expect(snapshot.layers.every((layer) => /^#[0-9a-f]{6}$/.test(layer.color))).toBe(true);
 		expect(snapshot.features.every((feature) => /^[0-9a-f]{64}$/.test(feature.id))).toBe(true);
-		expect(blueLagoon?.properties.description).toContain('Coordinates: 43.4388 N, 16.17353 E');
+		expect(new Set(snapshot.features.map((feature) => feature.id)).size).toBe(
+			snapshot.features.length
+		);
+		expect(blueLagoon?.properties.description).not.toContain('Coordinates:');
 		expect(blueLagoon?.properties.description).not.toContain('naziv:');
 		expect(blueLagoon?.properties.description).not.toContain('opis:');
+		expect(blueLagoon?.properties.extendedData).toMatchObject({
+			'Sea bed': 'Sand and Sea grass',
+			'Wind Protection': 'Protected from NW, W'
+		});
+		expect(maslinicaAnchorage?.properties.description).toMatch(
+			/^Anchoring ground at a depth of 6-14m, sand and rocks\./
+		);
+		expect(maslinicaAnchorage?.properties.description).not.toContain('Coordinates:');
+		expect(maslinicaAnchorage?.properties.description).not.toContain('Sea bed:');
+		expect(maslinicaAnchorage?.properties.description).not.toContain('Wind Protection:');
+		expect(maslinicaAnchorage?.properties.extendedData).toMatchObject({
+			'Sea bed': 'Sand and Rocks',
+			'Wind Protection': 'Protected from E, SE'
+		});
 		expect(boatBar?.properties.description).toBe('');
 		expect(boatBar?.properties.extendedData).toEqual({
 			description: '',
