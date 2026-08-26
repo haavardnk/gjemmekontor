@@ -331,7 +331,7 @@
 
 <section class="mx-auto max-w-4xl px-4 py-5 pb-10 lg:py-7">
 	<header class="mb-4">
-		<div class="flex min-h-5 items-center justify-between gap-3">
+		<div class="flex h-7 items-center justify-between gap-3">
 			<p class="flex items-center gap-1.5 text-sm font-semibold text-primary">
 				<Backpack size={16} /> Turutstyr
 			</p>

@@ -294,15 +294,16 @@
 <svelte:head><title>Meny · Gjemmekontor</title></svelte:head>
 
 <section class="mx-auto max-w-7xl px-4 py-5 pb-10 lg:px-6 lg:py-7">
-	<header class="mb-4 flex items-start justify-between gap-3">
-		<div>
-			<p class="mb-1 flex items-center gap-1.5 text-xs font-bold text-primary">
+	<header class="mb-4">
+		<div class="flex h-7 items-center justify-between gap-3">
+			<p class="flex items-center gap-1.5 text-sm font-semibold text-primary">
 				<Utensils size={15} /> Mat om bord
 			</p>
-			<h1 class="font-display text-3xl font-bold text-neutral">Meny</h1>
+			<SyncStatus />
 		</div>
-		<div class="flex flex-col items-end gap-2">
-			<SyncStatus /><button
+		<div class="mt-1 flex items-end justify-between gap-3">
+			<h1 class="font-display text-3xl font-bold text-neutral">Meny</h1>
+			<button
 				class="btn btn-primary btn-sm"
 				type="button"
 				onclick={() => (editing = { activateOnSave: true, initial: emptyEditor() })}

@@ -15,13 +15,13 @@
 
 <DaySelector />
 
-<section class="mx-auto max-w-3xl px-4 py-5 pb-10">
-	<header class="mb-5 flex flex-wrap items-end justify-between gap-3">
-		<div>
+<section class="mx-auto max-w-3xl px-4 py-5 pb-10 lg:py-7">
+	<header class="mb-4">
+		<div class="flex h-7 items-center justify-between gap-3">
 			<p class="text-sm font-semibold text-primary">{day.phase}</p>
-			<h1 class="font-display mt-1 text-2xl font-bold text-neutral">Loggbok</h1>
+			<SyncStatus />
 		</div>
-		<SyncStatus />
+		<h1 class="font-display mt-1 text-3xl font-bold text-neutral">Loggbok</h1>
 	</header>
 	<LogbookView {day} {mapEnabled} />
 </section>

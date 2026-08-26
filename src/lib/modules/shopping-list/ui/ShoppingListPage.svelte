@@ -304,53 +304,55 @@
 <section
 	class="mx-auto min-h-[calc(100dvh-7.5rem)] max-w-3xl px-4 py-5 pb-10 lg:min-h-[calc(100dvh-3.5rem)] lg:py-7"
 >
-	<header class="mb-5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1">
-		<p class="flex min-w-0 items-center gap-1.5 text-xs font-bold text-primary">
-			<ShoppingBasket size={15} />
-			Bring
-		</p>
-		<div class="flex min-w-0 items-center justify-end gap-1">
-			<div
-				class="flex min-w-0 items-center justify-end gap-1.5 text-[0.68rem] font-semibold text-base-content/55"
-				role="status"
-			>
-				{#if !online}
-					<WifiOff class="shrink-0" size={14} />
-					<span class="max-w-44 truncate"
-						>Uten nett{snapshot ? ` · sist oppdatert ${updatedLabel}` : ''}</span
-					>
-				{:else if !serviceAvailable}
-					<WifiOff class="shrink-0" size={14} />
-					<span class="max-w-44 truncate"
-						>{snapshot
-							? `Viser lagret liste · sist oppdatert ${updatedLabel}`
-							: 'Kan ikke nå Bring'}</span
-					>
-				{:else if refreshing}
-					<LoaderCircle class="shrink-0 animate-spin" size={14} />
-					<span class="max-w-44 truncate">Oppdaterer …</span>
-				{:else if snapshot}
-					<ListChecks class="shrink-0" size={14} />
-					<span class="max-w-44 truncate">Oppdatert {updatedLabel}</span>
-				{:else}
-					<LoaderCircle class="shrink-0 animate-spin" size={14} />
-					<span class="max-w-44 truncate">Kobler til Bring …</span>
-				{/if}
+	<header class="mb-4 min-w-0">
+		<div class="flex h-7 min-w-0 items-center justify-between gap-2">
+			<p class="flex min-w-0 shrink-0 items-center gap-1.5 text-sm font-semibold text-primary">
+				<ShoppingBasket size={15} />
+				Bring
+			</p>
+			<div class="flex min-w-0 items-center justify-end gap-1">
+				<div
+					class="flex min-w-0 items-center justify-end gap-1.5 text-[0.68rem] font-semibold text-base-content/55"
+					role="status"
+				>
+					{#if !online}
+						<WifiOff class="shrink-0" size={14} />
+						<span class="max-w-44 truncate"
+							>Uten nett{snapshot ? ` · sist oppdatert ${updatedLabel}` : ''}</span
+						>
+					{:else if !serviceAvailable}
+						<WifiOff class="shrink-0" size={14} />
+						<span class="max-w-44 truncate"
+							>{snapshot
+								? `Viser lagret liste · sist oppdatert ${updatedLabel}`
+								: 'Kan ikke nå Bring'}</span
+						>
+					{:else if refreshing}
+						<LoaderCircle class="shrink-0 animate-spin" size={14} />
+						<span class="max-w-44 truncate">Oppdaterer …</span>
+					{:else if snapshot}
+						<ListChecks class="shrink-0" size={14} />
+						<span class="max-w-44 truncate">Oppdatert {updatedLabel}</span>
+					{:else}
+						<LoaderCircle class="shrink-0 animate-spin" size={14} />
+						<span class="max-w-44 truncate">Kobler til Bring …</span>
+					{/if}
+				</div>
+				<button
+					class="btn btn-square h-7 min-h-7 w-7 shrink-0 btn-ghost p-0"
+					type="button"
+					onclick={() => refresh()}
+					disabled={!online || refreshing}
+					aria-label="Oppdater handlelisten"
+					title="Oppdater handlelisten"
+				>
+					<RefreshCw class={refreshing ? 'animate-spin' : ''} size={16} />
+				</button>
 			</div>
-			<button
-				class="btn btn-square shrink-0 btn-ghost btn-sm"
-				type="button"
-				onclick={() => refresh()}
-				disabled={!online || refreshing}
-				aria-label="Oppdater handlelisten"
-				title="Oppdater handlelisten"
-			>
-				<RefreshCw class={refreshing ? 'animate-spin' : ''} size={19} />
-			</button>
 		</div>
-		<h1 class="font-display col-span-2 text-3xl font-bold text-neutral">Handleliste</h1>
+		<h1 class="font-display mt-1 text-3xl font-bold text-neutral">Handleliste</h1>
 		{#if snapshot}
-			<p class="col-span-2 truncate text-sm text-base-content/60">
+			<p class="mt-1 truncate text-sm text-base-content/60">
 				{snapshot.listName} · {itemCount}
 				{itemCount === 1 ? 'vare' : 'varer'}
 			</p>

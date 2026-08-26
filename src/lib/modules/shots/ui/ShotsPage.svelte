@@ -21,16 +21,14 @@
 
 <DaySelector />
 
-<section class="mx-auto max-w-3xl px-4 py-3 pb-8">
-	<header class="mb-4 space-y-2">
-		<div class="flex items-start justify-between gap-3">
-			<div class="min-w-0">
-				<p class="text-xs font-semibold text-primary">{day.phase}</p>
-				<h1 class="font-display text-xl leading-tight font-bold text-neutral">{day.title}</h1>
-			</div>
+<section class="mx-auto max-w-3xl px-4 py-5 pb-10 lg:py-7">
+	<header class="mb-4">
+		<div class="flex h-7 items-center justify-between gap-3">
+			<p class="min-w-0 truncate text-sm font-semibold text-primary">{day.phase}</p>
 			<SyncStatus />
 		</div>
-		<div class="tabs tabs-box h-9 w-full p-0.5" role="tablist" aria-label="Opptaksmodus">
+		<h1 class="font-display mt-1 text-2xl leading-tight font-bold text-neutral">{day.title}</h1>
+		<div class="tabs tabs-box mt-3 h-9 w-full p-0.5" role="tablist" aria-label="Opptaksmodus">
 			<a
 				class="tab h-8 flex-1 gap-1.5 text-sm"
 				class:tab-active={mode === 'record'}
