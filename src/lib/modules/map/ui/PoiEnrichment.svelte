@@ -6,6 +6,7 @@
 		poiEnrichmentResponseSchema,
 		tripadvisorPhotosResponseSchema
 	} from '../domain/enrichment';
+	import type { OpenFreeMapRestaurant } from '../domain/openfreemap';
 	import GooglePlaceDetails from './GooglePlaceDetails.svelte';
 	import ProviderRatingCard from './ProviderRatingCard.svelte';
 
@@ -13,9 +14,11 @@
 
 	let {
 		featureId,
+		openFreeMapRestaurant,
 		onGoogleMatchState
 	}: {
 		featureId: string;
+		openFreeMapRestaurant?: OpenFreeMapRestaurant;
 		onGoogleMatchState?: (state: GoogleMatchState) => void;
 	} = $props();
 	let enrichment = $state<PoiEnrichmentResponse>();
@@ -25,13 +28,26 @@
 	let controller: AbortController | undefined;
 	let photosController: AbortController | undefined;
 
+	function request(path: '' | '/photos', signal: AbortSignal): Promise<Response> {
+		if (!openFreeMapRestaurant) {
+			return fetch(`/api/map/poi/${encodeURIComponent(featureId)}/enrichment${path}`, {
+				signal,
+				cache: 'no-store'
+			});
+		}
+		return fetch(`/api/map/poi/openfreemap/enrichment${path}`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(openFreeMapRestaurant),
+			signal,
+			cache: 'no-store'
+		});
+	}
+
 	onMount(() => {
 		onGoogleMatchState?.('loading');
 		controller = new AbortController();
-		void fetch(`/api/map/poi/${encodeURIComponent(featureId)}/enrichment`, {
-			signal: controller.signal,
-			cache: 'no-store'
-		})
+		void request('', controller.signal)
 			.then(async (response) => {
 				if (!response.ok) throw new Error('POI_ENRICHMENT_UNAVAILABLE');
 				enrichment = poiEnrichmentResponseSchema.parse(await response.json());
@@ -58,10 +74,7 @@
 		photosLoading = true;
 		photosController = new AbortController();
 		try {
-			const response = await fetch(
-				`/api/map/poi/${encodeURIComponent(featureId)}/enrichment/photos`,
-				{ signal: photosController.signal, cache: 'no-store' }
-			);
+			const response = await request('/photos', photosController.signal);
 			if (!response.ok) throw new Error('TRIPADVISOR_PHOTOS_UNAVAILABLE');
 			const result = tripadvisorPhotosResponseSchema.parse(await response.json());
 			enrichment = { ...enrichment, tripadvisor: result.tripadvisor };

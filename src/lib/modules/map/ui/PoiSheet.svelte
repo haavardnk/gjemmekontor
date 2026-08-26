@@ -6,6 +6,7 @@
 		isPoiEnrichmentEligible,
 		providerSearchTitle
 	} from '../domain/enrichment';
+	import type { OpenFreeMapRestaurant } from '../domain/openfreemap';
 	import type { MapFeature, MapSourceStyleLegend } from '../domain/types';
 	import MapSymbol from './MapSymbol.svelte';
 	import PoiEnrichment from './PoiEnrichment.svelte';
@@ -14,12 +15,14 @@
 		feature,
 		sourceStyle,
 		fetchedAt,
+		openFreeMapRestaurant,
 		online,
 		onclose
 	}: {
 		feature: MapFeature;
 		sourceStyle: MapSourceStyleLegend | undefined;
-		fetchedAt: string;
+		fetchedAt?: string;
+		openFreeMapRestaurant?: OpenFreeMapRestaurant;
 		online: boolean;
 		onclose: () => void;
 	} = $props();
@@ -66,9 +69,11 @@
 		)
 	);
 	const updated = $derived(
-		new Intl.DateTimeFormat('nb-NO', { dateStyle: 'medium', timeStyle: 'short' }).format(
-			new Date(fetchedAt)
-		)
+		fetchedAt
+			? new Intl.DateTimeFormat('nb-NO', { dateStyle: 'medium', timeStyle: 'short' }).format(
+					new Date(fetchedAt)
+				)
+			: undefined
 	);
 
 	function richText(element: HTMLElement, content: string): { update: (value: string) => void } {
@@ -100,7 +105,9 @@
 					<div
 						class="flex max-w-[55%] shrink-0 items-center gap-1.5 rounded-full bg-base-200 py-0.5 pr-2 pl-0.5"
 						data-source-icon-href={sourceStyle.iconHref}
-						title={`Google-symbol: ${sourceStyle.iconHref}`}
+						title={sourceStyle.iconHref
+							? `Kildesymbol: ${sourceStyle.iconHref}`
+							: sourceStyle.label}
 					>
 						<MapSymbol symbol={sourceStyle.symbol} color={sourceStyle.color} size={24} />
 						<span class="truncate">{sourceStyle.label}</span>
@@ -125,7 +132,11 @@
 	<div class="space-y-4 p-4">
 		{#if online && enrichmentEligible}
 			{#key feature.id}
-				<PoiEnrichment featureId={feature.id} onGoogleMatchState={updateGoogleMatch} />
+				<PoiEnrichment
+					featureId={feature.id}
+					{openFreeMapRestaurant}
+					onGoogleMatchState={updateGoogleMatch}
+				/>
 			{/key}
 		{/if}
 		{#if feature.properties.description}
@@ -175,7 +186,7 @@
 					{point[1].toFixed(5)}, {point[0].toFixed(5)}
 				</span>
 			{/if}
-			<span>Oppdatert {updated}</span>
+			{#if updated}<span>Oppdatert {updated}</span>{/if}
 		</div>
 	</div>
 </aside>

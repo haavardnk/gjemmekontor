@@ -24,7 +24,9 @@
 	import { onMount } from 'svelte';
 
 	import type { ActualRouteFeature } from '$lib/modules/logbook/public';
+	import { openFreeMapRestaurant } from '$lib/modules/map/client/openfreemap-poi';
 	import type { AisVesselFeature } from '$lib/modules/map/domain/ais';
+	import type { OpenFreeMapRestaurant } from '$lib/modules/map/domain/openfreemap';
 	import type { OfflineMapRecord } from '$lib/modules/map/public';
 
 	import type { MapFeature, MapMode, MapPointSymbol, MapSnapshot, Position } from '../domain/types';
@@ -34,6 +36,7 @@
 		visibleLayerIds,
 		visibleSourceStyleKeys,
 		selectedId,
+		selectedFeature,
 		mode,
 		offlineMap,
 		actualRoutes,
@@ -41,12 +44,14 @@
 		aisVessels,
 		selectedAisMmsi,
 		onselect,
+		onselectopenfreemap,
 		onselectais
 	}: {
 		snapshot: MapSnapshot;
 		visibleLayerIds: Set<string>;
 		visibleSourceStyleKeys: Set<string>;
 		selectedId: string | undefined;
+		selectedFeature: MapFeature | undefined;
 		mode: MapMode;
 		offlineMap: OfflineMapRecord | undefined;
 		actualRoutes: ActualRouteFeature[];
@@ -54,6 +59,7 @@
 		aisVessels: AisVesselFeature[];
 		selectedAisMmsi: number | undefined;
 		onselect: (id: string) => void;
+		onselectopenfreemap: (restaurant: OpenFreeMapRestaurant) => void;
 		onselectais: (mmsi: number) => void;
 	} = $props();
 
@@ -896,7 +902,8 @@
 	});
 
 	$effect(() => {
-		const feature = snapshot.features.find((candidate) => candidate.id === selectedId);
+		const feature =
+			selectedFeature ?? snapshot.features.find((candidate) => candidate.id === selectedId);
 		if (feature?.geometry.type === 'Point') {
 			if (!map) return;
 			if (window.innerWidth >= 1024) {
@@ -904,11 +911,12 @@
 				return;
 			}
 			const coordinates = feature.geometry.coordinates;
+			const selectionId = feature.id;
 			selectedPoint = coordinates;
 			let frame: number | undefined;
 			let observer: ResizeObserver | undefined;
 			const centerInVisibleBand = (): void => {
-				if (!map || selectedId !== feature.id) return;
+				if (!map || (selectedFeature?.id ?? selectedId) !== selectionId) return;
 				const mapBounds = container.getBoundingClientRect();
 				const controls = document.querySelector<HTMLElement>('[data-map-controls]');
 				const sheet = document.querySelector<HTMLElement>('[data-poi-sheet]');
@@ -1038,6 +1046,44 @@
 				void source
 					.getClusterExpansionZoom(clusterId)
 					.then((zoom) => map?.easeTo({ center, zoom }));
+			});
+			map.on('click', (event): void => {
+				if (!map) return;
+				const applicationLayers = [
+					'points',
+					'point-hit-targets',
+					'clusters',
+					'ais-vessels',
+					'ais-hit-targets'
+				].filter((id) => map?.getLayer(id) !== undefined);
+				if (
+					applicationLayers.length > 0 &&
+					map.queryRenderedFeatures(event.point, { layers: applicationLayers }).length > 0
+				) {
+					return;
+				}
+				const poiLayers = map
+					.getStyle()
+					.layers.filter((layer) => {
+						if (layer.type !== 'symbol' && layer.type !== 'circle') return false;
+						return (
+							('source-layer' in layer && layer['source-layer'] === 'poi') ||
+							/^poi_r\d+$/.test(layer.id)
+						);
+					})
+					.map((layer) => layer.id);
+				if (poiLayers.length === 0) return;
+				const hitBox: [[number, number], [number, number]] = [
+					[event.point.x - 10, event.point.y - 10],
+					[event.point.x + 10, event.point.y + 10]
+				];
+				for (const feature of map.queryRenderedFeatures(hitBox, { layers: poiLayers })) {
+					const restaurant = openFreeMapRestaurant(feature);
+					if (restaurant) {
+						onselectopenfreemap(restaurant);
+						return;
+					}
+				}
 			});
 			map.on('dragstart', (): void => {
 				following = false;

@@ -205,6 +205,23 @@ async function mockMap(page: Page, mapSnapshot = snapshot): Promise<void> {
 						type: 'vector',
 						tiles: ['http://127.0.0.1:4173/test-vector-tile/{z}/{x}/{y}.pbf'],
 						attribution: 'Test map data'
+					},
+					openFreeMapPois: {
+						type: 'geojson',
+						data: {
+							type: 'FeatureCollection',
+							features: [
+								{
+									type: 'Feature',
+									geometry: { type: 'Point', coordinates: [16.25, 43.22] },
+									properties: {
+										name: 'Konoba OpenFreeMap',
+										class: 'restaurant',
+										rank: 1
+									}
+								}
+							]
+						}
 					}
 				},
 				layers: [
@@ -215,6 +232,17 @@ async function mockMap(page: Page, mapSnapshot = snapshot): Promise<void> {
 						source: 'base',
 						'source-layer': 'water',
 						paint: { 'fill-color': '#9fc7df' }
+					},
+					{
+						id: 'poi_r1',
+						type: 'circle',
+						source: 'openFreeMapPois',
+						paint: {
+							'circle-color': '#9a5b3f',
+							'circle-radius': 9,
+							'circle-stroke-color': '#ffffff',
+							'circle-stroke-width': 2
+						}
 					}
 				]
 			}
@@ -584,6 +612,82 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 			() => (window as typeof window & { __googlePlaceFetches?: number }).__googlePlaceFetches
 		)
 	).toBe(2);
+});
+
+test('opens an OpenFreeMap restaurant in the shared Google and Tripadvisor POI sheet', async ({
+	page
+}) => {
+	const enrichmentBodies: unknown[] = [];
+	await mockMap(page);
+	await page.route('**/api/map/poi/openfreemap/enrichment', async (route) => {
+		enrichmentBodies.push(route.request().postDataJSON());
+		await route.fulfill({
+			json: {
+				featureId: `openfreemap:${'a'.repeat(64)}`,
+				google: {
+					status: 'available',
+					placeId: 'ChIJ1234567890_openfreemap',
+					uiKitKey: 'browser-test-key'
+				},
+				tripadvisor: {
+					status: 'available',
+					locationId: '654321',
+					rating: 4.8,
+					reviewCount: 88,
+					webUrl: 'https://www.tripadvisor.com/openfreemap-test',
+					photos: [],
+					photosLoaded: true,
+					cachedAt: '2026-08-26T10:00:00.000Z',
+					expiresAt: '2026-09-25T10:00:00.000Z'
+				}
+			}
+		});
+	});
+	await page.route(/https:\/\/maps\.googleapis\.com\/maps\/api\/js\?.*/, async (route) => {
+		await route.fulfill({
+			contentType: 'application/javascript',
+			body: `
+				class TestPlace {
+					async fetchFields() {
+						this.rating = 4.6;
+						this.userRatingCount = 120;
+						this.googleMapsURI = 'https://www.google.com/maps/place/openfreemap-test';
+						this.attributions = [];
+						this.photos = [];
+					}
+				}
+				window.google = { maps: { importLibrary: async () => ({ Place: TestPlace }) } };
+				const callback = new URL(document.currentScript.src).searchParams.get('callback');
+				if (callback && typeof window[callback] === 'function') window[callback]();
+			`
+		});
+	});
+	await page.route('https://www.gstatic.com/images/branding/googlelogo/**', async (route) => {
+		await route.fulfill({ body: transparentPng, contentType: 'image/png' });
+	});
+
+	await login(page);
+	await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready', 'true');
+	const canvas = page.locator('.maplibregl-canvas');
+	const box = await canvas.boundingBox();
+	expect(box).not.toBeNull();
+	await canvas.click({
+		position: { x: (box?.width ?? 0) / 2, y: (box?.height ?? 0) / 2 + 43 }
+	});
+
+	await expect(page.getByRole('heading', { name: 'Konoba OpenFreeMap' })).toBeVisible();
+	await expect(page.locator('[data-poi-sheet]')).toContainText('OpenFreeMap');
+	await expect(page.locator('[data-google-place-details]')).toContainText('4,6');
+	await expect(page.locator('[data-tripadvisor-details]')).toContainText('4,8');
+	await expect(page.locator('[data-poi-sheet]')).not.toContainText('Oppdatert');
+	await expect.poll(() => enrichmentBodies.length).toBe(1);
+	expect(enrichmentBodies[0]).toMatchObject({
+		source: 'openfreemap',
+		title: 'Konoba OpenFreeMap',
+		category: 'restaurant'
+	});
+	expect((enrichmentBodies[0] as { longitude: number }).longitude).toBeCloseTo(16.25, 3);
+	expect((enrichmentBodies[0] as { latitude: number }).latitude).toBeCloseTo(43.22, 3);
 });
 
 test('shows, selects, and toggles the live AIS vessel layer', async ({ page }) => {

@@ -35,6 +35,11 @@
 		storeMapSnapshot
 	} from '$lib/modules/map/client/offline';
 	import type { AisApiResponse } from '$lib/modules/map/domain/ais';
+	import {
+		type OpenFreeMapRestaurant,
+		openFreeMapRestaurantFeature,
+		openFreeMapRestaurantSourceStyle
+	} from '$lib/modules/map/domain/openfreemap';
 	import type {
 		MapApiResponse,
 		MapFeature,
@@ -56,6 +61,7 @@
 	const visibleLayerIds = new SvelteSet<string>();
 	const visibleSourceStyleKeys = new SvelteSet<string>();
 	let selectedId = $state<string>();
+	let selectedOpenFreeMapRestaurant = $state<OpenFreeMapRestaurant>();
 	let query = $state('');
 	let filterOpen = $state(false);
 	let routeScope = $state<'all' | 'current'>('all');
@@ -91,9 +97,22 @@
 		status: 'idle'
 	});
 
-	const selected = $derived(snapshot?.features.find((feature) => feature.id === selectedId));
+	const selectedImportedFeature = $derived(
+		snapshot?.features.find((feature) => feature.id === selectedId)
+	);
+	const selectedOpenFreeMapFeature = $derived(
+		selectedOpenFreeMapRestaurant
+			? openFreeMapRestaurantFeature(
+					selectedOpenFreeMapRestaurant,
+					`openfreemap-client:${selectedOpenFreeMapRestaurant.longitude.toFixed(5)}:${selectedOpenFreeMapRestaurant.latitude.toFixed(5)}:${selectedOpenFreeMapRestaurant.title}`
+				)
+			: undefined
+	);
+	const selected = $derived(selectedOpenFreeMapFeature ?? selectedImportedFeature);
 	const selectedSourceStyle = $derived(
-		snapshot?.sourceStyles.find((style) => style.key === selected?.properties.sourceStyleKey)
+		selectedOpenFreeMapRestaurant
+			? openFreeMapRestaurantSourceStyle
+			: snapshot?.sourceStyles.find((style) => style.key === selected?.properties.sourceStyleKey)
 	);
 	const selectedAisVessel = $derived(
 		aisResponse.features.find((feature) => feature.properties.mmsi === selectedAisMmsi)
@@ -229,6 +248,7 @@
 		visibleLayerIds.clear();
 		routeScope = 'all';
 		selectedId = undefined;
+		selectedOpenFreeMapRestaurant = undefined;
 		selectedAisMmsi = undefined;
 	}
 
@@ -239,6 +259,7 @@
 		}
 		routeScope = 'current';
 		selectedId = undefined;
+		selectedOpenFreeMapRestaurant = undefined;
 	}
 
 	function showAllMapItems(): void {
@@ -248,6 +269,7 @@
 
 	function selectFeature(feature: MapFeature): void {
 		selectedId = feature.id;
+		selectedOpenFreeMapRestaurant = undefined;
 		selectedAisMmsi = undefined;
 		query = '';
 	}
@@ -262,7 +284,13 @@
 
 	function selectMode(selectedMode: MapMode): void {
 		mode = selectedMode;
+		selectedOpenFreeMapRestaurant = undefined;
 		localStorage.setItem('mapMode', selectedMode);
+	}
+
+	function closePoi(): void {
+		selectedId = undefined;
+		selectedOpenFreeMapRestaurant = undefined;
 	}
 
 	function formatSize(size: number): string {
@@ -410,6 +438,7 @@
 			{visibleLayerIds}
 			{visibleSourceStyleKeys}
 			{selectedId}
+			selectedFeature={selected}
 			{mode}
 			{actualRoutes}
 			{hiddenRouteIds}
@@ -418,11 +447,18 @@
 			offlineMap={activeOfflineMap}
 			onselect={(id) => {
 				selectedId = id;
+				selectedOpenFreeMapRestaurant = undefined;
+				selectedAisMmsi = undefined;
+			}}
+			onselectopenfreemap={(restaurant) => {
+				selectedOpenFreeMapRestaurant = restaurant;
+				selectedId = undefined;
 				selectedAisMmsi = undefined;
 			}}
 			onselectais={(mmsi) => {
 				selectedAisMmsi = mmsi;
 				selectedId = undefined;
+				selectedOpenFreeMapRestaurant = undefined;
 			}}
 		/>
 	{:else}
@@ -783,9 +819,10 @@
 		<PoiSheet
 			feature={selected}
 			sourceStyle={selectedSourceStyle}
-			fetchedAt={snapshot.fetchedAt}
+			fetchedAt={selectedOpenFreeMapRestaurant ? undefined : snapshot.fetchedAt}
+			openFreeMapRestaurant={selectedOpenFreeMapRestaurant}
 			{online}
-			onclose={() => (selectedId = undefined)}
+			onclose={closePoi}
 		/>
 	{/if}
 	{#if selectedAisVessel}

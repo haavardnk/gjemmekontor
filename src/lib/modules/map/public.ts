@@ -6,6 +6,12 @@ export {
 	storedOfflineMaps,
 	storeMapSnapshot
 } from './client/offline';
+export type { OpenFreeMapRestaurant } from './domain/openfreemap';
+export {
+	openFreeMapRestaurantFeature,
+	openFreeMapRestaurantSchema,
+	openFreeMapRestaurantSourceStyle
+} from './domain/openfreemap';
 export type {
 	MapApiResponse,
 	MapFeature,
