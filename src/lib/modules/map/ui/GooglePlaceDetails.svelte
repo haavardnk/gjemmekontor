@@ -33,6 +33,7 @@
 	rating={details?.rating}
 	reviewCount={details?.reviewCount}
 	webUrl={details?.webUrl}
+	openingHours={details?.openingHours}
 	photos={details?.photos}
 	photosLoading={loadingState === 'loading'}
 	photosUnavailable={loadingState === 'unavailable'}

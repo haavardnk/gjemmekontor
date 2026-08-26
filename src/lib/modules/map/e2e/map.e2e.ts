@@ -537,6 +537,10 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 						this.userRatingCount = 238;
 						this.googleMapsURI = 'https://www.google.com/maps/place/test';
 						this.attributions = [];
+						this.utcOffsetMinutes = 120;
+						this.currentOpeningHours = {
+							periods: [{ open: { day: 0, hour: 0, minute: 0 } }]
+						};
 						this.photos = Array.from({ length: 5 }, (_, index) => ({
 							authorAttributions: [{ displayName: 'Google traveler' }],
 							getURI: () => 'https://lh3.googleusercontent.com/google-place-photo-' + index + '.jpg'
@@ -573,6 +577,12 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 	expect(pageErrors).toEqual([]);
 	await expect(page.locator('[data-google-place-details]')).toContainText('4,5');
 	await expect(page.locator('[data-google-place-details]')).toContainText('238 vurderinger');
+	const googleOpeningHours = page.locator('[data-google-opening-hours]');
+	await expect(googleOpeningHours).toContainText('Åpent nå');
+	await expect(googleOpeningHours).toContainText('I dag Døgnåpent');
+	await googleOpeningHours.locator('summary').click();
+	await expect(googleOpeningHours).toContainText('Mandag');
+	await expect(googleOpeningHours.getByText('Døgnåpent', { exact: true })).toHaveCount(7);
 	await expect(page.getByRole('link', { name: 'Åpne stedet i Google Maps' })).toHaveAttribute(
 		'href',
 		'https://www.google.com/maps/place/test'
