@@ -393,7 +393,10 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await expect(anchorageFilter).toHaveAttribute('aria-pressed', 'true');
 	await page.getByRole('button', { name: 'Lukk kartlag' }).last().click();
 	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Marina Kaštela');
-	await expect(page.getByText('Ingen treff.')).toBeVisible();
+	await expect(page.getByRole('button', { name: /Marina Kaštela/ })).toBeVisible();
+	await page.getByRole('button', { name: /Marina Kaštela/ }).click();
+	await expect(page.getByRole('heading', { name: 'Marina Kaštela' })).toBeVisible();
+	await page.getByRole('button', { name: 'Lukk detaljer' }).click();
 	await page.getByRole('button', { name: 'Velg kartlag' }).click();
 	await page.getByRole('button', { name: /Marinaer og havner/ }).click();
 	await expect(page.getByText('2 typer vises.')).toBeVisible();
@@ -417,7 +420,7 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await page.getByRole('button', { name: 'Dagens etappe' }).click();
 	await page.getByRole('button', { name: 'Lukk kartlag' }).last().click();
 	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Stiniva');
-	await expect(page.getByText('Ingen treff.')).toBeVisible();
+	await expect(page.getByRole('button', { name: /Stiniva-bukten/ })).toBeVisible();
 
 	const dimensions = await page.evaluate(() => ({
 		width: document.documentElement.scrollWidth,

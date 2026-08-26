@@ -121,20 +121,13 @@
 		normalizedQuery && snapshot
 			? snapshot.features
 					.filter((feature) => feature.geometry.type === 'Point')
-					.filter(
-						(feature) =>
-							visibleLayerIds.size === 0 || visibleLayerIds.has(feature.properties.layerId)
-					)
-					.filter(
-						(feature) =>
-							feature.properties.sourceStyleKey === undefined ||
-							visibleSourceStyleKeys.size === 0 ||
-							visibleSourceStyleKeys.has(feature.properties.sourceStyleKey)
-					)
 					.filter((feature) =>
 						[
 							feature.properties.title,
+							feature.properties.address,
 							feature.properties.layerName,
+							...feature.properties.layerPath,
+							feature.properties.snippet,
 							feature.properties.description,
 							...Object.values(feature.properties.extendedData)
 						]

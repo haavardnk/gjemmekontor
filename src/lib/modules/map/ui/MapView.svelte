@@ -425,10 +425,14 @@
 			features: snapshot.features
 				.filter((feature) => kind !== 'lines' || !hiddenRouteIds.has(feature.id))
 				.filter(
-					(feature) => visibleLayerIds.size === 0 || visibleLayerIds.has(feature.properties.layerId)
+					(feature) =>
+						feature.id === selectedId ||
+						visibleLayerIds.size === 0 ||
+						visibleLayerIds.has(feature.properties.layerId)
 				)
 				.filter(
 					(feature) =>
+						feature.id === selectedId ||
 						feature.geometry.type !== 'Point' ||
 						feature.properties.sourceStyleKey === undefined ||
 						visibleSourceStyleKeys.size === 0 ||
