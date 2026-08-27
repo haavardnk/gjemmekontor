@@ -1,5 +1,7 @@
 <script lang="ts">
 	import GearPage from '$lib/modules/gear/ui/GearPage.svelte';
+
+	let { data } = $props();
 </script>
 
-<GearPage />
+<GearPage people={data.people} categories={data.categories} items={data.items} />

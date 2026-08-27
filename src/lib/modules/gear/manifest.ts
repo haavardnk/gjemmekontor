@@ -8,7 +8,7 @@ export const gearManifest = {
 	mobileNavigation: 'more',
 	primaryPath: '/gear',
 	pagePrefixes: ['/gear'],
-	apiPrefixes: [],
+	apiPrefixes: ['/api/gear'],
 	cacheableApiPrefixes: [],
 	appShellPaths: ['/gear'],
 	statePrefixes: ['gear:'],

@@ -16,39 +16,28 @@
 		ShoppingCart,
 		SlidersHorizontal,
 		Trash2,
-		Users,
 		X
 	} from '@lucide/svelte';
 
-	import { sharedState } from '$lib/client/state.svelte';
+	import { invalidateAll } from '$app/navigation';
 	import {
 		filterGearItems,
 		type GearAvailability,
-		gearCategories,
-		gearCategoryKey,
-		gearCategorySchema,
-		gearItemKey,
-		gearItems,
-		gearItemSchema,
 		type GearItemSort,
-		gearOwnerKey,
-		gearOwners,
-		gearOwnerSchema,
-		gearPackedKey,
-		gearPlannedKey,
+		type GearItemView,
+		type GearPersonView,
 		gearProgress,
-		isGearItemPacked,
-		isGearItemPlanned,
 		type KeyedGearCategory,
-		type KeyedGearItem,
-		type KeyedGearOwner,
 		repositionGearCategory,
-		serializeGearCategory,
-		serializeGearItem,
-		serializeGearOwner,
 		sortGearItems
 	} from '$lib/modules/gear/domain/gear';
-	import SyncStatus from '$lib/ui/SyncStatus.svelte';
+
+	let {
+		people,
+		categories,
+		items
+	}: { people: GearPersonView[]; categories: KeyedGearCategory[]; items: GearItemView[] } =
+		$props();
 
 	let mode = $state<'plan' | 'pack' | 'archive'>('plan');
 	let query = $state('');
@@ -71,29 +60,23 @@
 	let categoryName = $state('');
 
 	let itemDialog: HTMLDialogElement;
-	let editingItem = $state<KeyedGearItem>();
+	let editingItem = $state<GearItemView>();
 	let itemCategoryId = $state('');
 	let itemName = $state('');
 	let itemQuantity = $state(1);
-	let itemOwnerId = $state('');
+	let itemOwnerIds = $state<string[]>([]);
 	let itemAvailability = $state<GearAvailability>('available');
 	let itemNotes = $state('');
 	let itemPlanned = $state(true);
 
-	let ownersDialog: HTMLDialogElement;
-	let newOwnerName = $state('');
 	let filtersDialog: HTMLDialogElement;
 
-	const owners = $derived(gearOwners(sharedState.values));
-	const categories = $derived(gearCategories(sharedState.values));
-	const items = $derived(gearItems(sharedState.values));
-	const ownerNames = $derived(new Map(owners.map((owner) => [owner.id, owner.name])));
+	const owners = $derived(people.filter((person) => person.activeTripMember));
+	const ownerNames = $derived(new Map(people.map((owner) => [owner.id, owner.name])));
 	const categoryNames = $derived(
 		new Map(categories.map((category) => [category.id, category.name]))
 	);
-	const plannedItems = $derived(
-		items.filter((item) => isGearItemPlanned(sharedState.values, item.id))
-	);
+	const plannedItems = $derived(items.filter((item) => item.selected));
 	const activeItems = $derived(
 		mode === 'archive'
 			? filterGearItems(items, {
@@ -101,9 +84,7 @@
 					...(archiveOwnerFilter ? { ownerId: archiveOwnerFilter } : {}),
 					...(archiveAvailabilityFilter ? { availability: archiveAvailabilityFilter } : {}),
 					...(archiveCategoryFilter ? { categoryId: archiveCategoryFilter } : {}),
-					...(archivePlanFilter
-						? { planned: archivePlanFilter === 'planned', values: sharedState.values }
-						: {}),
+					...(archivePlanFilter ? { planned: archivePlanFilter === 'planned' } : {}),
 					categoryNames,
 					ownerNames
 				})
@@ -115,7 +96,7 @@
 					ownerNames
 				})
 	);
-	const progress = $derived(gearProgress(plannedItems, sharedState.values));
+	const progress = $derived(gearProgress(plannedItems, {}));
 	const activeFilterCount = $derived(
 		mode === 'archive'
 			? Number(Boolean(archiveOwnerFilter)) +
@@ -151,17 +132,31 @@
 			: categories
 	);
 	const sortedArchiveItems = $derived(
-		sortGearItems(activeItems, archiveSort, sharedState.values, ownerNames, categoryNames)
+		sortGearItems(activeItems, archiveSort, {}, ownerNames, categoryNames)
 	);
 
-	function itemsForCategory(categoryId: string): KeyedGearItem[] {
+	function itemsForCategory(categoryId: string): GearItemView[] {
 		return sortGearItems(
 			activeItems.filter((item) => item.categoryId === categoryId),
 			sort,
-			sharedState.values,
+			{},
 			ownerNames,
 			categoryNames
 		);
+	}
+
+	async function apiMutation(url: string, method: string, body?: unknown): Promise<void> {
+		const response = await fetch(url, {
+			method,
+			...(body === undefined
+				? {}
+				: { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+		});
+		if (!response.ok) {
+			const result = (await response.json().catch(() => ({}))) as { error?: string };
+			throw new Error(result.error ?? 'GEAR_MUTATION_FAILED');
+		}
+		await invalidateAll();
 	}
 
 	function openCategory(category?: KeyedGearCategory): void {
@@ -187,33 +182,29 @@
 		}
 		saving = true;
 		try {
-			const now = new Date().toISOString();
-			const clientId = await sharedState.clientId();
-			const category = gearCategorySchema.parse({
-				version: 1,
+			const category = {
 				id: editingCategory?.id ?? crypto.randomUUID(),
 				name,
-				position: editingCategory?.position ?? categories.length,
-				createdAt: editingCategory?.createdAt ?? now,
-				createdBy: editingCategory?.createdBy ?? clientId,
-				tombstone: false
-			});
-			await sharedState.set(gearCategoryKey(category.id), serializeGearCategory(category));
+				position: editingCategory?.position ?? categories.length
+			};
+			await apiMutation('/api/gear/categories', 'POST', category);
 			categoryDialog.close();
+		} catch {
+			errorMessage = 'Kunne ikke lagre kategorien.';
 		} finally {
 			saving = false;
 		}
 	}
 
-	function openItem(categoryId: string, item?: KeyedGearItem): void {
+	function openItem(categoryId: string, item?: GearItemView): void {
 		editingItem = item;
 		itemCategoryId = item?.categoryId ?? categoryId;
 		itemName = item?.name ?? '';
 		itemQuantity = item?.quantity ?? 1;
-		itemOwnerId = item?.ownerId ?? '';
+		itemOwnerIds = item?.ownerIds.filter((id) => owners.some((owner) => owner.id === id)) ?? [];
 		itemAvailability = item?.availability ?? 'available';
 		itemNotes = item?.notes ?? '';
-		itemPlanned = item ? isGearItemPlanned(sharedState.values, item.id) : mode !== 'archive';
+		itemPlanned = item?.selected ?? mode !== 'archive';
 		errorMessage = '';
 		itemDialog.showModal();
 	}
@@ -223,52 +214,45 @@
 		if (!itemName.trim() || !itemCategoryId || saving) return;
 		saving = true;
 		try {
-			const now = new Date().toISOString();
-			const clientId = await sharedState.clientId();
-			const item = gearItemSchema.parse({
-				version: 1,
-				id: editingItem?.id ?? crypto.randomUUID(),
-				categoryId: itemCategoryId,
-				name: itemName,
-				quantity: itemQuantity,
-				...(itemOwnerId ? { ownerId: itemOwnerId } : {}),
-				availability: itemAvailability,
-				notes: itemNotes,
-				createdAt: editingItem?.createdAt ?? now,
-				createdBy: editingItem?.createdBy ?? clientId,
-				tombstone: false
-			});
-			const writes = [
-				{ key: gearItemKey(item.id), value: serializeGearItem(item) },
-				{ key: gearPlannedKey(item.id), value: itemPlanned }
-			];
-			if (!itemPlanned || item.availability === 'need-to-buy') {
-				writes.push({ key: gearPackedKey(item.id), value: false });
-			}
-			await sharedState.setMany(writes);
+			await apiMutation(
+				editingItem ? `/api/gear/items/${editingItem.id}` : '/api/gear/items',
+				editingItem ? 'PUT' : 'POST',
+				{
+					id: editingItem?.id ?? crypto.randomUUID(),
+					categoryId: itemCategoryId,
+					name: itemName.trim(),
+					quantity: itemQuantity,
+					ownerIds: itemOwnerIds,
+					availability: itemAvailability,
+					notes: itemNotes.trim(),
+					selected: itemPlanned
+				}
+			);
 			itemDialog.close();
+		} catch (error) {
+			errorMessage =
+				error instanceof Error && error.message === 'GEAR_OWNER_REQUIRED'
+					? 'Velg minst én eier for tilgjengelig utstyr eller utstyr som bare skal ligge i arkivet.'
+					: 'Kunne ikke lagre utstyret.';
 		} finally {
 			saving = false;
 		}
 	}
 
-	async function deleteItem(item: KeyedGearItem): Promise<void> {
-		if (!window.confirm(`Slette ${item.name} permanent fra utstyrsarkivet?`)) return;
-		await sharedState.setMany([
-			{ key: item.key, value: serializeGearItem({ ...item, tombstone: true }) },
-			{ key: gearPlannedKey(item.id), value: false },
-			{ key: gearPackedKey(item.id), value: false }
-		]);
+	async function deleteItem(item: GearItemView): Promise<void> {
+		if (!window.confirm(`Arkivere ${item.name}? Ingen data slettes.`)) return;
+		try {
+			await apiMutation(`/api/gear/items/${item.id}`, 'DELETE');
+		} catch {
+			errorMessage = 'Utstyret er i bruk på en reise og må fjernes fra listen først.';
+		}
 	}
 
-	async function setPlanned(item: KeyedGearItem, planned: boolean): Promise<void> {
-		await sharedState.setMany([
-			{ key: gearPlannedKey(item.id), value: planned },
-			{ key: gearPackedKey(item.id), value: false }
-		]);
+	async function setPlanned(item: GearItemView, planned: boolean): Promise<void> {
+		await apiMutation(`/api/gear/items/${item.id}/selection`, 'PATCH', { selected: planned });
 	}
 
-	async function removeFromPlan(item: KeyedGearItem): Promise<void> {
+	async function removeFromPlan(item: GearItemView): Promise<void> {
 		if (!window.confirm(`Fjerne ${item.name} fra denne utstyrslisten? Den blir i arkivet.`)) return;
 		await setPlanned(item, false);
 	}
@@ -282,41 +266,56 @@
 			return;
 		}
 		if (!window.confirm(`Slette ${category.name}?`)) return;
-		await sharedState.set(category.key, serializeGearCategory({ ...category, tombstone: true }));
+		try {
+			await apiMutation(`/api/gear/categories/${category.id}`, 'DELETE');
+		} catch {
+			errorMessage = 'Kategorien kan ikke arkiveres før alt utstyret er flyttet eller arkivert.';
+		}
 	}
 
-	async function setPacked(item: KeyedGearItem, packed: boolean): Promise<void> {
+	async function setPacked(item: GearItemView, packed: boolean): Promise<void> {
 		if (item.availability !== 'available') return;
-		await sharedState.set(gearPackedKey(item.id), packed);
+		try {
+			await apiMutation(`/api/gear/items/${item.id}/packing`, 'PATCH', { packed });
+		} catch {
+			errorMessage = 'Avklar eieren før utstyret pakkes.';
+		}
 	}
 
-	async function markAvailable(item: KeyedGearItem): Promise<void> {
-		await sharedState.setMany([
-			{
-				key: item.key,
-				value: serializeGearItem({ ...item, availability: 'available' })
-			},
-			{ key: gearPackedKey(item.id), value: false }
-		]);
+	async function markAvailable(item: GearItemView): Promise<void> {
+		const currentOwnerIds = item.ownerIds.filter((id) => owners.some((owner) => owner.id === id));
+		if (!currentOwnerIds.length) {
+			openItem(item.categoryId, item);
+			itemAvailability = 'available';
+			errorMessage = 'Velg minst én eier for å flytte innkjøpet til det globale arkivet.';
+			return;
+		}
+		await apiMutation(`/api/gear/items/${item.id}`, 'PUT', {
+			id: item.id,
+			categoryId: item.categoryId,
+			name: item.name,
+			quantity: item.quantity,
+			ownerIds: currentOwnerIds,
+			availability: 'available',
+			notes: item.notes,
+			selected: true
+		});
 	}
 
 	async function resetPacking(): Promise<void> {
-		const packedItems = plannedItems.filter((item) =>
-			isGearItemPacked(sharedState.values, item.id)
-		);
+		const packedItems = plannedItems.filter((item) => item.packed);
 		if (!packedItems.length || !window.confirm('Nullstille alle avhukinger i pakkelisten?')) return;
-		await sharedState.setMany(
-			packedItems.map((item) => ({ key: gearPackedKey(item.id), value: false }))
+		await Promise.all(
+			packedItems.map((item) =>
+				apiMutation(`/api/gear/items/${item.id}/packing`, 'PATCH', { packed: false })
+			)
 		);
 	}
 
 	async function persistCategoryOrder(reordered: ReturnType<typeof repositionGearCategory>) {
-		await sharedState.setMany(
-			reordered.map((category) => ({
-				key: gearCategoryKey(category.id),
-				value: serializeGearCategory(category)
-			}))
-		);
+		await apiMutation('/api/gear/categories', 'PATCH', {
+			categoryIds: reordered.map((category) => category.id)
+		});
 	}
 
 	async function moveCategory(category: KeyedGearCategory, offset: -1 | 1): Promise<void> {
@@ -336,70 +335,18 @@
 		await persistCategoryOrder(repositionGearCategory(categories, sourceId, targetIndex));
 	}
 
-	async function addOwner(event: SubmitEvent): Promise<void> {
-		event.preventDefault();
-		const name = newOwnerName.trim();
-		if (!name || saving) return;
-		if (
-			owners.some(
-				(owner) => owner.name.toLocaleLowerCase('nb-NO') === name.toLocaleLowerCase('nb-NO')
-			)
-		) {
-			errorMessage = 'Denne personen finnes allerede.';
-			return;
-		}
-		saving = true;
+	function toggleItemOwner(ownerId: string): void {
+		itemOwnerIds = itemOwnerIds.includes(ownerId)
+			? itemOwnerIds.filter((id) => id !== ownerId)
+			: [...itemOwnerIds, ownerId];
+	}
+
+	async function retainItem(item: GearItemView): Promise<void> {
 		try {
-			const owner = gearOwnerSchema.parse({
-				version: 1,
-				id: crypto.randomUUID(),
-				name,
-				createdAt: new Date().toISOString(),
-				createdBy: await sharedState.clientId(),
-				tombstone: false
-			});
-			await sharedState.set(gearOwnerKey(owner.id), serializeGearOwner(owner));
-			newOwnerName = '';
-			errorMessage = '';
-		} finally {
-			saving = false;
+			await apiMutation(`/api/gear/items/${item.id}/retain`, 'POST');
+		} catch {
+			errorMessage = 'Kunne ikke beholde utstyret på denne reisen.';
 		}
-	}
-
-	async function renameOwner(owner: KeyedGearOwner, name: string): Promise<void> {
-		const trimmed = name.trim();
-		if (!trimmed || trimmed === owner.name) return;
-		if (
-			owners.some(
-				(candidate) =>
-					candidate.id !== owner.id &&
-					candidate.name.toLocaleLowerCase('nb-NO') === trimmed.toLocaleLowerCase('nb-NO')
-			)
-		) {
-			errorMessage = 'Denne personen finnes allerede.';
-			return;
-		}
-		await sharedState.set(owner.key, serializeGearOwner({ ...owner, name: trimmed }));
-		errorMessage = '';
-	}
-
-	async function deleteOwner(owner: KeyedGearOwner): Promise<void> {
-		const ownedItems = items.filter((item) => item.ownerId === owner.id);
-		if (
-			!window.confirm(
-				`Slette ${owner.name}? ${ownedItems.length ? 'Personen fjernes fra tilknyttet utstyr.' : ''}`
-			)
-		)
-			return;
-		await sharedState.setMany([
-			{ key: owner.key, value: serializeGearOwner({ ...owner, tombstone: true }) },
-			...ownedItems.map((item) => {
-				const withoutOwner = { ...item };
-				delete withoutOwner.ownerId;
-				return { key: item.key, value: serializeGearItem(withoutOwner) };
-			})
-		]);
-		if (ownerFilter === owner.id) ownerFilter = '';
 	}
 </script>
 
@@ -407,11 +354,10 @@
 
 <section class="mx-auto max-w-4xl px-4 py-5 pb-10 lg:py-7">
 	<header class="mb-4">
-		<div class="flex h-7 items-center justify-between gap-3">
+		<div class="flex h-7 items-center gap-3">
 			<p class="flex items-center gap-1.5 text-sm font-semibold text-primary">
 				<Backpack size={16} /> Turutstyr
 			</p>
-			<SyncStatus />
 		</div>
 		<h1 class="font-display mt-1 text-3xl font-bold text-neutral">Utstyr</h1>
 	</header>
@@ -442,13 +388,6 @@
 		</div>
 		<div class="flex flex-wrap justify-end gap-2">
 			{#if mode === 'plan'}
-				<button
-					class="btn btn-outline btn-sm"
-					type="button"
-					onclick={() => ownersDialog.showModal()}
-				>
-					<Users size={16} /> Personer
-				</button>
 				<button class="btn btn-primary btn-sm" type="button" onclick={() => openCategory()}>
 					<Plus size={16} /> Kategori
 				</button>
@@ -678,8 +617,13 @@
 										{#if item.availability === 'need-to-buy'}<span
 												class="badge badge-sm badge-warning">Må kjøpes</span
 											>{/if}
-										{#if item.ownerId && ownerNames.get(item.ownerId)}<span
-												class="badge badge-ghost badge-sm">{ownerNames.get(item.ownerId)}</span
+										{#each item.ownerIds as ownerId (ownerId)}
+											{#if ownerNames.get(ownerId)}<span class="badge badge-ghost badge-sm"
+													>{ownerNames.get(ownerId)}</span
+												>{/if}
+										{/each}
+										{#if item.retainedWithoutCurrentOwner}<span class="badge badge-sm badge-info"
+												>Beholdt uten nåværende eier</span
 											>{/if}
 									</div>
 									{#if item.notes}<p class="mt-0.5 text-sm text-base-content/55">
@@ -687,7 +631,7 @@
 										</p>{/if}
 								</div>
 								<div class="flex shrink-0 items-center gap-1">
-									{#if isGearItemPlanned(sharedState.values, item.id)}
+									{#if item.selected}
 										<button
 											class="btn btn-outline btn-xs"
 											type="button"
@@ -716,7 +660,7 @@
 										class="btn btn-square btn-ghost text-error btn-sm"
 										type="button"
 										onclick={() => deleteItem(item)}
-										aria-label={`Slett ${item.name} permanent`}><Trash2 size={16} /></button
+										aria-label={`Arkiver ${item.name}`}><Trash2 size={16} /></button
 									>
 								</div>
 							</article>
@@ -740,7 +684,7 @@
 				)}
 				{@const categoryProgress = gearProgress(
 					plannedItems.filter((item) => item.categoryId === category.id),
-					sharedState.values
+					{}
 				)}
 				<section
 					class="overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-sm"
@@ -825,12 +769,13 @@
 					{#if categoryItems.length}
 						<ul class="divide-y divide-base-300" aria-label={`Utstyr i ${category.name}`}>
 							{#each categoryItems as item (item.id)}
-								<li class="flex min-h-16 items-center gap-3 px-3 py-2.5 sm:px-4">
+								<li class="flex min-h-16 items-start gap-3 px-3 py-2.5 sm:px-4">
 									{#if mode === 'pack' && item.availability === 'available'}
 										<input
-											class="checkbox shrink-0 checkbox-success"
+											class="checkbox mt-1 shrink-0 checkbox-success"
 											type="checkbox"
-											checked={isGearItemPacked(sharedState.values, item.id)}
+											checked={item.packed}
+											disabled={item.needsOwnerResolution && !item.retainedWithoutCurrentOwner}
 											onchange={(event) => setPacked(item, event.currentTarget.checked)}
 											aria-label={`Pakket ${item.name}`}
 										/>
@@ -841,8 +786,8 @@
 										<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
 											<p
 												class="font-semibold"
-												class:line-through={isGearItemPacked(sharedState.values, item.id)}
-												class:opacity-50={isGearItemPacked(sharedState.values, item.id)}
+												class:line-through={item.packed}
+												class:opacity-50={item.packed}
 											>
 												{item.name}
 											</p>
@@ -852,13 +797,38 @@
 											{#if item.availability === 'need-to-buy'}<span
 													class="badge badge-sm badge-warning">Må kjøpes</span
 												>{/if}
-											{#if item.ownerId && ownerNames.get(item.ownerId)}<span
-													class="badge badge-outline badge-sm">{ownerNames.get(item.ownerId)}</span
+											{#each item.ownerIds as ownerId (ownerId)}
+												{#if ownerNames.get(ownerId)}<span class="badge badge-outline badge-sm"
+														>{ownerNames.get(ownerId)}</span
+													>{/if}
+											{/each}
+											{#if item.retainedWithoutCurrentOwner}<span class="badge badge-sm badge-info"
+													>Beholdt uten nåværende eier</span
 												>{/if}
 										</div>
 										{#if item.notes}<p class="mt-0.5 text-sm text-base-content/55">
 												{item.notes}
 											</p>{/if}
+										{#if item.needsOwnerResolution && !item.retainedWithoutCurrentOwner}
+											<div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-warning">
+												<span>Ingen av eierne er med på denne reisen.</span>
+												<button
+													class="btn btn-outline btn-xs"
+													type="button"
+													onclick={() => retainItem(item)}>Behold likevel</button
+												>
+												<button
+													class="btn btn-ghost btn-xs"
+													type="button"
+													onclick={() => openItem(category.id, item)}>Bytt eier</button
+												>
+												<button
+													class="btn btn-ghost btn-xs"
+													type="button"
+													onclick={() => removeFromPlan(item)}>Fjern</button
+												>
+											</div>
+										{/if}
 									</div>
 									{#if mode === 'plan'}
 										<button
@@ -1124,15 +1094,30 @@
 				</label>
 			</div>
 			<div class="grid gap-3 sm:grid-cols-2">
-				<label class="form-control block">
-					<span class="mb-2 block text-sm font-semibold"
-						>Person <span class="font-normal text-base-content/50">(valgfritt)</span></span
-					>
-					<select class="select w-full" bind:value={itemOwnerId} aria-label="Person">
-						<option value="">Ingen valgt</option>
-						{#each owners as owner (owner.id)}<option value={owner.id}>{owner.name}</option>{/each}
-					</select>
-				</label>
+				<fieldset class="form-control block">
+					<legend class="mb-2 block text-sm font-semibold">
+						Eiere <span class="font-normal text-base-content/50">(flere kan velges)</span>
+					</legend>
+					<div class="max-h-36 space-y-1 overflow-y-auto rounded-box border border-base-300 p-2">
+						{#each owners as owner (owner.id)}
+							<label
+								class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-base-200"
+							>
+								<input
+									class="checkbox checkbox-sm checkbox-primary"
+									type="checkbox"
+									checked={itemOwnerIds.includes(owner.id)}
+									onchange={() => toggleItemOwner(owner.id)}
+								/>
+								<span class="text-sm">{owner.name}</span>
+							</label>
+						{:else}
+							<p class="px-2 py-1 text-sm text-base-content/55">
+								Legg til personer i reiseinnstillingene.
+							</p>
+						{/each}
+					</div>
+				</fieldset>
 				<label class="form-control block">
 					<span class="mb-2 block text-sm font-semibold">Tilgjengelighet</span>
 					<select class="select w-full" bind:value={itemAvailability} aria-label="Tilgjengelighet">
@@ -1177,62 +1162,5 @@
 	</div>
 	<form method="dialog" class="modal-backdrop">
 		<button type="submit" aria-label="Lukk utstyrsdialogen">Lukk</button>
-	</form>
-</dialog>
-
-<dialog
-	bind:this={ownersDialog}
-	class="modal"
-	aria-labelledby="gear-owners-dialog-title"
-	onclose={() => (errorMessage = '')}
->
-	<div class="modal-box max-w-md rounded-box">
-		<h2 id="gear-owners-dialog-title" class="font-display text-2xl font-bold">Personer</h2>
-		<p class="mt-1 text-sm text-base-content/55">Personer kan velges som eier av utstyr.</p>
-		<form class="mt-5 flex gap-2" onsubmit={addOwner}>
-			<input
-				class="input min-w-0 flex-1"
-				bind:value={newOwnerName}
-				maxlength="100"
-				placeholder="Navn"
-				aria-label="Navn på person"
-			/>
-			<button class="btn btn-primary" type="submit" disabled={saving || !newOwnerName.trim()}
-				><Plus size={16} /> Legg til</button
-			>
-		</form>
-		{#if errorMessage}<p class="mt-2 text-sm text-error" role="alert">{errorMessage}</p>{/if}
-		{#if owners.length}
-			<ul
-				class="mt-5 divide-y divide-base-300 rounded-box border border-base-300"
-				aria-label="Personer"
-			>
-				{#each owners as owner (owner.id)}
-					<li class="flex items-center gap-2 p-2">
-						<input
-							class="input min-w-0 flex-1 input-ghost"
-							value={owner.name}
-							onchange={(event) => renameOwner(owner, event.currentTarget.value)}
-							aria-label={`Navn på ${owner.name}`}
-							maxlength="100"
-						/>
-						<button
-							class="btn btn-square btn-ghost text-error btn-sm"
-							type="button"
-							onclick={() => deleteOwner(owner)}
-							aria-label={`Slett ${owner.name}`}><Trash2 size={16} /></button
-						>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<p class="mt-6 text-center text-sm text-base-content/50">Ingen personer lagt til.</p>
-		{/if}
-		<div class="modal-action">
-			<button class="btn" type="button" onclick={() => ownersDialog.close()}>Ferdig</button>
-		</div>
-	</div>
-	<form method="dialog" class="modal-backdrop">
-		<button type="submit" aria-label="Lukk persondialogen">Lukk</button>
 	</form>
 </dialog>

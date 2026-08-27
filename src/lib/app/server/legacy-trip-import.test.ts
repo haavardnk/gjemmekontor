@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import type Database from 'better-sqlite3';
 import { afterEach, describe, expect, test } from 'vitest';
 
+import { loadGearPageData } from '$lib/modules/gear/server';
+
 import { createApplicationDatabase } from './database';
 import {
 	importLegacyKroatia2026,
@@ -238,6 +240,14 @@ describe('Kroatia 2026 import', (): void => {
 			owner_is_trip_member: 1,
 			selected_for_trip: 1,
 			packed: 1
+		});
+		expect(
+			loadGearPageData(db, kroatia2026TripId).items.find((item) => item.name === 'Pocket 4')
+		).toMatchObject({
+			ownerIds: ['0d01a972-9ca1-4b82-a938-1894dcea8c79'],
+			selected: true,
+			packed: true,
+			needsOwnerResolution: false
 		});
 		expect(
 			db.prepare('SELECT COUNT(*) AS count FROM trip_member_module_preferences').get()

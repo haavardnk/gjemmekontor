@@ -304,6 +304,8 @@ export const tripDatabaseMigrations: readonly DatabaseMigration[] = [
 				quantity_override INTEGER CHECK (quantity_override BETWEEN 1 AND 999),
 				availability TEXT NOT NULL CHECK (availability IN ('available', 'need-to-buy')),
 				trip_notes TEXT NOT NULL DEFAULT '' CHECK (length(trip_notes) <= 500),
+				owner_resolution TEXT NOT NULL DEFAULT 'current'
+					CHECK (owner_resolution IN ('current', 'retained')),
 				active INTEGER NOT NULL CHECK (active IN (0, 1)),
 				added_at TEXT NOT NULL,
 				updated_at TEXT NOT NULL,
