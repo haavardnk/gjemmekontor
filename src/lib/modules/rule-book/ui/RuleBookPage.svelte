@@ -1,34 +1,34 @@
 <script lang="ts">
-	import { LoaderCircle, Plus, ScrollText, Shuffle, Trash2, Users } from '@lucide/svelte';
+	import { LoaderCircle, ScrollText, Shuffle, Users } from '@lucide/svelte';
 
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
-		activeRuleBookGameSchema,
 		nextSectionNumber,
 		participantForDay,
 		ruleBookGame,
-		ruleBookGameKey,
-		type RuleBookParticipant,
+		type RuleBookMember,
 		ruleBookRuleKey,
 		ruleBookRules,
 		ruleBookRuleSchema,
-		ruleBookSetupSchema,
 		ruleForDay,
-		serializeRuleBookGame,
-		serializeRuleBookRule,
-		shuffledParticipants
+		serializeRuleBookRule
 	} from '$lib/modules/rule-book/domain/rule-book';
 	import { tripDayState } from '$lib/trip/day.svelte';
 	import { dateKeyAt, tripDays } from '$lib/trip/itinerary';
 	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
-	let newParticipantName = $state('');
+	let { members }: { members: RuleBookMember[] } = $props();
+	let localMembers = $derived(members.map((member) => ({ ...member })));
 	let errorMessage = $state('');
 	let saving = $state(false);
 
 	const game = $derived(ruleBookGame(sharedState.values));
-	const setupParticipants = $derived(game?.status === 'setup' ? game.participants : []);
 	const activeGame = $derived(game?.status === 'active' ? game : undefined);
+	const participants = $derived(
+		localMembers
+			.filter((member) => !member.optedOut)
+			.map((member) => ({ id: member.id, name: member.name }))
+	);
 	const rules = $derived(ruleBookRules(sharedState.values));
 	const todayIndex = $derived(tripDayState.todayIndex);
 	let selectedRuleDayIndex = $derived(todayIndex);
@@ -50,88 +50,37 @@
 		return currentDate < (tripDays[0]?.date ?? '') ? 'before' : 'after';
 	});
 
-	function normalizedName(name: string): string {
-		return name.trim().toLocaleLowerCase('nb-NO');
-	}
-
-	async function persistSetup(participants: RuleBookParticipant[]): Promise<void> {
-		const setup = ruleBookSetupSchema.parse({
-			version: 1,
-			status: 'setup',
-			participants
-		});
-		await sharedState.set(ruleBookGameKey, serializeRuleBookGame(setup));
-	}
-
-	async function addParticipant(event: SubmitEvent): Promise<void> {
-		event.preventDefault();
-		const name = newParticipantName.trim();
-		if (!name || saving || game?.status === 'active') return;
-		if (
-			setupParticipants.some(
-				(participant) => normalizedName(participant.name) === normalizedName(name)
-			)
-		) {
-			errorMessage = 'Denne personen finnes allerede.';
-			return;
-		}
-		saving = true;
+	async function setParticipation(member: RuleBookMember, participating: boolean): Promise<void> {
+		const previous = member.optedOut;
+		member.optedOut = !participating;
+		errorMessage = '';
 		try {
-			await persistSetup([...setupParticipants, { id: crypto.randomUUID(), name }]);
-			newParticipantName = '';
-			errorMessage = '';
-		} finally {
-			saving = false;
+			const response = await fetch('/api/rule-book/preferences', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ personId: member.id, optedOut: !participating })
+			});
+			if (!response.ok) throw new Error('PREFERENCE_FAILED');
+		} catch {
+			member.optedOut = previous;
+			errorMessage = 'Kunne ikke lagre deltakervalget. Prøv igjen.';
 		}
-	}
-
-	async function renameParticipant(participant: RuleBookParticipant, event: Event): Promise<void> {
-		const input = event.currentTarget;
-		if (!(input instanceof HTMLInputElement) || game?.status !== 'setup') return;
-		const name = input.value.trim();
-		if (!name) {
-			input.value = participant.name;
-			errorMessage = 'Navnet kan ikke være tomt.';
-			return;
-		}
-		if (
-			setupParticipants.some(
-				(candidate) =>
-					candidate.id !== participant.id && normalizedName(candidate.name) === normalizedName(name)
-			)
-		) {
-			input.value = participant.name;
-			errorMessage = 'Denne personen finnes allerede.';
-			return;
-		}
-		if (name === participant.name) return;
-		await persistSetup(
-			setupParticipants.map((candidate) =>
-				candidate.id === participant.id ? { ...candidate, name } : candidate
-			)
-		);
-		errorMessage = '';
-	}
-
-	async function removeParticipant(participant: RuleBookParticipant): Promise<void> {
-		if (game?.status !== 'setup') return;
-		await persistSetup(setupParticipants.filter((candidate) => candidate.id !== participant.id));
-		errorMessage = '';
 	}
 
 	async function startGame(): Promise<void> {
-		if (game?.status !== 'setup' || setupParticipants.length < 2 || saving) return;
+		if (activeGame || participants.length < 2 || saving) return;
 		saving = true;
 		try {
-			const active = activeRuleBookGameSchema.parse({
-				version: 1,
-				status: 'active',
-				participantOrder: shuffledParticipants(setupParticipants),
-				startedAt: new Date().toISOString(),
-				startedBy: await sharedState.clientId()
+			const response = await fetch('/api/rule-book/game', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ clientId: await sharedState.clientId() })
 			});
-			await sharedState.set(ruleBookGameKey, serializeRuleBookGame(active));
+			if (!response.ok) throw new Error('START_FAILED');
+			await sharedState.sync();
 			errorMessage = '';
+		} catch {
+			errorMessage = 'Kunne ikke starte spillet. Oppdater siden og prøv igjen.';
 		} finally {
 			saving = false;
 		}
@@ -140,7 +89,21 @@
 	async function returnToSetup(): Promise<void> {
 		if (!activeGame || rules.length > 0) return;
 		if (!window.confirm('Vil du endre deltakerne? Det trekkes en ny rekkefølge.')) return;
-		await persistSetup(activeGame.participantOrder);
+		saving = true;
+		try {
+			const response = await fetch('/api/rule-book/game', {
+				method: 'DELETE',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ clientId: await sharedState.clientId() })
+			});
+			if (!response.ok) throw new Error('RESET_FAILED');
+			await sharedState.sync();
+			errorMessage = '';
+		} catch {
+			errorMessage = 'Kunne ikke åpne deltakervalget igjen.';
+		} finally {
+			saving = false;
+		}
 	}
 
 	async function saveRule(event: SubmitEvent): Promise<void> {
@@ -207,56 +170,35 @@
 				<div>
 					<h2 class="font-display text-xl font-bold text-neutral">Hvem er med?</h2>
 					<p class="mt-1 text-sm text-base-content/65">
-						Legg til alle deltakerne. Rekkefølgen trekkes når spillet starter.
+						Alle på reisen er med som standard. Fjern haken for dem som ikke vil delta.
 					</p>
 				</div>
 			</div>
 
-			<form class="flex gap-2" onsubmit={addParticipant}>
-				<label class="sr-only" for="new-rule-book-participant">Navn på person</label>
-				<input
-					id="new-rule-book-participant"
-					class="input min-w-0 flex-1"
-					bind:value={newParticipantName}
-					maxlength="100"
-					placeholder="Navn"
-					autocomplete="off"
-				/>
-				<button
-					class="btn btn-primary"
-					type="submit"
-					disabled={!newParticipantName.trim() || saving}
-				>
-					<Plus size={18} /> Legg til
-				</button>
-			</form>
-
-			{#if setupParticipants.length}
+			{#if localMembers.length}
 				<ul class="mt-4 space-y-2" aria-label="Deltakere">
-					{#each setupParticipants as participant (participant.id)}
-						<li class="flex items-center gap-2">
-							<label class="sr-only" for={`rule-book-participant-${participant.id}`}>
-								Navn på {participant.name}
-							</label>
-							<input
-								id={`rule-book-participant-${participant.id}`}
-								class="input min-w-0 flex-1 input-sm"
-								value={participant.name}
-								maxlength="100"
-								onchange={(event) => renameParticipant(participant, event)}
-							/>
-							<button
-								class="btn btn-square btn-ghost text-error btn-sm"
-								type="button"
-								onclick={() => removeParticipant(participant)}
-								aria-label={`Fjern ${participant.name}`}
-								title={`Fjern ${participant.name}`}
+					{#each localMembers as member (member.id)}
+						<li class="rounded-box border border-base-300 bg-base-200/50 px-3 py-2">
+							<label
+								class="flex cursor-pointer items-center gap-3"
+								for={`rule-book-member-${member.id}`}
 							>
-								<Trash2 size={17} />
-							</button>
+								<input
+									id={`rule-book-member-${member.id}`}
+									class="checkbox checkbox-sm checkbox-primary"
+									type="checkbox"
+									checked={!member.optedOut}
+									onchange={(event) => setParticipation(member, event.currentTarget.checked)}
+								/>
+								<span class="font-medium text-neutral">{member.name}</span>
+							</label>
 						</li>
 					{/each}
 				</ul>
+			{:else}
+				<p class="mt-4 text-sm text-base-content/55">
+					Legg personer til reisen i Trip Settings før spillet kan startes.
+				</p>
 			{/if}
 
 			{#if errorMessage}
@@ -267,13 +209,13 @@
 				class="btn mt-5 w-full btn-primary"
 				type="button"
 				onclick={startGame}
-				disabled={setupParticipants.length < 2 || saving}
+				disabled={participants.length < 2 || saving}
 			>
 				{#if saving}<LoaderCircle class="animate-spin" size={18} />{:else}<Shuffle size={18} />{/if}
 				Start spillet
 			</button>
-			{#if setupParticipants.length < 2}
-				<p class="mt-2 text-center text-xs text-base-content/55">Legg til minst to personer.</p>
+			{#if participants.length < 2}
+				<p class="mt-2 text-center text-xs text-base-content/55">Minst to personer må være med.</p>
 			{/if}
 		</div>
 	{:else}

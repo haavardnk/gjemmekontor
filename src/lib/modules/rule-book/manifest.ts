@@ -8,7 +8,7 @@ export const ruleBookManifest = {
 	mobileNavigation: 'more',
 	primaryPath: '/rule-book',
 	pagePrefixes: ['/rule-book'],
-	apiPrefixes: [],
+	apiPrefixes: ['/api/rule-book'],
 	cacheableApiPrefixes: [],
 	appShellPaths: ['/rule-book'],
 	statePrefixes: ['rule-book:'],

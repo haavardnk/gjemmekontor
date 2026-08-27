@@ -57,6 +57,7 @@ export type RuleBookSetup = z.infer<typeof ruleBookSetupSchema>;
 export type ActiveRuleBookGame = z.infer<typeof activeRuleBookGameSchema>;
 export type RuleBookGame = z.infer<typeof ruleBookGameSchema>;
 export type RuleBookRule = z.infer<typeof ruleBookRuleSchema>;
+export type RuleBookMember = { id: string; name: string; optedOut: boolean };
 
 export function ruleBookRuleKey(dayIndex: number): string {
 	return `${rulePrefix}${dayIndex}`;

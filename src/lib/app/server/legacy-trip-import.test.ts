@@ -242,6 +242,17 @@ describe('Kroatia 2026 import', (): void => {
 		expect(
 			db.prepare('SELECT COUNT(*) AS count FROM trip_member_module_preferences').get()
 		).toEqual({ count: 4 });
+		const importedGame = JSON.parse(
+			(
+				db
+					.prepare('SELECT value FROM trip_state_entries WHERE trip_id = ? AND key = ?')
+					.get(kroatia2026TripId, 'rule-book:game') as { value: string }
+			).value
+		) as { participantOrder: Array<{ id: string; name: string }> };
+		expect(importedGame.participantOrder).toEqual([
+			{ id: '0d01a972-9ca1-4b82-a938-1894dcea8c79', name: 'Håvard' },
+			{ id: 'dd9f380b-0bba-41f2-bbc0-03a63dc24669', name: 'Tina' }
+		]);
 		expect(
 			db.prepare('SELECT COUNT(*) AS count FROM trip_modules WHERE enabled != 0').get()
 		).toEqual({ count: 0 });
