@@ -26,15 +26,41 @@ describe('application database composition', (): void => {
 			.all()
 			.map((row) => (row as { name: string }).name);
 
-		expect(tables).toEqual([
+		for (const table of [
+			'auth_login_attempts',
 			'gpx_uploads',
-			'meta',
 			'poi_enrichment_cache',
 			'poi_provider_mappings',
 			'sessions',
-			'state_entries'
-		]);
-		expect(database.pragma('user_version', { simple: true })).toBe(3);
+			'state_entries',
+			'trips',
+			'trip_credentials',
+			'people',
+			'trip_members',
+			'trip_days',
+			'trip_modules',
+			'session_trip_grants',
+			'session_admin_grants',
+			'trip_state_entries',
+			'trip_revisions',
+			'trip_mutation_receipts',
+			'trip_gpx_uploads',
+			'trip_poi_provider_mappings',
+			'trip_poi_enrichment_cache',
+			'shot_content_packs',
+			'trip_shot_content',
+			'recipes',
+			'recipe_versions',
+			'trip_menu_entries',
+			'gear_items',
+			'gear_item_owners',
+			'trip_gear_items',
+			'trip_gear_packing'
+		]) {
+			expect(tables, table).toContain(table);
+		}
+		expect(database.pragma('foreign_key_check')).toEqual([]);
+		expect(database.pragma('user_version', { simple: true })).toBe(4);
 		database.close();
 	});
 
@@ -53,7 +79,7 @@ describe('application database composition', (): void => {
 
 		expect(tables).toContain('poi_provider_mappings');
 		expect(tables).toContain('poi_enrichment_cache');
-		expect(upgraded.pragma('user_version', { simple: true })).toBe(3);
+		expect(upgraded.pragma('user_version', { simple: true })).toBe(4);
 		upgraded.close();
 	});
 
@@ -90,7 +116,7 @@ describe('application database composition', (): void => {
 		expect(upgraded.prepare('SELECT COUNT(*) AS count FROM poi_enrichment_cache').get()).toEqual({
 			count: 2
 		});
-		expect(upgraded.pragma('user_version', { simple: true })).toBe(3);
+		expect(upgraded.pragma('user_version', { simple: true })).toBe(4);
 		upgraded.close();
 	});
 });

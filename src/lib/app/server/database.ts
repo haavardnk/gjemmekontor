@@ -9,6 +9,8 @@ import {
 } from '$lib/server/database';
 import { getRuntimeConfig } from '$lib/server/env';
 
+import { tripDatabaseMigrations } from './trip-schema';
+
 function combineMigrations(
 	...groups: readonly (readonly DatabaseMigration[])[]
 ): DatabaseMigration[] {
@@ -21,7 +23,8 @@ function combineMigrations(
 export const applicationDatabaseMigrations = combineMigrations(
 	coreDatabaseMigrations,
 	logbookDatabaseMigrations,
-	mapDatabaseMigrations
+	mapDatabaseMigrations,
+	tripDatabaseMigrations
 );
 
 export function createApplicationDatabase(dataDir: string): Database.Database {
