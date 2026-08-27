@@ -1,3 +1,4 @@
+import type Database from 'better-sqlite3';
 import Bring from 'bring-shopping';
 
 import {
@@ -11,7 +12,11 @@ import {
 } from '$lib/modules/shopping-list/domain/shopping-list';
 import { apiError, apiSuccess } from '$lib/server/api';
 
-import { type BringConfig, getBringConfig } from './config';
+import {
+	type BringConfig,
+	type BringCredentials,
+	getBringCredentials
+} from './config';
 
 type BringList = { listUuid: string; name: string };
 type BringItem = { name: string; specification: string };
@@ -39,13 +44,16 @@ export type BringClient = {
 	getUserSettings(): Promise<BringUserSettings>;
 	saveItem(listUuid: string, name: string, specification: string): Promise<string>;
 	moveToRecentList(listUuid: string, name: string): Promise<string>;
+	createList?(name: string): Promise<void>;
 };
 
-type BringClientFactory = (config: BringConfig) => BringClient;
-type BringErrorCode =
+type BringClientFactory = (credentials: BringCredentials) => BringClient;
+export type BringErrorCode =
 	| 'BRING_NOT_CONFIGURED'
 	| 'BRING_AUTH_FAILED'
 	| 'BRING_LIST_NOT_FOUND'
+	| 'BRING_LIST_NAME_CONFLICT'
+	| 'BRING_LIST_CREATE_FAILED'
 	| 'BRING_UNAVAILABLE'
 	| 'BRING_MUTATION_FAILED';
 
@@ -55,8 +63,30 @@ export class BringServiceError extends Error {
 	}
 }
 
-function defaultClientFactory(config: BringConfig): BringClient {
-	return new Bring({ mail: config.email, password: config.password });
+function defaultClientFactory(credentials: BringCredentials): BringClient {
+	const client = new Bring({ mail: credentials.email, password: credentials.password });
+	const internal = client as unknown as BringClient & {
+		uuid?: string;
+		url?: string;
+		putHeaders?: Record<string, string>;
+	};
+	internal.createList = async (name: string): Promise<void> => {
+		if (!internal.uuid || !internal.url || !internal.putHeaders) {
+			throw new Error('Bring client is not authenticated');
+		}
+		const response = await fetch(`${internal.url}bringusers/${internal.uuid}/lists`, {
+			method: 'POST',
+			headers: internal.putHeaders,
+			body: new URLSearchParams({
+				name,
+				theme: 'ch.publisheria.bring.theme.home'
+			})
+		});
+		if (!response.ok) {
+			throw new Error(`Bring list creation failed (${response.status})`);
+		}
+	};
+	return internal;
 }
 
 function isAuthenticationError(error: unknown): boolean {
@@ -75,6 +105,79 @@ function validUpstreamItem(
 	return sourceName && sourceName.length <= 100 && name.length <= 100 && specification.length <= 120
 		? { sourceName, name, specification }
 		: undefined;
+}
+
+export type BringListConnection = { listUuid: string; listName: string };
+
+export class BringConnectionService {
+	constructor(
+		private readonly credentials: BringCredentials | undefined,
+		private readonly createClient: BringClientFactory = defaultClientFactory
+	) {}
+
+	private async authenticatedClient(): Promise<BringClient> {
+		if (!this.credentials) throw new BringServiceError('BRING_NOT_CONFIGURED');
+		const client = this.createClient(this.credentials);
+		try {
+			await client.login();
+			return client;
+		} catch {
+			throw new BringServiceError('BRING_AUTH_FAILED');
+		}
+	}
+
+	private async lists(client: BringClient): Promise<BringList[]> {
+		try {
+			return (await client.loadLists()).lists;
+		} catch (error) {
+			throw new BringServiceError(
+				isAuthenticationError(error) ? 'BRING_AUTH_FAILED' : 'BRING_UNAVAILABLE'
+			);
+		}
+	}
+
+	async verify(listUuid: string): Promise<BringListConnection> {
+		const selectedUuid = listUuid.trim();
+		if (!selectedUuid) throw new BringServiceError('BRING_LIST_NOT_FOUND');
+		const client = await this.authenticatedClient();
+		const selected = (await this.lists(client)).find((list) => list.listUuid === selectedUuid);
+		if (!selected) throw new BringServiceError('BRING_LIST_NOT_FOUND');
+		return { listUuid: selected.listUuid, listName: selected.name };
+	}
+
+	async create(name: string): Promise<BringListConnection> {
+		const listName = name.trim();
+		if (!listName || listName.length > 100) {
+			throw new BringServiceError('BRING_LIST_CREATE_FAILED');
+		}
+		const client = await this.authenticatedClient();
+		const before = await this.lists(client);
+		const normalizedName = listName.toLocaleLowerCase('nb-NO');
+		if (before.some((list) => list.name.trim().toLocaleLowerCase('nb-NO') === normalizedName)) {
+			throw new BringServiceError('BRING_LIST_NAME_CONFLICT');
+		}
+		if (!client.createList) throw new BringServiceError('BRING_LIST_CREATE_FAILED');
+		try {
+			await client.createList(listName);
+		} catch (error) {
+			throw new BringServiceError(
+				isAuthenticationError(error) ? 'BRING_AUTH_FAILED' : 'BRING_LIST_CREATE_FAILED'
+			);
+		}
+		const previousIds = new Set(before.map((list) => list.listUuid));
+		for (let attempt = 0; attempt < 3; attempt += 1) {
+			const created = (await this.lists(client)).filter(
+				(list) =>
+					!previousIds.has(list.listUuid) &&
+					list.name.trim().toLocaleLowerCase('nb-NO') === normalizedName
+			);
+			if (created.length === 1) {
+				return { listUuid: created[0].listUuid, listName: created[0].name };
+			}
+			if (created.length > 1) break;
+		}
+		throw new BringServiceError('BRING_LIST_CREATE_FAILED');
+	}
 }
 
 export class BringService {
@@ -380,17 +483,39 @@ function errorResponse(error: unknown): Response {
 	return apiError(error.code, status);
 }
 
-let service: BringService | undefined;
+export function loadTripBringConfig(
+	db: Database.Database,
+	tripId: string,
+	credentials: BringCredentials | undefined = getBringCredentials()
+): BringConfig | undefined {
+	if (!credentials) return undefined;
+	const row = db
+		.prepare(
+			`SELECT config_json FROM trip_modules
+			 WHERE trip_id = ? AND module_id = 'shopping-list' AND enabled = 1`
+		)
+		.get(tripId) as { config_json: string } | undefined;
+	if (!row) return undefined;
+	const config = JSON.parse(row.config_json) as Record<string, unknown>;
+	return typeof config.listUuid === 'string' && config.providerStatus === 'verified'
+		? { ...credentials, listUuid: config.listUuid }
+		: undefined;
+}
 
-export function getBringService(): BringService {
-	if (!service) {
-		service = new BringService(getBringConfig());
-	}
+const services = new Map<string, { listUuid: string; service: BringService }>();
+
+export function getBringService(db: Database.Database, tripId: string): BringService {
+	const config = loadTripBringConfig(db, tripId);
+	const cached = services.get(tripId);
+	if (cached && cached.listUuid === config?.listUuid) return cached.service;
+	const service = new BringService(config);
+	if (config) services.set(tripId, { listUuid: config.listUuid, service });
+	else services.delete(tripId);
 	return service;
 }
 
 export async function handleGetShoppingList(
-	bring: BringService = getBringService()
+	bring: BringService
 ): Promise<Response> {
 	try {
 		return apiSuccess(await bring.snapshot());
@@ -401,7 +526,7 @@ export async function handleGetShoppingList(
 
 export async function handleAddShoppingListItem(
 	request: Request,
-	bring: BringService = getBringService()
+	bring: BringService
 ): Promise<Response> {
 	let body: unknown;
 	try {
@@ -422,7 +547,7 @@ export async function handleAddShoppingListItem(
 
 export async function handleCompleteShoppingListItem(
 	request: Request,
-	bring: BringService = getBringService()
+	bring: BringService
 ): Promise<Response> {
 	let body: unknown;
 	try {
@@ -443,7 +568,7 @@ export async function handleCompleteShoppingListItem(
 
 export async function handleEditShoppingListItem(
 	request: Request,
-	bring: BringService = getBringService()
+	bring: BringService
 ): Promise<Response> {
 	let body: unknown;
 	try {

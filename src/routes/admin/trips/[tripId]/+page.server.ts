@@ -11,6 +11,7 @@ import {
 	setTripMapConfiguration,
 	setTripModules,
 	setTripPassword,
+	setTripShoppingListConnection,
 	setTripVisibility,
 	tripReadiness,
 	unarchiveTrip,
@@ -18,6 +19,8 @@ import {
 } from '$lib/app/server/trip-settings';
 import { handleRefreshMap } from '$lib/modules/map/server';
 import { getMapRuntimeConfig } from '$lib/modules/map/server/config';
+import { BringConnectionService, BringServiceError } from '$lib/modules/shopping-list/server/bring';
+import { getBringCredentials } from '$lib/modules/shopping-list/server/config';
 
 import type { Actions, PageServerLoad } from './$types';
 
@@ -46,6 +49,7 @@ export const load: PageServerLoad = ({ params }) => {
 	const db = getDatabase();
 	const mapRuntime = getMapRuntimeConfig();
 	const mapModule = trip.modules.find((module) => module.id === 'map');
+	const shoppingModule = trip.modules.find((module) => module.id === 'shopping-list');
 	return {
 		settings: trip,
 		readiness: tripReadiness(db, trip.id),
@@ -67,6 +71,24 @@ export const load: PageServerLoad = ({ params }) => {
 					.prepare('SELECT COUNT(*) AS count FROM trip_poi_enrichment_cache WHERE trip_id = ?')
 					.get(trip.id) as { count: number }
 			).count
+		},
+		bringSummary: {
+			enabled: shoppingModule?.enabled === true,
+			credentialsConfigured: Boolean(getBringCredentials()),
+			listUuid:
+				typeof shoppingModule?.config.listUuid === 'string'
+					? shoppingModule.config.listUuid
+					: undefined,
+			listName:
+				typeof shoppingModule?.config.listName === 'string'
+					? shoppingModule.config.listName
+					: undefined,
+			providerStatus:
+				shoppingModule?.config.providerStatus === 'verified' ? 'verified' : 'unconfigured',
+			verifiedAt:
+				typeof shoppingModule?.config.verifiedAt === 'string'
+					? shoppingModule.config.verifiedAt
+					: undefined
 		}
 	};
 };
@@ -100,8 +122,10 @@ export const actions = {
 	modules: async ({ request, params }) => {
 		const form = await request.formData();
 		try {
-			const currentMap =
-				settings(params.tripId).modules.find((module) => module.id === 'map')?.config ?? {};
+			const currentModules = settings(params.tripId).modules;
+			const currentMap = currentModules.find((module) => module.id === 'map')?.config ?? {};
+			const currentShopping =
+				currentModules.find((module) => module.id === 'shopping-list')?.config ?? {};
 			const parsedOrder = JSON.parse(text(form, 'moduleOrder')) as unknown;
 			if (!Array.isArray(parsedOrder) || !parsedOrder.every((id) => typeof id === 'string')) {
 				throw new Error('INVALID_MODULE_ORDER');
@@ -130,7 +154,12 @@ export const actions = {
 								value === 'normal' || value === 'nautical' || value === 'satellite'
 						)
 					: [],
-				shoppingListUuid: text(form, 'shoppingListUuid')
+				shoppingListUuid:
+					typeof currentShopping.listUuid === 'string' ? currentShopping.listUuid : '',
+				shoppingListName:
+					typeof currentShopping.listName === 'string' ? currentShopping.listName : '',
+				shoppingListVerifiedAt:
+					typeof currentShopping.verifiedAt === 'string' ? currentShopping.verifiedAt : ''
 			});
 			return { successMessage: 'Modulvalg og rekkefølge er lagret.' };
 		} catch (cause) {
@@ -159,6 +188,56 @@ export const actions = {
 			return { successMessage: 'Kartinnstillingene er lagret.' };
 		} catch (cause) {
 			return actionError(cause, 'Kunne ikke lagre kartinnstillingene.');
+		}
+	},
+	connectBring: async ({ request, params }) => {
+		const form = await request.formData();
+		try {
+			const connection = await new BringConnectionService(getBringCredentials()).verify(
+				text(form, 'listUuid')
+			);
+			setTripShoppingListConnection(getDatabase(), params.tripId, connection);
+			return { successMessage: `Bring-listen «${connection.listName}» er koblet til reisen.` };
+		} catch (cause) {
+			if (cause instanceof BringServiceError) {
+				const messages = {
+					BRING_NOT_CONFIGURED: 'Bring-legitimasjon mangler på serveren.',
+					BRING_AUTH_FAILED: 'Bring-legitimasjonen ble avvist.',
+					BRING_LIST_NOT_FOUND: 'Bring-listen finnes ikke eller kontoen har ikke tilgang.',
+					BRING_LIST_NAME_CONFLICT: 'Det finnes allerede en Bring-liste med dette navnet.',
+					BRING_LIST_CREATE_FAILED: 'Bring klarte ikke å opprette listen.',
+					BRING_UNAVAILABLE: 'Bring er ikke tilgjengelig akkurat nå.',
+					BRING_MUTATION_FAILED: 'Bring lagret ikke endringen.'
+				};
+				return fail(400, { errorMessage: messages[cause.code] });
+			}
+			return fail(400, { errorMessage: 'Bring-listen kunne ikke kobles til.' });
+		}
+	},
+	createBring: async ({ params }) => {
+		try {
+			const trip = settings(params.tripId);
+			const connection = await new BringConnectionService(getBringCredentials()).create(trip.name);
+			setTripShoppingListConnection(getDatabase(), params.tripId, connection);
+			return {
+				successMessage: `Bring-listen «${connection.listName}» er opprettet og koblet til.`
+			};
+		} catch (cause) {
+			if (cause instanceof BringServiceError) {
+				const messages = {
+					BRING_NOT_CONFIGURED: 'Bring-legitimasjon mangler på serveren.',
+					BRING_AUTH_FAILED: 'Bring-legitimasjonen ble avvist.',
+					BRING_LIST_NOT_FOUND: 'Bring-listen finnes ikke.',
+					BRING_LIST_NAME_CONFLICT:
+						'Det finnes allerede en Bring-liste med reisenavnet. Koble den til med ID i stedet.',
+					BRING_LIST_CREATE_FAILED:
+						'Bring klarte ikke å opprette listen. Den eksisterende koblingen er uendret.',
+					BRING_UNAVAILABLE: 'Bring er ikke tilgjengelig akkurat nå.',
+					BRING_MUTATION_FAILED: 'Bring lagret ikke endringen.'
+				};
+				return fail(400, { errorMessage: messages[cause.code] });
+			}
+			return fail(400, { errorMessage: 'Bring-listen kunne ikke opprettes.' });
 		}
 	},
 	refreshMap: async ({ params }) => {

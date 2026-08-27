@@ -20,7 +20,8 @@
 		<p class="mb-1 text-xs font-semibold tracking-wide text-primary uppercase">Administrator</p>
 		<h1 class="font-display text-4xl font-bold text-neutral">Ny reise</h1>
 		<p class="mt-2 text-sm text-base-content/70">
-			Reisen opprettes samlet når alle obligatoriske innstillinger er gyldige.
+			Reisen opprettes samlet når alle obligatoriske innstillinger og leverandørkoblinger er
+			gyldige.
 		</p>
 	</header>
 
@@ -156,8 +157,12 @@
 					{/each}
 				</fieldset>
 				<label class="form-control">
-					<span class="label font-semibold">Bring-liste-ID</span>
+					<span class="label font-semibold">Eksisterende Bring-liste-ID</span>
 					<input class="input-bordered input" name="shoppingListUuid" />
+					<span class="label text-xs text-base-content/60">
+						Kontrolleres før reisen opprettes når handlelistemodulen er valgt. En ny liste kan
+						opprettes fra Trip Settings etterpå.
+					</span>
 				</label>
 			</div>
 		</fieldset>

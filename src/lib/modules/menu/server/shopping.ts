@@ -10,8 +10,7 @@ import {
 import { absoluteShoppingOperationSchema } from '$lib/modules/shopping-list/public';
 import {
 	BringService,
-	BringServiceError,
-	getBringService
+	BringServiceError
 } from '$lib/modules/shopping-list/server-public';
 import { apiError, apiSuccess } from '$lib/server/api';
 
@@ -76,7 +75,7 @@ export async function handleMenuShoppingPreview(
 	request: Request,
 	db: Database.Database,
 	tripId: string,
-	bring: BringService = getBringService(),
+	bring: BringService,
 	shoppingListEnabled = true
 ): Promise<Response> {
 	if (!shoppingListEnabled) return apiError('SHOPPING_LIST_DISABLED', 503);
@@ -103,7 +102,7 @@ export async function handleMenuShoppingApply(
 	request: Request,
 	db: Database.Database,
 	tripId: string,
-	bring: BringService = getBringService(),
+	bring: BringService,
 	now: () => Date = () => new Date(),
 	shoppingListEnabled = true
 ): Promise<Response> {

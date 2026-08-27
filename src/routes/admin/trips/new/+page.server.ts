@@ -3,6 +3,11 @@ import { fail, redirect } from '@sveltejs/kit';
 import { defaultModuleIds, isModuleId } from '$lib/app/modules/catalog';
 import { getDatabase } from '$lib/app/server/database';
 import { createTrip, listPeople } from '$lib/app/server/trip-settings';
+import {
+	BringConnectionService,
+	BringServiceError
+} from '$lib/modules/shopping-list/server/bring';
+import { getBringCredentials } from '$lib/modules/shopping-list/server/config';
 
 import type { Actions, PageServerLoad } from './$types';
 
@@ -30,6 +35,11 @@ export const actions = {
 			.filter(isModuleId);
 		let tripId: string;
 		try {
+			const shoppingConnection = enabled.includes('shopping-list')
+				? await new BringConnectionService(getBringCredentials()).verify(
+						text(form, 'shoppingListUuid')
+					)
+				: undefined;
 			tripId = createTrip(getDatabase(), {
 				name: text(form, 'name'),
 				destination: text(form, 'destination'),
@@ -58,10 +68,24 @@ export const actions = {
 							(value): value is 'normal' | 'nautical' | 'satellite' =>
 								value === 'normal' || value === 'nautical' || value === 'satellite'
 						),
-					shoppingListUuid: text(form, 'shoppingListUuid')
+					shoppingListUuid: shoppingConnection?.listUuid ?? '',
+					shoppingListName: shoppingConnection?.listName ?? '',
+					shoppingListVerifiedAt: shoppingConnection ? new Date().toISOString() : ''
 				}
 			});
 		} catch (error) {
+			if (error instanceof BringServiceError) {
+				const messages = {
+					BRING_NOT_CONFIGURED: 'Bring-legitimasjon mangler på serveren.',
+					BRING_AUTH_FAILED: 'Bring-legitimasjonen ble avvist.',
+					BRING_LIST_NOT_FOUND: 'Bring-listen finnes ikke eller kontoen har ikke tilgang.',
+					BRING_LIST_NAME_CONFLICT: 'Det finnes allerede en Bring-liste med dette navnet.',
+					BRING_LIST_CREATE_FAILED: 'Bring klarte ikke å opprette listen.',
+					BRING_UNAVAILABLE: 'Bring er ikke tilgjengelig akkurat nå.',
+					BRING_MUTATION_FAILED: 'Bring lagret ikke endringen.'
+				};
+				return fail(400, { errorMessage: messages[error.code] });
+			}
 			return fail(400, {
 				errorMessage:
 					error instanceof Error && error.message.startsWith('TRIP_NOT_READY:')

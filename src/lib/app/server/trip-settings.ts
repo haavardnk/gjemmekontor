@@ -11,6 +11,7 @@ import {
 	mapOverlayValues,
 	parseMapRuntimeConfig
 } from '$lib/modules/map/server/config';
+import { getBringCredentials } from '$lib/modules/shopping-list/server/config';
 
 const isoDate = z
 	.string()
@@ -67,6 +68,8 @@ export type ModuleSettingsInput = {
 	mapEnabledOverlays: MapOverlay[];
 	mapOfflinePackages: MapMode[];
 	shoppingListUuid: string;
+	shoppingListName: string;
+	shoppingListVerifiedAt: string;
 };
 
 export type MapSettingsInput = Pick<
@@ -250,7 +253,9 @@ function normalizedModuleInput(input: ModuleSettingsInput): ModuleSettingsInput 
 		mapDefaultMode,
 		mapEnabledOverlays,
 		mapOfflinePackages,
-		shoppingListUuid: input.shoppingListUuid.trim()
+		shoppingListUuid: input.shoppingListUuid.trim(),
+		shoppingListName: input.shoppingListName.trim(),
+		shoppingListVerifiedAt: input.shoppingListVerifiedAt.trim()
 	};
 }
 
@@ -264,7 +269,14 @@ function moduleConfig(moduleId: ModuleId, input: ModuleSettingsInput): Record<st
 		};
 	}
 	if (moduleId === 'shopping-list') {
-		return input.shoppingListUuid ? { listUuid: input.shoppingListUuid } : {};
+		return input.shoppingListUuid
+			? {
+					listUuid: input.shoppingListUuid,
+					listName: input.shoppingListName,
+					providerStatus: 'verified',
+					verifiedAt: input.shoppingListVerifiedAt || nowIso()
+				}
+			: {};
 	}
 	return {};
 }
@@ -298,8 +310,14 @@ export function tripReadiness(db: Database.Database, tripId: string): TripReadin
 		) {
 			issues.push('AIS-overlegget trenger AISSTREAM_API_KEY.');
 		}
-		if (module.module_id === 'shopping-list' && !config.listUuid) {
-			issues.push('Handleliste trenger en Bring-liste-ID.');
+		if (
+			module.module_id === 'shopping-list' &&
+			(!config.listUuid || config.providerStatus !== 'verified')
+		) {
+			issues.push('Handleliste trenger en verifisert Bring-liste.');
+		}
+		if (module.module_id === 'shopping-list' && !getBringCredentials()) {
+			issues.push('Handleliste trenger BRING_EMAIL og BRING_PASSWORD.');
 		}
 	}
 	return { ready: issues.length === 0, issues };
@@ -548,6 +566,53 @@ export function setTripMapConfiguration(
 			db.prepare('DELETE FROM session_trip_grants WHERE trip_id = ?').run(tripId);
 		}
 		audit(db, tripId, 'trip.map.updated');
+	})();
+}
+
+export function setTripShoppingListConnection(
+	db: Database.Database,
+	tripId: string,
+	connection: { listUuid: string; listName: string; verifiedAt?: string }
+): void {
+	const parsed = z
+		.object({
+			listUuid: z.string().trim().min(1).max(100),
+			listName: z.string().trim().min(1).max(100),
+			verifiedAt: z.iso.datetime().optional()
+		})
+		.strict()
+		.parse(connection);
+	const now = nowIso();
+	const config = {
+		listUuid: parsed.listUuid,
+		listName: parsed.listName,
+		providerStatus: 'verified',
+		verifiedAt: parsed.verifiedAt ?? now
+	};
+	const configJson = JSON.stringify(config);
+	db.transaction((): void => {
+		const current = db
+			.prepare(
+				`SELECT config_version, config_json FROM trip_modules
+				 WHERE trip_id = ? AND module_id = 'shopping-list'`
+			)
+			.get(tripId) as { config_version: number; config_json: string } | undefined;
+		if (!current) throw new Error('TRIP_NOT_FOUND');
+		if (current.config_json === configJson) return;
+		const version = current.config_version + 1;
+		db.prepare(
+			`UPDATE trip_modules SET config_version = ?, config_json = ?, configured_at = ?, updated_at = ?
+			 WHERE trip_id = ? AND module_id = 'shopping-list'`
+		).run(version, configJson, now, now, tripId);
+		db.prepare(
+			`INSERT INTO trip_module_config_history
+			 (id, trip_id, module_id, config_version, config_json, changed_at, changed_by_session)
+			 VALUES (?, ?, 'shopping-list', ?, ?, ?, NULL)`
+		).run(randomUUID(), tripId, version, configJson, now);
+		audit(db, tripId, 'trip.shopping-list.connected', {
+			listUuid: parsed.listUuid,
+			listName: parsed.listName
+		});
 	})();
 }
 export function activateTrip(db: Database.Database, tripId: string): TripReadiness {

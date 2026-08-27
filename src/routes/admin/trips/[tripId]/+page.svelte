@@ -27,13 +27,6 @@
 			)
 		)
 	);
-	let shoppingListUuid = $state(
-		untrack(() =>
-			String(
-				data.settings.modules.find((module) => module.id === 'shopping-list')?.config.listUuid ?? ''
-			)
-		)
-	);
 	let loadedModules = $state(untrack(() => JSON.stringify(data.settings.modules)));
 	const members = $derived(data.settings.people.filter((person) => person.member));
 	const availablePeople = $derived(
@@ -49,9 +42,6 @@
 		modules = data.settings.modules.map((module) => ({ ...module }));
 		mapGoogleMyMapsId = String(
 			data.settings.modules.find((module) => module.id === 'map')?.config.googleMyMapsId ?? ''
-		);
-		shoppingListUuid = String(
-			data.settings.modules.find((module) => module.id === 'shopping-list')?.config.listUuid ?? ''
 		);
 		loadedModules = fingerprint;
 	});
@@ -296,16 +286,6 @@
 						</div>
 					{/each}
 				</div>
-				<div class="mt-4 grid gap-4 sm:grid-cols-2">
-					<label class="form-control">
-						<span class="label font-semibold">Handleliste · Bring-liste-ID</span>
-						<input
-							class="input-bordered input"
-							name="shoppingListUuid"
-							bind:value={shoppingListUuid}
-						/>
-					</label>
-				</div>
 				<button class="btn mt-4 self-end btn-primary" type="submit"
 					><Save size={18} /> Lagre moduler</button
 				>
@@ -410,6 +390,79 @@
 						Test og oppdater kart
 					</button>
 				</form>
+			</section>
+
+			<section class="card border border-base-300 bg-base-100 p-5">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<h2 class="text-xl font-bold">Handleliste og Bring</h2>
+						<p class="mt-1 text-sm text-base-content/65">
+							Bring-kontoen deles av serveren, mens hver reise velger sin egen liste.
+						</p>
+					</div>
+					<span
+						class="badge"
+						class:badge-success={data.bringSummary.providerStatus === 'verified'}
+						class:badge-warning={data.bringSummary.providerStatus !== 'verified'}
+					>
+						{data.bringSummary.providerStatus === 'verified' ? 'Verifisert' : 'Ikke koblet'}
+					</span>
+				</div>
+				{#if data.bringSummary.listUuid}
+					<div class="mt-4 rounded-box border border-base-300 bg-base-200/40 p-3 text-sm">
+						<p class="font-semibold">{data.bringSummary.listName ?? 'Bring-liste'}</p>
+						<p class="mt-1 font-mono text-xs break-all text-base-content/65">
+							{data.bringSummary.listUuid}
+						</p>
+					</div>
+				{/if}
+				{#if !data.bringSummary.credentialsConfigured}
+					<p class="mt-4 alert text-sm alert-warning">
+						BRING_EMAIL og BRING_PASSWORD må konfigureres på serveren først.
+					</p>
+				{/if}
+				<div class="mt-4 grid gap-4 sm:grid-cols-2">
+					<form
+						method="post"
+						action="?/connectBring"
+						class="rounded-box border border-base-300 p-4"
+					>
+						<h3 class="font-bold">Bruk eksisterende liste</h3>
+						<p class="mt-1 text-xs text-base-content/60">
+							ID-en lagres først etter at Bring har bekreftet tilgangen.
+						</p>
+						<input
+							class="input-bordered input mt-3 w-full"
+							name="listUuid"
+							required
+							maxlength="100"
+							placeholder="Bring-liste-ID"
+						/>
+						<button
+							class="btn mt-3 w-full btn-outline"
+							type="submit"
+							disabled={!data.bringSummary.credentialsConfigured}
+						>
+							Test og koble til
+						</button>
+					</form>
+					<form method="post" action="?/createBring" class="rounded-box border border-base-300 p-4">
+						<h3 class="font-bold">Opprett ny liste</h3>
+						<p class="mt-1 text-xs text-base-content/60">
+							Opprettes med navnet «{data.settings.name}» og kobles til etter kontroll.
+						</p>
+						<button
+							class="btn mt-3 w-full btn-primary"
+							type="submit"
+							disabled={!data.bringSummary.credentialsConfigured}
+						>
+							Opprett i Bring
+						</button>
+					</form>
+				</div>
+				<p class="mt-4 text-xs text-base-content/55">
+					Et senere bytte av reisenavn endrer ikke navnet på Bring-listen automatisk.
+				</p>
 			</section>
 
 			<section class="card border border-base-300 bg-base-100 p-5">

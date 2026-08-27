@@ -1,4 +1,5 @@
 export {
+	getBringService,
 	handleAddShoppingListItem,
 	handleCompleteShoppingListItem,
 	handleEditShoppingListItem,

@@ -1,1 +1,6 @@
-export { BringService, BringServiceError, getBringService } from './server/bring';
+export {
+	BringConnectionService,
+	BringService,
+	BringServiceError,
+	getBringService
+} from './server/bring';

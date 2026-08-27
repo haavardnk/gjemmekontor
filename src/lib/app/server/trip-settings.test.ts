@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { defaultModuleIds, type ModuleId } from '$lib/app/modules/catalog';
+import { loadTripBringConfig } from '$lib/modules/shopping-list/server/bring';
 
 import { createApplicationDatabase } from './database';
 import {
@@ -16,6 +17,7 @@ import {
 	setTripMapConfiguration,
 	setTripModules,
 	setTripPassword,
+	setTripShoppingListConnection,
 	tripReadiness,
 	updateTripGeneral
 } from './trip-settings';
@@ -57,7 +59,9 @@ describe('trip settings', (): void => {
 				mapDefaultMode: 'normal',
 				mapEnabledOverlays: ['ais', 'depth-contours'],
 				mapOfflinePackages: [],
-				shoppingListUuid: ''
+				shoppingListUuid: '',
+				shoppingListName: '',
+				shoppingListVerifiedAt: ''
 			}
 		});
 
@@ -119,7 +123,9 @@ describe('trip settings', (): void => {
 			mapDefaultMode: 'normal',
 			mapEnabledOverlays: ['ais', 'depth-contours'],
 			mapOfflinePackages: [],
-			shoppingListUuid: ''
+			shoppingListUuid: '',
+			shoppingListName: '',
+			shoppingListVerifiedAt: ''
 		});
 		expect(getTripSettings(db, tripId)?.status).toBe('draft');
 		expect(tripReadiness(db, tripId).issues).toContain('Kart trenger en Google My Maps-ID.');
@@ -131,7 +137,9 @@ describe('trip settings', (): void => {
 			mapDefaultMode: 'nautical',
 			mapEnabledOverlays: ['depth-contours'],
 			mapOfflinePackages: ['nautical'],
-			shoppingListUuid: ''
+			shoppingListUuid: '',
+			shoppingListName: '',
+			shoppingListVerifiedAt: ''
 		});
 		expect(activateTrip(db, tripId)).toEqual({ ready: true, issues: [] });
 		expect(getTripSettings(db, tripId)?.status).toBe('active');
@@ -158,7 +166,6 @@ describe('trip settings', (): void => {
 		expect(after.password_hash).not.toBe(before.password_hash);
 		expect(after.password_hash).not.toContain('replacement-trip-password');
 	});
-
 	test('updates map configuration without changing module selection', (): void => {
 		const tripId = createTestTrip();
 		const before = getTripSettings(db, tripId)?.modules.map(({ id, enabled }) => ({ id, enabled }));
@@ -178,6 +185,71 @@ describe('trip settings', (): void => {
 			enabledOverlays: ['ais'],
 			offlinePackages: ['normal', 'satellite']
 		});
+	});
+
+	test('keeps a verified Bring connection through trip edits', (): void => {
+		const tripId = createTestTrip();
+		setTripShoppingListConnection(db, tripId, {
+			listUuid: 'bring-kroatia',
+			listName: 'Kroatia 2026',
+			verifiedAt: '2026-08-27T12:00:00.000Z'
+		});
+
+		updateTripGeneral(db, tripId, { ...general, name: 'Nytt reisenavn' });
+		setTripModules(db, tripId, {
+			order: [...defaultModuleIds].reverse(),
+			enabled: ['gear'],
+			mapGoogleMyMapsId: '',
+			mapDefaultMode: 'normal',
+			mapEnabledOverlays: [],
+			mapOfflinePackages: [],
+			shoppingListUuid: 'bring-kroatia',
+			shoppingListName: 'Kroatia 2026',
+			shoppingListVerifiedAt: '2026-08-27T12:00:00.000Z'
+		});
+
+		expect(
+			getTripSettings(db, tripId)?.modules.find((module) => module.id === 'shopping-list')?.config
+		).toEqual({
+			listUuid: 'bring-kroatia',
+			listName: 'Kroatia 2026',
+			providerStatus: 'verified',
+			verifiedAt: '2026-08-27T12:00:00.000Z'
+		});
+	});
+
+	test('loads only the current trip Bring UUID', (): void => {
+		const firstTripId = createTestTrip();
+		const secondTripId = createTrip(db, {
+			...general,
+			name: 'Danmark 2027',
+			password: 'another-trip-password',
+			memberIds: [],
+			modules: {
+				order: [...defaultModuleIds],
+				enabled: ['gear'],
+				mapGoogleMyMapsId: '',
+				mapDefaultMode: 'normal',
+				mapEnabledOverlays: [],
+				mapOfflinePackages: [],
+				shoppingListUuid: '',
+				shoppingListName: '',
+				shoppingListVerifiedAt: ''
+			}
+		});
+		setTripShoppingListConnection(db, firstTripId, {
+			listUuid: 'first-list',
+			listName: 'Første'
+		});
+		setTripShoppingListConnection(db, secondTripId, {
+			listUuid: 'second-list',
+			listName: 'Andre'
+		});
+		db.prepare("UPDATE trip_modules SET enabled = 1 WHERE module_id = 'shopping-list'").run();
+		const credentials = { email: 'crew@example.com', password: 'shared-provider-secret' };
+
+		expect(loadTripBringConfig(db, firstTripId, credentials)?.listUuid).toBe('first-list');
+		expect(loadTripBringConfig(db, secondTripId, credentials)?.listUuid).toBe('second-list');
 	});
 });
 
@@ -203,7 +275,9 @@ function createTestTrip(): string {
 			mapDefaultMode: 'normal',
 			mapEnabledOverlays: ['ais', 'depth-contours'],
 			mapOfflinePackages: [],
-			shoppingListUuid: ''
+			shoppingListUuid: '',
+			shoppingListName: '',
+			shoppingListVerifiedAt: ''
 		}
 	});
 }

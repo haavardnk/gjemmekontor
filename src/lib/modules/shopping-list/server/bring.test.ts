@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import {
 	type BringClient,
+	BringConnectionService,
 	BringService,
 	BringServiceError,
 	handleAddShoppingListItem,
@@ -76,6 +77,57 @@ function fakeClient(initial = [{ name: 'Øl', specification: '6 bokser' }]): Bri
 }
 
 describe('Bring service', (): void => {
+	test('verifies an existing list without changing the provider', async (): Promise<void> => {
+		const client = fakeClient();
+		const connection = await new BringConnectionService(config, () => client).verify('trip-list');
+
+		expect(connection).toEqual({ listUuid: 'trip-list', listName: 'Kroatia' });
+		expect(client.login).toHaveBeenCalledOnce();
+		expect(client.loadLists).toHaveBeenCalledOnce();
+	});
+
+	test('creates the trip-named list and verifies its new UUID', async (): Promise<void> => {
+		const client = fakeClient();
+		let lists = [{ listUuid: 'other-list', name: 'Annen reise' }];
+		client.loadLists = vi.fn(async () => ({ lists: [...lists] }));
+		client.createList = vi.fn(async (name: string) => {
+			lists = [...lists, { listUuid: 'new-trip-list', name }];
+		});
+
+		const connection = await new BringConnectionService(config, () => client).create(
+			'Kroatia 2026'
+		);
+
+		expect(connection).toEqual({ listUuid: 'new-trip-list', listName: 'Kroatia 2026' });
+		expect(client.createList).toHaveBeenCalledWith('Kroatia 2026');
+		expect(client.loadLists).toHaveBeenCalledTimes(2);
+	});
+
+	test('rejects duplicate list names without creating or selecting one', async (): Promise<void> => {
+		const client = fakeClient();
+		client.loadLists = vi.fn(async () => ({
+			lists: [{ listUuid: 'existing', name: 'KROATIA 2026' }]
+		}));
+		client.createList = vi.fn(async () => undefined);
+
+		await expect(
+			new BringConnectionService(config, () => client).create('Kroatia 2026')
+		).rejects.toEqual(new BringServiceError('BRING_LIST_NAME_CONFLICT'));
+		expect(client.createList).not.toHaveBeenCalled();
+	});
+
+	test('rejects an unconfirmed creation instead of returning an old list', async (): Promise<void> => {
+		const client = fakeClient();
+		client.loadLists = vi.fn(async () => ({
+			lists: [{ listUuid: 'existing', name: 'Annen reise' }]
+		}));
+		client.createList = vi.fn(async () => undefined);
+
+		await expect(
+			new BringConnectionService(config, () => client).create('Kroatia 2026')
+		).rejects.toEqual(new BringServiceError('BRING_LIST_CREATE_FAILED'));
+	});
+
 	test('logs in once, validates the configured list, and normalizes active items', async (): Promise<void> => {
 		const client = fakeClient([
 			{ name: ' Bier ', specification: ' 6 bokser ' },
