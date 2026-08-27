@@ -14,7 +14,9 @@ import {
 	gearOwnerKey,
 	gearOwners,
 	gearPackedKey,
+	gearPlannedKey,
 	gearProgress,
+	isGearItemPlanned,
 	type KeyedGearItem,
 	repositionGearCategory,
 	serializeGearCategory,
@@ -118,6 +120,21 @@ describe('gear domain', (): void => {
 		expect(
 			filterGearItems(entries, { availability: 'need-to-buy' }).map((entry) => entry.id)
 		).toEqual([secondItemId]);
+		expect(
+			filterGearItems(entries, { categoryId: secondCategoryId }).map((entry) => entry.id)
+		).toEqual([secondItemId]);
+		expect(
+			filterGearItems(entries, {
+				planned: false,
+				values: { [gearPlannedKey(secondItemId)]: false }
+			}).map((entry) => entry.id)
+		).toEqual([secondItemId]);
+	});
+
+	test('treats existing gear without membership state as planned', (): void => {
+		expect(isGearItemPlanned({}, itemId)).toBe(true);
+		expect(isGearItemPlanned({ [gearPlannedKey(itemId)]: true }, itemId)).toBe(true);
+		expect(isGearItemPlanned({ [gearPlannedKey(itemId)]: false }, itemId)).toBe(false);
 	});
 
 	test('counts only available items in packing progress', (): void => {
@@ -127,7 +144,7 @@ describe('gear domain', (): void => {
 		expect(gearProgress(items, values)).toEqual({ packed: 1, total: 1, needToBuy: 1 });
 	});
 
-	test('sorts by owner, availability, and unpacked state with name as fallback', (): void => {
+	test('sorts by category, owner, availability, and unpacked state with name as fallback', (): void => {
 		const entries: KeyedGearItem[] = [
 			{ key: gearItemKey(itemId), ...item({ name: 'Vest' }) },
 			{
@@ -144,6 +161,20 @@ describe('gear domain', (): void => {
 			[ownerId, 'Åse'],
 			[secondOwnerId, 'Bjørn']
 		]);
+		const categoryNames = new Map([
+			[categoryId, 'Sikkerhet'],
+			[secondCategoryId, 'Elektronikk']
+		]);
+
+		expect(
+			sortGearItems(
+				[entries[0]!, { ...entries[1]!, categoryId: secondCategoryId }],
+				'category',
+				{},
+				ownerNames,
+				categoryNames
+			).map((entry) => entry.name)
+		).toEqual(['Lader', 'Vest']);
 
 		expect(sortGearItems(entries, 'owner', {}, ownerNames).map((entry) => entry.name)).toEqual([
 			'Lader',

@@ -50,11 +50,12 @@ export type GearItem = z.infer<typeof gearItemSchema>;
 export type KeyedGearOwner = GearOwner & { key: string };
 export type KeyedGearCategory = GearCategory & { key: string };
 export type KeyedGearItem = GearItem & { key: string };
-export type GearItemSort = 'name' | 'owner' | 'availability' | 'unpacked';
+export type GearItemSort = 'name' | 'category' | 'owner' | 'availability' | 'unpacked';
 
 const ownerPrefix = 'gear:owner:';
 const categoryPrefix = 'gear:category:';
 const itemPrefix = 'gear:item:';
+const plannedPrefix = 'gear:planned:';
 const packedPrefix = 'gear:packed:';
 const norwegianCollator = new Intl.Collator('nb-NO', { sensitivity: 'base' });
 
@@ -68,6 +69,10 @@ export function gearCategoryKey(id: string): string {
 
 export function gearItemKey(id: string): string {
 	return `${itemPrefix}${id}`;
+}
+
+export function gearPlannedKey(itemId: string): string {
+	return `${plannedPrefix}${itemId}`;
 }
 
 export function gearPackedKey(itemId: string): string {
@@ -125,6 +130,10 @@ export function isGearItemPacked(values: Record<string, JsonValue>, itemId: stri
 	return values[gearPackedKey(itemId)] === true;
 }
 
+export function isGearItemPlanned(values: Record<string, JsonValue>, itemId: string): boolean {
+	return values[gearPlannedKey(itemId)] !== false;
+}
+
 export function gearProgress(
 	items: readonly GearItem[],
 	values: Record<string, JsonValue>
@@ -143,6 +152,9 @@ export function filterGearItems(
 		query?: string;
 		ownerId?: string;
 		availability?: GearAvailability;
+		categoryId?: string;
+		planned?: boolean;
+		values?: Record<string, JsonValue>;
 		categoryNames?: ReadonlyMap<string, string>;
 		ownerNames?: ReadonlyMap<string, string>;
 	}
@@ -151,6 +163,12 @@ export function filterGearItems(
 	return items.filter((item) => {
 		if (options.ownerId && item.ownerId !== options.ownerId) return false;
 		if (options.availability && item.availability !== options.availability) return false;
+		if (options.categoryId && item.categoryId !== options.categoryId) return false;
+		if (
+			options.planned !== undefined &&
+			isGearItemPlanned(options.values ?? {}, item.id) !== options.planned
+		)
+			return false;
 		if (!query) return true;
 		const categoryName = options.categoryNames?.get(item.categoryId) ?? '';
 		const ownerName = item.ownerId ? (options.ownerNames?.get(item.ownerId) ?? '') : '';
@@ -164,9 +182,17 @@ export function sortGearItems(
 	items: readonly KeyedGearItem[],
 	sort: GearItemSort,
 	values: Record<string, JsonValue>,
-	ownerNames: ReadonlyMap<string, string>
+	ownerNames: ReadonlyMap<string, string>,
+	categoryNames: ReadonlyMap<string, string> = new Map()
 ): KeyedGearItem[] {
 	return [...items].sort((left, right) => {
+		if (sort === 'category') {
+			const categoryComparison = norwegianCollator.compare(
+				categoryNames.get(left.categoryId) ?? '',
+				categoryNames.get(right.categoryId) ?? ''
+			);
+			if (categoryComparison) return categoryComparison;
+		}
 		if (sort === 'owner') {
 			const ownerComparison = norwegianCollator.compare(
 				left.ownerId ? (ownerNames.get(left.ownerId) ?? '') : '',

@@ -1,11 +1,14 @@
 <script lang="ts">
 	import {
+		Archive,
 		ArrowDown,
 		ArrowUp,
 		Backpack,
 		Check,
 		CircleAlert,
 		GripVertical,
+		ListMinus,
+		ListPlus,
 		Pencil,
 		Plus,
 		RotateCcw,
@@ -32,8 +35,10 @@
 		gearOwners,
 		gearOwnerSchema,
 		gearPackedKey,
+		gearPlannedKey,
 		gearProgress,
 		isGearItemPacked,
+		isGearItemPlanned,
 		type KeyedGearCategory,
 		type KeyedGearItem,
 		type KeyedGearOwner,
@@ -45,11 +50,17 @@
 	} from '$lib/modules/gear/domain/gear';
 	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
-	let mode = $state<'plan' | 'pack'>('plan');
+	let mode = $state<'plan' | 'pack' | 'archive'>('plan');
 	let query = $state('');
 	let ownerFilter = $state('');
 	let availabilityFilter = $state<'' | GearAvailability>('');
 	let sort = $state<GearItemSort>('name');
+	let archiveQuery = $state('');
+	let archiveOwnerFilter = $state('');
+	let archiveAvailabilityFilter = $state<'' | GearAvailability>('');
+	let archiveCategoryFilter = $state('');
+	let archivePlanFilter = $state<'' | 'planned' | 'not-planned'>('');
+	let archiveSort = $state<GearItemSort>('name');
 	let errorMessage = $state('');
 	let saving = $state(false);
 	let draggedCategoryId = $state<string>();
@@ -67,6 +78,7 @@
 	let itemOwnerId = $state('');
 	let itemAvailability = $state<GearAvailability>('available');
 	let itemNotes = $state('');
+	let itemPlanned = $state(true);
 
 	let ownersDialog: HTMLDialogElement;
 	let newOwnerName = $state('');
@@ -79,25 +91,67 @@
 	const categoryNames = $derived(
 		new Map(categories.map((category) => [category.id, category.name]))
 	);
+	const plannedItems = $derived(
+		items.filter((item) => isGearItemPlanned(sharedState.values, item.id))
+	);
 	const activeItems = $derived(
-		filterGearItems(items, {
-			query,
-			...(ownerFilter ? { ownerId: ownerFilter } : {}),
-			...(availabilityFilter ? { availability: availabilityFilter } : {}),
-			categoryNames,
-			ownerNames
-		})
+		mode === 'archive'
+			? filterGearItems(items, {
+					query: archiveQuery,
+					...(archiveOwnerFilter ? { ownerId: archiveOwnerFilter } : {}),
+					...(archiveAvailabilityFilter ? { availability: archiveAvailabilityFilter } : {}),
+					...(archiveCategoryFilter ? { categoryId: archiveCategoryFilter } : {}),
+					...(archivePlanFilter
+						? { planned: archivePlanFilter === 'planned', values: sharedState.values }
+						: {}),
+					categoryNames,
+					ownerNames
+				})
+			: filterGearItems(plannedItems, {
+					query,
+					...(ownerFilter ? { ownerId: ownerFilter } : {}),
+					...(availabilityFilter ? { availability: availabilityFilter } : {}),
+					categoryNames,
+					ownerNames
+				})
 	);
-	const progress = $derived(gearProgress(items, sharedState.values));
+	const progress = $derived(gearProgress(plannedItems, sharedState.values));
 	const activeFilterCount = $derived(
-		Number(Boolean(ownerFilter)) + Number(Boolean(availabilityFilter)) + Number(sort !== 'name')
+		mode === 'archive'
+			? Number(Boolean(archiveOwnerFilter)) +
+					Number(Boolean(archiveAvailabilityFilter)) +
+					Number(Boolean(archiveCategoryFilter)) +
+					Number(Boolean(archivePlanFilter)) +
+					Number(archiveSort !== 'name')
+			: Number(Boolean(ownerFilter)) + Number(Boolean(availabilityFilter)) + Number(sort !== 'name')
 	);
-	const selectedOwnerName = $derived(ownerFilter ? (ownerNames.get(ownerFilter) ?? '') : '');
-	const hasFilters = $derived(Boolean(query.trim() || ownerFilter || availabilityFilter));
+	const selectedOwnerName = $derived(
+		mode === 'archive'
+			? archiveOwnerFilter
+				? (ownerNames.get(archiveOwnerFilter) ?? '')
+				: ''
+			: ownerFilter
+				? (ownerNames.get(ownerFilter) ?? '')
+				: ''
+	);
+	const hasFilters = $derived(
+		mode === 'archive'
+			? Boolean(
+					archiveQuery.trim() ||
+					archiveOwnerFilter ||
+					archiveAvailabilityFilter ||
+					archiveCategoryFilter ||
+					archivePlanFilter
+				)
+			: Boolean(query.trim() || ownerFilter || availabilityFilter)
+	);
 	const visibleCategories = $derived(
 		hasFilters
 			? categories.filter((category) => activeItems.some((item) => item.categoryId === category.id))
 			: categories
+	);
+	const sortedArchiveItems = $derived(
+		sortGearItems(activeItems, archiveSort, sharedState.values, ownerNames, categoryNames)
 	);
 
 	function itemsForCategory(categoryId: string): KeyedGearItem[] {
@@ -105,7 +159,8 @@
 			activeItems.filter((item) => item.categoryId === categoryId),
 			sort,
 			sharedState.values,
-			ownerNames
+			ownerNames,
+			categoryNames
 		);
 	}
 
@@ -158,6 +213,7 @@
 		itemOwnerId = item?.ownerId ?? '';
 		itemAvailability = item?.availability ?? 'available';
 		itemNotes = item?.notes ?? '';
+		itemPlanned = item ? isGearItemPlanned(sharedState.values, item.id) : mode !== 'archive';
 		errorMessage = '';
 		itemDialog.showModal();
 	}
@@ -182,8 +238,11 @@
 				createdBy: editingItem?.createdBy ?? clientId,
 				tombstone: false
 			});
-			const writes = [{ key: gearItemKey(item.id), value: serializeGearItem(item) }];
-			if (item.availability === 'need-to-buy') {
+			const writes = [
+				{ key: gearItemKey(item.id), value: serializeGearItem(item) },
+				{ key: gearPlannedKey(item.id), value: itemPlanned }
+			];
+			if (!itemPlanned || item.availability === 'need-to-buy') {
 				writes.push({ key: gearPackedKey(item.id), value: false });
 			}
 			await sharedState.setMany(writes);
@@ -194,21 +253,36 @@
 	}
 
 	async function deleteItem(item: KeyedGearItem): Promise<void> {
-		if (!window.confirm(`Slette ${item.name} fra utstyrslisten?`)) return;
-		await sharedState.set(item.key, serializeGearItem({ ...item, tombstone: true }));
+		if (!window.confirm(`Slette ${item.name} permanent fra utstyrsarkivet?`)) return;
+		await sharedState.setMany([
+			{ key: item.key, value: serializeGearItem({ ...item, tombstone: true }) },
+			{ key: gearPlannedKey(item.id), value: false },
+			{ key: gearPackedKey(item.id), value: false }
+		]);
+	}
+
+	async function setPlanned(item: KeyedGearItem, planned: boolean): Promise<void> {
+		await sharedState.setMany([
+			{ key: gearPlannedKey(item.id), value: planned },
+			{ key: gearPackedKey(item.id), value: false }
+		]);
+	}
+
+	async function removeFromPlan(item: KeyedGearItem): Promise<void> {
+		if (!window.confirm(`Fjerne ${item.name} fra denne utstyrslisten? Den blir i arkivet.`)) return;
+		await setPlanned(item, false);
 	}
 
 	async function deleteCategory(category: KeyedGearCategory): Promise<void> {
 		const categoryItems = items.filter((item) => item.categoryId === category.id);
-		const detail = categoryItems.length ? ` og ${categoryItems.length} ting i kategorien` : '';
-		if (!window.confirm(`Slette ${category.name}${detail}?`)) return;
-		await sharedState.setMany([
-			{ key: category.key, value: serializeGearCategory({ ...category, tombstone: true }) },
-			...categoryItems.map((item) => ({
-				key: item.key,
-				value: serializeGearItem({ ...item, tombstone: true })
-			}))
-		]);
+		if (categoryItems.length) {
+			window.alert(
+				`Flytt eller slett de ${categoryItems.length} arkiverte tingene før kategorien slettes.`
+			);
+			return;
+		}
+		if (!window.confirm(`Slette ${category.name}?`)) return;
+		await sharedState.set(category.key, serializeGearCategory({ ...category, tombstone: true }));
 	}
 
 	async function setPacked(item: KeyedGearItem, packed: boolean): Promise<void> {
@@ -227,7 +301,9 @@
 	}
 
 	async function resetPacking(): Promise<void> {
-		const packedItems = items.filter((item) => isGearItemPacked(sharedState.values, item.id));
+		const packedItems = plannedItems.filter((item) =>
+			isGearItemPacked(sharedState.values, item.id)
+		);
 		if (!packedItems.length || !window.confirm('Nullstille alle avhukinger i pakkelisten?')) return;
 		await sharedState.setMany(
 			packedItems.map((item) => ({ key: gearPackedKey(item.id), value: false }))
@@ -356,8 +432,15 @@
 				type="button"
 				onclick={() => (mode = 'pack')}>Pakk</button
 			>
+			<button
+				class="btn join-item btn-sm"
+				class:btn-primary={mode === 'archive'}
+				class:btn-ghost={mode !== 'archive'}
+				type="button"
+				onclick={() => (mode = 'archive')}>Arkiv</button
+			>
 		</div>
-		<div class="flex gap-2">
+		<div class="flex flex-wrap justify-end gap-2">
 			{#if mode === 'plan'}
 				<button
 					class="btn btn-outline btn-sm"
@@ -369,7 +452,7 @@
 				<button class="btn btn-primary btn-sm" type="button" onclick={() => openCategory()}>
 					<Plus size={16} /> Kategori
 				</button>
-			{:else}
+			{:else if mode === 'pack'}
 				<span
 					class="badge h-8 gap-1.5 border-primary/25 bg-primary/10 px-3 font-semibold text-primary"
 				>
@@ -386,27 +469,55 @@
 					aria-label="Nullstill pakkelisten"
 					title="Nullstill pakkelisten"><RotateCcw size={16} /></button
 				>
+			{:else}
+				<button
+					class="btn btn-primary btn-sm"
+					type="button"
+					onclick={() => openItem(categories[0]?.id ?? '')}
+					disabled={categories.length === 0}
+				>
+					<Plus size={16} /> Utstyr
+				</button>
 			{/if}
 		</div>
 	</div>
 
 	<div class="mb-4 flex gap-2">
-		<label class="input flex min-w-0 flex-1 items-center gap-2 bg-base-100">
-			<Search size={17} />
-			<input
-				class="min-w-0 grow"
-				type="search"
-				placeholder="Søk i utstyr"
-				aria-label="Søk i utstyr"
-				bind:value={query}
-			/>
-			{#if query}<button
-					class="btn btn-square btn-ghost btn-xs"
-					type="button"
-					onclick={() => (query = '')}
-					aria-label="Tøm søket"><X size={15} /></button
-				>{/if}
-		</label>
+		{#if mode === 'archive'}
+			<label class="input flex min-w-0 flex-1 items-center gap-2 bg-base-100">
+				<Search size={17} />
+				<input
+					class="min-w-0 grow"
+					type="search"
+					placeholder="Søk i arkivet"
+					aria-label="Søk i arkivet"
+					bind:value={archiveQuery}
+				/>
+				{#if archiveQuery}<button
+						class="btn btn-square btn-ghost btn-xs"
+						type="button"
+						onclick={() => (archiveQuery = '')}
+						aria-label="Tøm arkivsøket"><X size={15} /></button
+					>{/if}
+			</label>
+		{:else}
+			<label class="input flex min-w-0 flex-1 items-center gap-2 bg-base-100">
+				<Search size={17} />
+				<input
+					class="min-w-0 grow"
+					type="search"
+					placeholder="Søk i utstyr"
+					aria-label="Søk i utstyr"
+					bind:value={query}
+				/>
+				{#if query}<button
+						class="btn btn-square btn-ghost btn-xs"
+						type="button"
+						onclick={() => (query = '')}
+						aria-label="Tøm søket"><X size={15} /></button
+					>{/if}
+			</label>
+		{/if}
 		<button
 			class="btn relative shrink-0 btn-outline"
 			type="button"
@@ -423,30 +534,71 @@
 			{#if selectedOwnerName}<button
 					class="badge h-7 gap-1 badge-outline"
 					type="button"
-					onclick={() => (ownerFilter = '')}
+					onclick={() => {
+						if (mode === 'archive') archiveOwnerFilter = '';
+						else ownerFilter = '';
+					}}
 					aria-label={`Fjern personfilter ${selectedOwnerName}`}
 					>{selectedOwnerName} <X size={13} /></button
 				>{/if}
-			{#if availabilityFilter}<button
-					class="badge h-7 gap-1 badge-outline"
-					type="button"
-					onclick={() => (availabilityFilter = '')}
-					aria-label="Fjern tilgjengelighetsfilter"
-					>{availabilityFilter === 'available' ? 'Tilgjengelig' : 'Må kjøpes'}
-					<X size={13} /></button
-				>{/if}
-			{#if sort !== 'name'}<button
-					class="badge h-7 gap-1 badge-outline"
-					type="button"
-					onclick={() => (sort = 'name')}
-					aria-label="Tilbakestill sortering"
-					>Sortert: {sort === 'owner'
-						? 'person'
-						: sort === 'availability'
-							? 'må kjøpes'
-							: 'upakket'}
-					<X size={13} /></button
-				>{/if}
+			{#if mode === 'archive'}
+				{#if archiveCategoryFilter}<button
+						class="badge h-7 gap-1 badge-outline"
+						type="button"
+						onclick={() => (archiveCategoryFilter = '')}
+						aria-label="Fjern kategorifilter"
+						>{categoryNames.get(archiveCategoryFilter)} <X size={13} /></button
+					>{/if}
+				{#if archiveAvailabilityFilter}<button
+						class="badge h-7 gap-1 badge-outline"
+						type="button"
+						onclick={() => (archiveAvailabilityFilter = '')}
+						aria-label="Fjern tilgjengelighetsfilter"
+						>{archiveAvailabilityFilter === 'available' ? 'Tilgjengelig' : 'Må kjøpes'}
+						<X size={13} /></button
+					>{/if}
+				{#if archivePlanFilter}<button
+						class="badge h-7 gap-1 badge-outline"
+						type="button"
+						onclick={() => (archivePlanFilter = '')}
+						aria-label="Fjern listefilter"
+						>{archivePlanFilter === 'planned' ? 'På listen' : 'Ikke på listen'}
+						<X size={13} /></button
+					>{/if}
+				{#if archiveSort !== 'name'}<button
+						class="badge h-7 gap-1 badge-outline"
+						type="button"
+						onclick={() => (archiveSort = 'name')}
+						aria-label="Tilbakestill arkivsortering"
+						>Sortert: {archiveSort === 'category'
+							? 'kategori'
+							: archiveSort === 'owner'
+								? 'person'
+								: 'må kjøpes'}
+						<X size={13} /></button
+					>{/if}
+			{:else}
+				{#if availabilityFilter}<button
+						class="badge h-7 gap-1 badge-outline"
+						type="button"
+						onclick={() => (availabilityFilter = '')}
+						aria-label="Fjern tilgjengelighetsfilter"
+						>{availabilityFilter === 'available' ? 'Tilgjengelig' : 'Må kjøpes'}
+						<X size={13} /></button
+					>{/if}
+				{#if sort !== 'name'}<button
+						class="badge h-7 gap-1 badge-outline"
+						type="button"
+						onclick={() => (sort = 'name')}
+						aria-label="Tilbakestill sortering"
+						>Sortert: {sort === 'owner'
+							? 'person'
+							: sort === 'availability'
+								? 'må kjøpes'
+								: 'upakket'}
+						<X size={13} /></button
+					>{/if}
+			{/if}
 		</div>
 	{/if}
 
@@ -471,6 +623,108 @@
 				</button>
 			</div>
 		</div>
+	{:else if mode === 'archive'}
+		{#if items.length === 0}
+			<div
+				class="grid min-h-64 place-items-center rounded-box border border-dashed border-base-300 bg-base-100/45 p-8 text-center"
+			>
+				<div>
+					<Archive class="mx-auto mb-3 text-primary" size={38} />
+					<h2 class="font-display text-2xl font-bold">Arkivet er tomt</h2>
+					<p class="mt-1 text-sm text-base-content/60">
+						Utstyr du oppretter her kan brukes på senere turer.
+					</p>
+					<button
+						class="btn mt-5 btn-primary"
+						type="button"
+						onclick={() => openItem(categories[0]?.id ?? '')}
+					>
+						<Plus size={17} /> Legg til utstyr
+					</button>
+				</div>
+			</div>
+		{:else if sortedArchiveItems.length === 0}
+			<div
+				class="grid min-h-48 place-items-center border-y border-dashed border-base-300 text-center"
+			>
+				<p class="text-sm font-semibold text-base-content/55">
+					Ingen arkivert utstyr matcher søket eller filtrene.
+				</p>
+			</div>
+		{:else}
+			<div class="overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-sm">
+				<div
+					class="flex items-center justify-between gap-3 border-b border-base-300 bg-base-200/55 px-4 py-3 text-sm"
+				>
+					<p class="font-semibold">{sortedArchiveItems.length} i arkivet</p>
+					<p class="text-base-content/55">{plannedItems.length} på listen</p>
+				</div>
+				<ul class="divide-y divide-base-300" aria-label="Utstyrsarkiv">
+					{#each sortedArchiveItems as item (item.id)}
+						<li>
+							<article
+								class="flex min-h-20 items-center gap-3 px-3 py-3 sm:px-4"
+								aria-label={item.name}
+							>
+								<div class="min-w-0 flex-1">
+									<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+										<p class="font-semibold">{item.name}</p>
+										{#if item.quantity > 1}<span class="badge badge-ghost badge-sm"
+												>{item.quantity} stk.</span
+											>{/if}
+										<span class="badge badge-outline badge-sm"
+											>{categoryNames.get(item.categoryId)}</span
+										>
+										{#if item.availability === 'need-to-buy'}<span
+												class="badge badge-sm badge-warning">Må kjøpes</span
+											>{/if}
+										{#if item.ownerId && ownerNames.get(item.ownerId)}<span
+												class="badge badge-ghost badge-sm">{ownerNames.get(item.ownerId)}</span
+											>{/if}
+									</div>
+									{#if item.notes}<p class="mt-0.5 text-sm text-base-content/55">
+											{item.notes}
+										</p>{/if}
+								</div>
+								<div class="flex shrink-0 items-center gap-1">
+									{#if isGearItemPlanned(sharedState.values, item.id)}
+										<button
+											class="btn btn-outline btn-xs"
+											type="button"
+											onclick={() => setPlanned(item, false)}
+											aria-label={`Fjern ${item.name} fra listen`}
+										>
+											<ListMinus size={14} /> <span class="hidden sm:inline">På listen</span>
+										</button>
+									{:else}
+										<button
+											class="btn btn-primary btn-xs"
+											type="button"
+											onclick={() => setPlanned(item, true)}
+											aria-label={`Legg ${item.name} til listen`}
+										>
+											<ListPlus size={14} /> <span class="hidden sm:inline">Legg til</span>
+										</button>
+									{/if}
+									<button
+										class="btn btn-square btn-ghost btn-sm"
+										type="button"
+										onclick={() => openItem(item.categoryId, item)}
+										aria-label={`Endre ${item.name}`}><Pencil size={16} /></button
+									>
+									<button
+										class="btn btn-square btn-ghost text-error btn-sm"
+										type="button"
+										onclick={() => deleteItem(item)}
+										aria-label={`Slett ${item.name} permanent`}><Trash2 size={16} /></button
+									>
+								</div>
+							</article>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
 	{:else if visibleCategories.length === 0}
 		<div
 			class="grid min-h-48 place-items-center border-y border-dashed border-base-300 text-center"
@@ -485,7 +739,7 @@
 					(candidate) => candidate.id === category.id
 				)}
 				{@const categoryProgress = gearProgress(
-					items.filter((item) => item.categoryId === category.id),
+					plannedItems.filter((item) => item.categoryId === category.id),
 					sharedState.values
 				)}
 				<section
@@ -532,7 +786,7 @@
 								{#if mode === 'pack'}
 									{categoryProgress.packed}/{categoryProgress.total} pakket
 								{:else}
-									{items.filter((item) => item.categoryId === category.id).length} ting
+									{plannedItems.filter((item) => item.categoryId === category.id).length} ting
 								{/if}
 								{#if categoryProgress.needToBuy}
 									· {categoryProgress.needToBuy} må kjøpes{/if}
@@ -614,10 +868,10 @@
 											aria-label={`Endre ${item.name}`}><Pencil size={16} /></button
 										>
 										<button
-											class="btn btn-square btn-ghost text-error btn-sm"
+											class="btn btn-square btn-ghost btn-sm"
 											type="button"
-											onclick={() => deleteItem(item)}
-											aria-label={`Slett ${item.name}`}><Trash2 size={16} /></button
+											onclick={() => removeFromPlan(item)}
+											aria-label={`Flytt ${item.name} til arkivet`}><Archive size={16} /></button
 										>
 									{:else if item.availability === 'need-to-buy'}
 										<button
@@ -659,46 +913,114 @@
 			Filter og sortering
 		</h2>
 		<div class="mt-5 space-y-5">
-			<label class="form-control block">
-				<span class="mb-2 block text-sm font-semibold">Person</span>
-				<select class="select w-full" bind:value={ownerFilter} aria-label="Filtrer på person">
-					<option value="">Alle personer</option>
-					{#each owners as owner (owner.id)}<option value={owner.id}>{owner.name}</option>{/each}
-				</select>
-			</label>
-			<div>
-				<p class="mb-2 text-sm font-semibold">Tilgjengelighet</p>
-				<div class="join grid grid-cols-3" role="group" aria-label="Filtrer på tilgjengelighet">
-					{#each [{ value: '', label: 'Alle' }, { value: 'available', label: 'Har' }, { value: 'need-to-buy', label: 'Må kjøpes' }] as option (option.value)}
-						<button
-							class="btn join-item btn-sm"
-							class:btn-primary={availabilityFilter === option.value}
-							class:btn-ghost={availabilityFilter !== option.value}
-							type="button"
-							onclick={() => (availabilityFilter = option.value as '' | GearAvailability)}
-							aria-pressed={availabilityFilter === option.value}>{option.label}</button
-						>
-					{/each}
+			{#if mode === 'archive'}
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Kategori</span>
+					<select
+						class="select w-full"
+						bind:value={archiveCategoryFilter}
+						aria-label="Filtrer arkivet på kategori"
+					>
+						<option value="">Alle kategorier</option>
+						{#each categories as category (category.id)}<option value={category.id}
+								>{category.name}</option
+							>{/each}
+					</select>
+				</label>
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Person</span>
+					<select
+						class="select w-full"
+						bind:value={archiveOwnerFilter}
+						aria-label="Filtrer arkivet på person"
+					>
+						<option value="">Alle personer</option>
+						{#each owners as owner (owner.id)}<option value={owner.id}>{owner.name}</option>{/each}
+					</select>
+				</label>
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Tilgjengelighet</span>
+					<select
+						class="select w-full"
+						bind:value={archiveAvailabilityFilter}
+						aria-label="Filtrer arkivet på tilgjengelighet"
+					>
+						<option value="">All tilgjengelighet</option>
+						<option value="available">Tilgjengelig</option>
+						<option value="need-to-buy">Må kjøpes</option>
+					</select>
+				</label>
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Gjeldende liste</span>
+					<select
+						class="select w-full"
+						bind:value={archivePlanFilter}
+						aria-label="Filtrer arkivet på listestatus"
+					>
+						<option value="">Alle</option>
+						<option value="planned">På listen</option>
+						<option value="not-planned">Ikke på listen</option>
+					</select>
+				</label>
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Sorter etter</span>
+					<select class="select w-full" bind:value={archiveSort} aria-label="Sorter arkivet">
+						<option value="name">Navn</option>
+						<option value="category">Kategori</option>
+						<option value="owner">Person</option>
+						<option value="availability">Må kjøpes først</option>
+					</select>
+				</label>
+			{:else}
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Person</span>
+					<select class="select w-full" bind:value={ownerFilter} aria-label="Filtrer på person">
+						<option value="">Alle personer</option>
+						{#each owners as owner (owner.id)}<option value={owner.id}>{owner.name}</option>{/each}
+					</select>
+				</label>
+				<div>
+					<p class="mb-2 text-sm font-semibold">Tilgjengelighet</p>
+					<div class="join grid grid-cols-3" role="group" aria-label="Filtrer på tilgjengelighet">
+						{#each [{ value: '', label: 'Alle' }, { value: 'available', label: 'Har' }, { value: 'need-to-buy', label: 'Må kjøpes' }] as option (option.value)}
+							<button
+								class="btn join-item btn-sm"
+								class:btn-primary={availabilityFilter === option.value}
+								class:btn-ghost={availabilityFilter !== option.value}
+								type="button"
+								onclick={() => (availabilityFilter = option.value as '' | GearAvailability)}
+								aria-pressed={availabilityFilter === option.value}>{option.label}</button
+							>
+						{/each}
+					</div>
 				</div>
-			</div>
-			<label class="form-control block">
-				<span class="mb-2 block text-sm font-semibold">Sorter etter</span>
-				<select class="select w-full" bind:value={sort} aria-label="Sorter utstyr">
-					<option value="name">Navn</option>
-					<option value="owner">Person</option>
-					<option value="availability">Må kjøpes først</option>
-					<option value="unpacked">Upakket først</option>
-				</select>
-			</label>
+				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Sorter etter</span>
+					<select class="select w-full" bind:value={sort} aria-label="Sorter utstyr">
+						<option value="name">Navn</option>
+						<option value="owner">Person</option>
+						<option value="availability">Må kjøpes først</option>
+						<option value="unpacked">Upakket først</option>
+					</select>
+				</label>
+			{/if}
 		</div>
 		<div class="mt-6 grid grid-cols-2 gap-2">
 			<button
 				class="btn btn-ghost"
 				type="button"
 				onclick={() => {
-					ownerFilter = '';
-					availabilityFilter = '';
-					sort = 'name';
+					if (mode === 'archive') {
+						archiveOwnerFilter = '';
+						archiveAvailabilityFilter = '';
+						archiveCategoryFilter = '';
+						archivePlanFilter = '';
+						archiveSort = 'name';
+					} else {
+						ownerFilter = '';
+						availabilityFilter = '';
+						sort = 'name';
+					}
 				}}
 				disabled={activeFilterCount === 0}>Nullstill</button
 			>
@@ -828,6 +1150,17 @@
 					bind:value={itemNotes}
 					maxlength="500"
 					aria-label="Notater"></textarea>
+			</label>
+			<label
+				class="flex cursor-pointer items-center gap-3 rounded-box border border-base-300 bg-base-200/45 p-3"
+			>
+				<input class="checkbox checkbox-primary" type="checkbox" bind:checked={itemPlanned} />
+				<span>
+					<span class="block text-sm font-semibold">Legg til i gjeldende liste</span>
+					<span class="block text-xs text-base-content/55"
+						>Utstyret blir i arkivet selv om det fjernes fra listen.</span
+					>
+				</span>
 			</label>
 			<div class="grid grid-cols-2 gap-2 pt-2">
 				<button

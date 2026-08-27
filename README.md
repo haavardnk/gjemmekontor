@@ -13,7 +13,7 @@ A shared, offline-first travel app for a sailing trip in Croatia.
 - Shared sailing logbook with Orca GPX import and actual routes
 - Live shared Bring shopping list with completion, restore, detail editing, and cached offline access
 - Shared meal planning with recipe import, cooking mode, and Bring shopping list integration
-- Shared gear planning and packing with categories, owners, purchasing status, and progress
+- Shared gear archive, planning, and packing with categories, owners, purchasing status, and progress
 - Shared trip rule book with a randomized daily participant rotation
 - Offline editing and synchronization between devices
 - Installable progressive web app
