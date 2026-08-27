@@ -105,6 +105,16 @@ export type MenuShoppingStatus = z.infer<typeof menuShoppingStatusSchema>;
 export type KeyedMenuArchive = MenuArchive & { key: string };
 export type KeyedMenuActive = MenuActive & { key: string };
 export type CurrentDish = { archive: KeyedMenuArchive; active: KeyedMenuActive };
+export type RecipeArchiveView = KeyedMenuArchive & {
+	recipeVersionId: string;
+	recipeVersion: number;
+};
+export type TripMenuDish = {
+	archive: RecipeArchiveView;
+	active: KeyedMenuActive;
+	entryId: string;
+	latestRecipeVersion: number;
+};
 export type MenuEditorValue = {
 	name: string;
 	sourceUrl?: string;
@@ -172,10 +182,10 @@ export function dishInCategory(dish: CurrentDish, category: MealCategory): boole
 	return dish.active.categories.includes(category);
 }
 
-export function orderedDishesInCategory(
-	dishes: readonly CurrentDish[],
+export function orderedDishesInCategory<T extends CurrentDish>(
+	dishes: readonly T[],
 	category: MealCategory
-): CurrentDish[] {
+): T[] {
 	return dishes
 		.filter((dish) => dishInCategory(dish, category))
 		.sort((left, right) => {

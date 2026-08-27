@@ -254,6 +254,25 @@ describe('Kroatia 2026 import', (): void => {
 			{ id: 'dd9f380b-0bba-41f2-bbc0-03a63dc24669', name: 'Tina' }
 		]);
 		expect(
+			db
+				.prepare(
+					`SELECT r.name, rv.version, e.active,
+					        json_extract(rv.value, '$.name') AS version_name,
+					        json_extract(e.value, '$.plannedServings') AS planned_servings
+					 FROM trip_menu_entries e
+					 JOIN recipes r ON r.id = e.recipe_id
+					 JOIN recipe_versions rv ON rv.id = e.recipe_version_id
+					 WHERE e.trip_id = ?`
+				)
+				.get(kroatia2026TripId)
+		).toEqual({
+			name: 'Pasta',
+			version: 1,
+			active: 1,
+			version_name: 'Pasta',
+			planned_servings: 4
+		});
+		expect(
 			db.prepare('SELECT COUNT(*) AS count FROM trip_modules WHERE enabled != 0').get()
 		).toEqual({ count: 0 });
 		expect(

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import MenuPage from '$lib/modules/menu/ui/MenuPage.svelte';
+
+	let { data } = $props();
 </script>
 
-<MenuPage />
+<MenuPage archives={data.archives} dishes={data.dishes} />

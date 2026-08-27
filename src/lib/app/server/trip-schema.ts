@@ -262,7 +262,8 @@ export const tripDatabaseMigrations: readonly DatabaseMigration[] = [
 				value TEXT NOT NULL CHECK (json_valid(value)),
 				active INTEGER NOT NULL CHECK (active IN (0, 1)),
 				created_at TEXT NOT NULL,
-				updated_at TEXT NOT NULL
+				updated_at TEXT NOT NULL,
+				UNIQUE (trip_id, recipe_id)
 			);
 			CREATE INDEX trip_menu_entries_trip ON trip_menu_entries(trip_id, active);
 

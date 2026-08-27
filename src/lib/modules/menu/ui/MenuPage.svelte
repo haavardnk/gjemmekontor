@@ -11,33 +11,27 @@
 		Plus,
 		Search,
 		ShoppingBasket,
-		Trash2,
 		Utensils,
 		WifiOff
 	} from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
+	import { invalidateAll } from '$app/navigation';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		consumeDishCategory,
-		type CurrentDish,
-		currentDishes,
 		type KeyedMenuActive,
-		type KeyedMenuArchive,
 		mealCategories,
 		type MealCategory,
-		menuActiveKey,
 		menuActiveSchema,
 		type MenuArchive,
-		menuArchiveKey,
-		menuArchives,
 		menuArchiveSchema,
 		type MenuEditorValue,
 		moveDishCategory,
 		orderedDishesInCategory,
 		reactivateDish,
-		serializeMenuActive,
-		serializeMenuArchive
+		type RecipeArchiveView,
+		type TripMenuDish
 	} from '$lib/modules/menu/domain/menu';
 	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
@@ -46,11 +40,14 @@
 	import ShoppingPreview from './ShoppingPreview.svelte';
 
 	type EditingContext = {
-		archive?: KeyedMenuArchive;
+		archive?: RecipeArchiveView;
 		active?: KeyedMenuActive;
+		entryId?: string;
 		activateOnSave: boolean;
 		initial: MenuEditorValue;
 	};
+
+	let { archives, dishes }: { archives: RecipeArchiveView[]; dishes: TripMenuDish[] } = $props();
 
 	let view = $state<'menu' | 'archive'>('menu');
 	let mobileCategory = $state<MealCategory>('breakfast');
@@ -58,14 +55,14 @@
 	let online = $state(true);
 	let editing = $state<EditingContext>();
 	let recipe = $state<{ archive: MenuArchive; plannedServings: number }>();
-	let activating = $state<KeyedMenuArchive>();
+	let activating = $state<RecipeArchiveView>();
 	let activationCategories = $state<MealCategory[]>(['dinner']);
 	let activationServings = $state(4);
-	let shoppingScope = $state<{ scope: 'dish' | 'menu'; dishes: CurrentDish[] }>();
+	let shoppingScope = $state<{ scope: 'dish' | 'menu'; dishes: TripMenuDish[] }>();
 
-	const archives = $derived(menuArchives(sharedState.values));
-	const dishes = $derived(currentDishes(sharedState.values));
 	const activeById = $derived(new Map(dishes.map((dish) => [dish.archive.id, dish.active])));
+	const dishById = $derived(new Map(dishes.map((dish) => [dish.archive.id, dish])));
+	const latestArchiveById = $derived(new Map(archives.map((archive) => [archive.id, archive])));
 	const normalizedQuery = $derived(query.trim().toLocaleLowerCase('nb-NO'));
 	const filteredArchives = $derived(
 		archives.filter((archive) =>
@@ -93,7 +90,7 @@
 		};
 	}
 
-	function editorFor(archive: KeyedMenuArchive, active?: KeyedMenuActive): MenuEditorValue {
+	function editorFor(archive: RecipeArchiveView, active?: KeyedMenuActive): MenuEditorValue {
 		return {
 			name: archive.name,
 			...(archive.sourceUrl ? { sourceUrl: archive.sourceUrl } : {}),
@@ -106,6 +103,17 @@
 			ingredients: archive.ingredients,
 			instructions: archive.instructions
 		};
+	}
+
+	async function apiMutation(url: string, method: string, body?: unknown): Promise<void> {
+		const response = await fetch(url, {
+			method,
+			...(body === undefined
+				? {}
+				: { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+		});
+		if (!response.ok) throw new Error('MENU_MUTATION_FAILED');
+		await invalidateAll();
 	}
 
 	async function saveEditor(value: MenuEditorValue): Promise<void> {
@@ -139,6 +147,9 @@
 					activatedAt: context.active.activatedAt,
 					activatedBy: context.active.activatedBy,
 					...(context.active.categoryOrder ? { categoryOrder: context.active.categoryOrder } : {}),
+					...(context.active.shoppingStatus
+						? { shoppingStatus: context.active.shoppingStatus }
+						: {}),
 					tombstone: false
 				})
 			: reactivateDish(
@@ -149,11 +160,16 @@
 					clientId,
 					crypto.randomUUID()
 				);
-		const writes = [{ key: menuArchiveKey(id), value: serializeMenuArchive(archive) }];
-		if (context.activateOnSave) {
-			writes.push({ key: menuActiveKey(id), value: serializeMenuActive(active) });
+		await apiMutation(
+			context.archive ? `/api/menu/recipes/${context.archive.id}` : '/api/menu/recipes',
+			context.archive ? 'PUT' : 'POST',
+			{ recipe: archive }
+		);
+		if (!context.archive && context.activateOnSave) {
+			await apiMutation('/api/menu/entries', 'POST', { active });
+		} else if (context.active && context.entryId) {
+			await apiMutation(`/api/menu/entries/${context.entryId}`, 'PATCH', { active });
 		}
-		await sharedState.setMany(writes);
 		editing = undefined;
 		if (context.activateOnSave) view = 'menu';
 	}
@@ -170,7 +186,7 @@
 		return (await response.json()) as Partial<MenuEditorValue>;
 	}
 
-	function openActivation(archive: KeyedMenuArchive): void {
+	function openActivation(archive: RecipeArchiveView): void {
 		activating = archive;
 		activationCategories = ['dinner'];
 		activationServings = archive.defaultPlannedServings;
@@ -187,12 +203,12 @@
 			clientId,
 			crypto.randomUUID()
 		);
-		await sharedState.set(menuActiveKey(activating.id), serializeMenuActive(active));
+		await apiMutation('/api/menu/entries', 'POST', { active });
 		activating = undefined;
 		view = 'menu';
 	}
 
-	async function consume(dish: CurrentDish, category: MealCategory): Promise<void> {
+	async function consume(dish: TripMenuDish, category: MealCategory): Promise<void> {
 		const final = dish.active.categories.length === 1;
 		if (
 			!window.confirm(
@@ -202,20 +218,22 @@
 			)
 		)
 			return;
-		await sharedState.set(
-			dish.active.key,
-			serializeMenuActive(consumeDishCategory(dish.active, category))
-		);
+		await apiMutation(`/api/menu/entries/${dish.entryId}`, 'PATCH', {
+			active: consumeDishCategory(dish.active, category)
+		});
 	}
 
-	async function move(dish: CurrentDish, from: MealCategory, to: MealCategory): Promise<void> {
-		await sharedState.set(
-			dish.active.key,
-			serializeMenuActive(moveDishCategory(dish.active, from, to))
-		);
+	async function move(dish: TripMenuDish, from: MealCategory, to: MealCategory): Promise<void> {
+		await apiMutation(`/api/menu/entries/${dish.entryId}`, 'PATCH', {
+			active: moveDishCategory(dish.active, from, to)
+		});
 	}
 
-	async function reorder(dish: CurrentDish, category: MealCategory, offset: -1 | 1): Promise<void> {
+	async function reorder(
+		dish: TripMenuDish,
+		category: MealCategory,
+		offset: -1 | 1
+	): Promise<void> {
 		const categoryDishes = orderedDishesInCategory(dishes, category);
 		const currentIndex = categoryDishes.findIndex(
 			(candidate) => candidate.archive.id === dish.archive.id
@@ -227,45 +245,46 @@
 			reordered[targetIndex]!,
 			reordered[currentIndex]!
 		];
-		await sharedState.setMany(
-			reordered.map((candidate, position) => ({
-				key: candidate.active.key,
-				value: serializeMenuActive({
-					...candidate.active,
-					categoryOrder: {
-						...candidate.active.categoryOrder,
-						[category]: position
+		await Promise.all(
+			reordered.map((candidate, position) =>
+				apiMutation(`/api/menu/entries/${candidate.entryId}`, 'PATCH', {
+					active: {
+						...candidate.active,
+						categoryOrder: {
+							...candidate.active.categoryOrder,
+							[category]: position
+						}
 					}
 				})
-			}))
+			)
 		);
 	}
 
-	async function deleteArchive(archive: KeyedMenuArchive): Promise<void> {
+	async function archiveRecipe(archive: RecipeArchiveView): Promise<void> {
 		const active = activeById.get(archive.id);
 		const message = active
-			? `Slette ${archive.name} permanent fra Arkiv? Retten forsvinner også fra Meny.`
-			: `Slette ${archive.name} permanent fra Arkiv med oppskrift og ingredienser?`;
+			? `Arkivere ${archive.name}? Den skjules i Arkiv, men blir liggende i denne menyen.`
+			: `Arkivere ${archive.name}? Oppskriften kan ikke velges på nye reiser.`;
 		if (!window.confirm(message)) return;
-		const writes = [
-			{ key: archive.key, value: serializeMenuArchive({ ...archive, tombstone: true }) }
-		];
-		if (active)
-			writes.push({ key: active.key, value: serializeMenuActive({ ...active, tombstone: true }) });
-		await sharedState.setMany(writes);
+		await apiMutation(`/api/menu/recipes/${archive.id}`, 'DELETE');
+	}
+
+	async function useLatestRecipe(dish: TripMenuDish): Promise<void> {
+		await apiMutation(`/api/menu/entries/${dish.entryId}`, 'PATCH', { useLatest: true });
 	}
 
 	function useExisting(archive: MenuArchive): void {
 		editing = undefined;
 		const keyed = archives.find((entry) => entry.id === archive.id);
 		if (keyed) {
-			const active = activeById.get(keyed.id);
-			if (active) {
+			const dish = dishById.get(keyed.id);
+			if (dish) {
 				editing = {
 					archive: keyed,
-					active,
+					active: dish.active,
+					entryId: dish.entryId,
 					activateOnSave: true,
-					initial: editorFor(keyed, active)
+					initial: editorFor(keyed, dish.active)
 				};
 			} else openActivation(keyed);
 		}
@@ -389,6 +408,13 @@
 												class="badge shrink-0 badge-sm whitespace-nowrap badge-success"
 												>Lagt til</span
 											>{/if}
+										{#if dish.archive.recipeVersion < dish.latestRecipeVersion}<button
+												class="badge shrink-0 badge-sm badge-warning"
+												type="button"
+												onclick={() => useLatestRecipe(dish)}
+												aria-label={`Bruk nyeste versjon av ${dish.archive.name}`}
+												>Ny versjon</button
+											>{/if}
 									</div>
 									<div class="mb-3 flex flex-wrap gap-1">
 										{#each dish.active.categories as selected (selected)}<span
@@ -445,10 +471,14 @@
 											type="button"
 											onclick={() =>
 												(editing = {
-													archive: dish.archive,
+													archive: latestArchiveById.get(dish.archive.id) ?? dish.archive,
 													active: dish.active,
+													entryId: dish.entryId,
 													activateOnSave: true,
-													initial: editorFor(dish.archive, dish.active)
+													initial: editorFor(
+														latestArchiveById.get(dish.archive.id) ?? dish.archive,
+														dish.active
+													)
 												})}
 											aria-label={`Rediger ${dish.archive.name}`}><Edit3 size={17} /></button
 										><button
@@ -486,7 +516,8 @@
 		</div>
 		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 			{#each filteredArchives as archive (archive.id)}
-				{@const active = activeById.get(archive.id)}
+				{@const activeDish = dishById.get(archive.id)}
+				{@const active = activeDish?.active}
 				<article class="rounded-box border border-base-300 bg-base-100 p-3 shadow-sm">
 					<div class="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-3">
 						<div
@@ -551,6 +582,7 @@
 											(editing = {
 												archive,
 												active,
+												entryId: activeDish?.entryId,
 												activateOnSave: Boolean(active),
 												initial: editorFor(archive, active)
 											})}
@@ -561,8 +593,8 @@
 									<button
 										class="text-error"
 										type="button"
-										onclick={() => deleteArchive(archive)}
-										aria-label={`Slett ${archive.name}`}><Trash2 size={17} /> Slett</button
+										onclick={() => archiveRecipe(archive)}
+										aria-label={`Arkiver ${archive.name}`}><Archive size={17} /> Arkiver</button
 									>
 								</li>
 							</ul>

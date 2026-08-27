@@ -2,13 +2,9 @@
 	import { CircleAlert, LoaderCircle, RefreshCw, ShoppingBasket, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
+	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import { sharedState } from '$lib/client/state.svelte';
-	import {
-		type CurrentDish,
-		menuActiveKey,
-		serializeMenuActive
-	} from '$lib/modules/menu/domain/menu';
+	import type { CurrentDish } from '$lib/modules/menu/domain/menu';
 	import type {
 		MenuShoppingPreview,
 		MenuShoppingPreviewRow,
@@ -77,7 +73,6 @@
 		loading = true;
 		error = '';
 		try {
-			await sharedState.sync();
 			const response = await fetch('/api/menu/shopping/preview', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -209,28 +204,7 @@
 			};
 			const snapshot = shoppingListSnapshotSchema.safeParse(result.snapshot);
 			if (snapshot.success) await storeShoppingListSnapshot(tripId, snapshot.data);
-			const applied = new Map(
-				result.appliedCycles.map((cycle) => [cycle.archiveId, cycle.cycleId])
-			);
-			await sharedState.setMany(
-				dishes.flatMap((dish) =>
-					applied.get(dish.archive.id) === dish.active.cycleId
-						? [
-								{
-									key: menuActiveKey(dish.archive.id),
-									value: serializeMenuActive({
-										...dish.active,
-										shoppingStatus: {
-											appliedAt: result.appliedAt,
-											batchId: result.batchId,
-											scope
-										}
-									})
-								}
-							]
-						: []
-				)
-			);
+			await invalidateAll();
 			onClose();
 		} catch (cause) {
 			error =
