@@ -3,17 +3,16 @@ import { fail, redirect } from '@sveltejs/kit';
 import { defaultModuleIds, isModuleId } from '$lib/app/modules/catalog';
 import { getDatabase } from '$lib/app/server/database';
 import { createTrip, listPeople } from '$lib/app/server/trip-settings';
-import {
-	BringConnectionService,
-	BringServiceError
-} from '$lib/modules/shopping-list/server/bring';
+import { BringConnectionService, BringServiceError } from '$lib/modules/shopping-list/server/bring';
 import { getBringCredentials } from '$lib/modules/shopping-list/server/config';
+import { listShotCloneSources } from '$lib/modules/shots/server/content';
 
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = () => ({
 	people: listPeople(getDatabase()).filter((person) => !person.archived),
-	modules: defaultModuleIds
+	modules: defaultModuleIds,
+	shotCloneSources: listShotCloneSources(getDatabase())
 });
 
 function text(form: FormData, name: string): string {
@@ -35,6 +34,13 @@ export const actions = {
 			.filter(isModuleId);
 		let tripId: string;
 		try {
+			const shotMode = text(form, 'shotContentMode');
+			const shots =
+				shotMode === 'standard'
+					? ({ mode: 'standard' } as const)
+					: shotMode === 'clone'
+						? ({ mode: 'clone', sourceTripId: text(form, 'shotSourceTripId') } as const)
+						: ({ mode: 'blank' } as const);
 			const shoppingConnection = enabled.includes('shopping-list')
 				? await new BringConnectionService(getBringCredentials()).verify(
 						text(form, 'shoppingListUuid')
@@ -51,6 +57,7 @@ export const actions = {
 				memberIds: form
 					.getAll('memberId')
 					.filter((value): value is string => typeof value === 'string'),
+				shots,
 				modules: {
 					order: [...defaultModuleIds],
 					enabled,

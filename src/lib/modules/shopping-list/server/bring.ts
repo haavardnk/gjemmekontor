@@ -12,11 +12,7 @@ import {
 } from '$lib/modules/shopping-list/domain/shopping-list';
 import { apiError, apiSuccess } from '$lib/server/api';
 
-import {
-	type BringConfig,
-	type BringCredentials,
-	getBringCredentials
-} from './config';
+import { type BringConfig, type BringCredentials, getBringCredentials } from './config';
 
 type BringList = { listUuid: string; name: string };
 type BringItem = { name: string; specification: string };
@@ -514,9 +510,7 @@ export function getBringService(db: Database.Database, tripId: string): BringSer
 	return service;
 }
 
-export async function handleGetShoppingList(
-	bring: BringService
-): Promise<Response> {
+export async function handleGetShoppingList(bring: BringService): Promise<Response> {
 	try {
 		return apiSuccess(await bring.snapshot());
 	} catch (error) {

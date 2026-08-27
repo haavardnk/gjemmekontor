@@ -21,6 +21,11 @@ import { handleRefreshMap } from '$lib/modules/map/server';
 import { getMapRuntimeConfig } from '$lib/modules/map/server/config';
 import { BringConnectionService, BringServiceError } from '$lib/modules/shopping-list/server/bring';
 import { getBringCredentials } from '$lib/modules/shopping-list/server/config';
+import {
+	listShotCloneSources,
+	loadTripShotContent,
+	replaceTripShotContent
+} from '$lib/modules/shots/server/content';
 
 import type { Actions, PageServerLoad } from './$types';
 
@@ -50,6 +55,8 @@ export const load: PageServerLoad = ({ params }) => {
 	const mapRuntime = getMapRuntimeConfig();
 	const mapModule = trip.modules.find((module) => module.id === 'map');
 	const shoppingModule = trip.modules.find((module) => module.id === 'shopping-list');
+	const shotsModule = trip.modules.find((module) => module.id === 'shots');
+	const shotContent = loadTripShotContent(db, trip.id);
 	return {
 		settings: trip,
 		readiness: tripReadiness(db, trip.id),
@@ -89,6 +96,13 @@ export const load: PageServerLoad = ({ params }) => {
 				typeof shoppingModule?.config.verifiedAt === 'string'
 					? shoppingModule.config.verifiedAt
 					: undefined
+		},
+		shotsSummary: {
+			enabled: shotsModule?.enabled === true,
+			packName: shotContent.name,
+			version: shotContent.version,
+			contentJson: JSON.stringify(shotContent.content, null, 2),
+			cloneSources: listShotCloneSources(db, trip.id)
 		}
 	};
 };
@@ -238,6 +252,42 @@ export const actions = {
 				return fail(400, { errorMessage: messages[cause.code] });
 			}
 			return fail(400, { errorMessage: 'Bring-listen kunne ikke opprettes.' });
+		}
+	},
+	shotsBlank: ({ params }) => {
+		replaceTripShotContent(getDatabase(), params.tripId, { mode: 'blank' });
+		return { successMessage: 'En ny tom opptaksplan er lagret. Tidligere versjoner er bevart.' };
+	},
+	shotsStandard: ({ params }) => {
+		replaceTripShotContent(getDatabase(), params.tripId, { mode: 'standard' });
+		return { successMessage: 'Standardmalen er lagret som en ny opptaksplan.' };
+	},
+	shotsClone: async ({ request, params }) => {
+		const form = await request.formData();
+		try {
+			replaceTripShotContent(getDatabase(), params.tripId, {
+				mode: 'clone',
+				sourceTripId: text(form, 'sourceTripId')
+			});
+			return {
+				successMessage: 'Opptaksplanen er kopiert. Fullføring og utvalgsdata ble ikke kopiert.'
+			};
+		} catch {
+			return fail(400, { errorMessage: 'Opptaksplanen kunne ikke kopieres.' });
+		}
+	},
+	shotsCustom: async ({ request, params }) => {
+		const form = await request.formData();
+		try {
+			replaceTripShotContent(getDatabase(), params.tripId, {
+				mode: 'custom',
+				content: JSON.parse(text(form, 'contentJson')) as unknown
+			});
+			return { successMessage: 'Den egendefinerte opptaksplanen er validert og lagret.' };
+		} catch {
+			return fail(400, {
+				errorMessage: 'Opptaksplanen er ugyldig. Kontroller JSON, referanser og A-roll-indekser.'
+			});
 		}
 	},
 	refreshMap: async ({ params }) => {

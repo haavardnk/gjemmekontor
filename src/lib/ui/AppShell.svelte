@@ -84,8 +84,15 @@
 			return;
 		}
 		void sharedState.start(page.data.tripId, enabledModuleIds);
-		void tripDayState.start(page.data.tripId);
-		void warmAppShell(enabledModules.flatMap((module) => module.appShellPaths));
+		void tripDayState.start(
+			page.data.tripId,
+			page.data.tripDays ?? [],
+			page.data.tripTimezone ?? 'Europe/Oslo'
+		);
+		void warmAppShell(
+			enabledModules.flatMap((module) => module.appShellPaths),
+			page.data.tripId
+		);
 		return (): void => {
 			sharedState.stop();
 			tripDayState.stop();

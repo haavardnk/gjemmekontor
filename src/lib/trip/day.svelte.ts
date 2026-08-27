@@ -7,7 +7,8 @@ import {
 	tripClientDatabaseName
 } from '$lib/client/database';
 
-import { isTripDayIndex, tripDayIndexAt } from './itinerary';
+import type { TripDay } from './itinerary';
+import { isTripDayIndex, tripDayIndexAt, tripDays, tripTimeZone } from './itinerary';
 
 type TripDayStateOptions = {
 	databaseName?: string;
@@ -26,6 +27,8 @@ export class TripDayState {
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private started = false;
 	private tripId: string | undefined;
+	private days: readonly TripDay[] = tripDays;
+	private timeZone = tripTimeZone;
 	private readonly resumeToday = (): void => {
 		if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
 			return;
@@ -58,14 +61,15 @@ export class TripDayState {
 			stored?.value && typeof stored.value === 'object' && !Array.isArray(stored.value)
 				? stored.value.dayIndex
 				: undefined;
-		this.todayIndex = tripDayIndexAt(this.now());
-		this.selectedIndex = this.todayIndex ?? (isTripDayIndex(storedIndex) ? storedIndex : 0);
+		this.todayIndex = tripDayIndexAt(this.now(), this.days, this.timeZone);
+		this.selectedIndex =
+			this.todayIndex ?? (isTripDayIndex(storedIndex, this.days.length) ? storedIndex : 0);
 		this.showTodayOffer = false;
 		this.initialized = true;
 	}
 
 	async select(index: number): Promise<void> {
-		if (!isTripDayIndex(index)) {
+		if (!isTripDayIndex(index, this.days.length)) {
 			return;
 		}
 		this.selectedIndex = index;
@@ -75,7 +79,7 @@ export class TripDayState {
 	}
 
 	refreshToday(): void {
-		const current = tripDayIndexAt(this.now());
+		const current = tripDayIndexAt(this.now(), this.days, this.timeZone);
 		if (current === this.todayIndex) {
 			return;
 		}
@@ -91,15 +95,20 @@ export class TripDayState {
 	}
 
 	async selectToday(): Promise<void> {
-		const current = tripDayIndexAt(this.now());
+		const current = tripDayIndexAt(this.now(), this.days, this.timeZone);
 		this.todayIndex = current;
 		if (current !== undefined && current !== this.selectedIndex) {
 			await this.select(current);
 		}
 	}
 
-	async start(tripId: string): Promise<void> {
-		if (this.started && this.tripId === tripId) {
+	async start(tripId: string, days: readonly TripDay[], timeZone: string): Promise<void> {
+		if (
+			this.started &&
+			this.tripId === tripId &&
+			this.days === days &&
+			this.timeZone === timeZone
+		) {
 			return;
 		}
 		if (this.tripId && this.tripId !== tripId) {
@@ -110,6 +119,8 @@ export class TripDayState {
 			this.initialized = false;
 		}
 		this.tripId = tripId;
+		this.days = days;
+		this.timeZone = timeZone;
 		this.started = true;
 		await this.initialize();
 		if (!this.started) {

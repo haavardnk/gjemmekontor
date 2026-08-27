@@ -6,6 +6,9 @@ import type Database from 'better-sqlite3';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import { loadGearPageData } from '$lib/modules/gear/server';
+import { shotModules } from '$lib/modules/shots/domain/content';
+import { cameraChoices } from '$lib/modules/shots/domain/digest';
+import { loadTripShotContent } from '$lib/modules/shots/server/content';
 
 import { createApplicationDatabase } from './database';
 import {
@@ -128,7 +131,9 @@ function seedLegacyData(db: Database.Database): void {
 			},
 			6
 		),
-		stateValue('gear:packed:8691fb8c-7b58-4c60-835d-755af7e4a7de', true, 7)
+		stateValue('gear:packed:8691fb8c-7b58-4c60-835d-755af7e4a7de', true, 7),
+		stateValue('shots:d0:module:utreise:0', true, 8),
+		stateValue('digest:d0:story', 'Første reisedag', 9)
 	];
 	const insertState = db.prepare(`
 		INSERT INTO state_entries
@@ -147,7 +152,7 @@ function seedLegacyData(db: Database.Database): void {
 		);
 		insertReceipt.run(`mutation:${value.mutationId}`, String(value.revision));
 	}
-	db.prepare("UPDATE meta SET value = '7' WHERE key = 'global_revision'").run();
+	db.prepare("UPDATE meta SET value = '9' WHERE key = 'global_revision'").run();
 	db.prepare(
 		`INSERT INTO gpx_uploads
 		(id, leg_key, filename, content_type, checksum, byte_size, parser_version,
@@ -190,8 +195,8 @@ describe('Kroatia 2026 import', (): void => {
 
 		expect(report).toEqual({
 			tripId: kroatia2026TripId,
-			stateEntries: 7,
-			mutationReceipts: 7,
+			stateEntries: 9,
+			mutationReceipts: 9,
 			people: 6,
 			recipes: 1,
 			menuEntries: 1,
@@ -288,6 +293,23 @@ describe('Kroatia 2026 import', (): void => {
 		expect(
 			db.prepare("SELECT COUNT(*) AS count FROM trip_modules WHERE config_json != '{}'").get()
 		).toEqual({ count: 0 });
+		const importedShots = loadTripShotContent(db, kroatia2026TripId).content;
+		expect(importedShots.modules).toEqual(shotModules);
+		expect(importedShots.cameras).toEqual(cameraChoices);
+		expect(importedShots.dayPlans).toHaveLength(19);
+		expect(importedShots.dayPlans[0]?.modules).toEqual(['utreise', 'overtakelse', 'avreise']);
+		expect(importedShots.dayPlans[18]?.modules).toEqual(['hjemreise']);
+		expect(
+			db
+				.prepare(
+					`SELECT key, value FROM trip_state_entries
+					 WHERE trip_id = ? AND (key LIKE 'shots:%' OR key LIKE 'digest:%') ORDER BY revision`
+				)
+				.all(kroatia2026TripId)
+		).toEqual([
+			{ key: 'shots:d0:module:utreise:0', value: 'true' },
+			{ key: 'digest:d0:story', value: '"Første reisedag"' }
+		]);
 		expect(importLegacyKroatia2026(db)).toEqual(report);
 		expect(db.pragma('foreign_key_check')).toEqual([]);
 		db.close();

@@ -12,8 +12,33 @@ const assetCacheName = `${cachePrefix}assets-${version}`;
 const pageCacheName = `${cachePrefix}pages-${version}`;
 const assets = [...new Set([...build, ...files])];
 let enabledAppShellPaths = [...knownAppShellPaths];
+let activeTripId: string | undefined;
+const activeTripMarker = `${base}/__active_trip__`;
 
-async function cachePage(request: Request, response: Response): Promise<void> {
+function tripPageRequest(request: Request | string, tripId: string): Request {
+	const url = new URL(typeof request === 'string' ? request : request.url, worker.location.origin);
+	url.searchParams.set('__trip_cache', tripId);
+	return new Request(url, {
+		headers: { accept: 'text/html' },
+		credentials: 'same-origin'
+	});
+}
+
+async function rememberActiveTrip(tripId: string): Promise<void> {
+	activeTripId = tripId;
+	const cache = await caches.open(pageCacheName);
+	await cache.put(activeTripMarker, new Response(tripId));
+}
+
+async function rememberedActiveTrip(): Promise<string | undefined> {
+	if (activeTripId) return activeTripId;
+	const cached = await (await caches.open(pageCacheName)).match(activeTripMarker);
+	const value = (await cached?.text())?.trim();
+	activeTripId = value || undefined;
+	return activeTripId;
+}
+
+async function cachePage(request: Request, response: Response, tripId: string): Promise<void> {
 	const contentType = response.headers.get('content-type') ?? '';
 	if (!response.ok || response.redirected || !contentType.includes('text/html')) {
 		return;
@@ -23,16 +48,15 @@ async function cachePage(request: Request, response: Response): Promise<void> {
 		return;
 	}
 	const cache = await caches.open(pageCacheName);
-	await cache.put(request, response);
+	await cache.put(tripPageRequest(request, tripId), response);
 }
 
 async function navigationResponse(request: Request): Promise<Response> {
+	const tripId = await rememberedActiveTrip();
 	try {
-		const response = await fetch(request);
-		await cachePage(request, response.clone());
-		return response;
+		return await fetch(request);
 	} catch (error) {
-		const cached = await caches.match(request);
+		const cached = tripId ? await caches.match(tripPageRequest(request, tripId)) : undefined;
 		if (cached) {
 			return cached;
 		}
@@ -40,13 +64,14 @@ async function navigationResponse(request: Request): Promise<Response> {
 	}
 }
 
-async function warmPages(paths: readonly string[]): Promise<void> {
+async function warmPages(paths: readonly string[], tripId: string): Promise<void> {
+	await rememberActiveTrip(tripId);
 	enabledAppShellPaths = paths.filter((path) => knownAppShellPaths.includes(path));
 	const cache = await caches.open(pageCacheName);
 	await Promise.all(
 		knownAppShellPaths
 			.filter((path) => !enabledAppShellPaths.includes(path))
-			.map((path) => cache.delete(`${base}${path}`))
+			.map((path) => cache.delete(tripPageRequest(`${base}${path}`, tripId)))
 	);
 	await Promise.all(
 		enabledAppShellPaths.map(async (path): Promise<void> => {
@@ -55,7 +80,7 @@ async function warmPages(paths: readonly string[]): Promise<void> {
 				credentials: 'same-origin'
 			});
 			const response = await fetch(request);
-			await cachePage(request, response);
+			await cachePage(request, response, tripId);
 		})
 	);
 }
@@ -92,7 +117,8 @@ worker.addEventListener('message', (event): void => {
 		const paths = Array.isArray(event.data.paths)
 			? event.data.paths.filter((path: unknown): path is string => typeof path === 'string')
 			: [];
-		event.waitUntil(warmPages(paths));
+		const tripId = typeof event.data.tripId === 'string' ? event.data.tripId.trim() : '';
+		if (tripId) event.waitUntil(warmPages(paths, tripId));
 	}
 });
 

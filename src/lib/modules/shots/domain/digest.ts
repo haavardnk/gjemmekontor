@@ -20,7 +20,7 @@ export const offloadCameraChoices = cameraChoices.filter((choice) => choice !== 
 
 export const mediaRowSchema = z.object({
 	description: z.string().max(500),
-	camera: z.enum(cameraChoices),
+	camera: z.string().trim().min(1).max(100),
 	customCamera: z.string().max(100),
 	filename: z.string().max(200),
 	createdAt: z.string(),

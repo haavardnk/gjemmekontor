@@ -8,10 +8,7 @@ import {
 	type MenuShoppingScope
 } from '$lib/modules/menu/domain/shopping';
 import { absoluteShoppingOperationSchema } from '$lib/modules/shopping-list/public';
-import {
-	BringService,
-	BringServiceError
-} from '$lib/modules/shopping-list/server-public';
+import { BringService, BringServiceError } from '$lib/modules/shopping-list/server-public';
 import { apiError, apiSuccess } from '$lib/server/api';
 
 import { listTripMenu } from './library';

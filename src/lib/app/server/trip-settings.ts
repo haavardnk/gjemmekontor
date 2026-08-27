@@ -12,6 +12,11 @@ import {
 	parseMapRuntimeConfig
 } from '$lib/modules/map/server/config';
 import { getBringCredentials } from '$lib/modules/shopping-list/server/config';
+import {
+	initializeBlankTripShotContent,
+	reconcileTripShotContentDays,
+	replaceTripShotContent
+} from '$lib/modules/shots/server/content';
 
 const isoDate = z
 	.string()
@@ -329,6 +334,7 @@ export function createTrip(
 		password: string;
 		memberIds: string[];
 		modules: ModuleSettingsInput;
+		shots?: { mode: 'blank' | 'standard' } | { mode: 'clone'; sourceTripId: string };
 	}
 ): string {
 	const general = parseGeneral(input);
@@ -399,6 +405,10 @@ export function createTrip(
 		for (const [position, personId] of input.memberIds.entries()) {
 			insertMember.run(tripId, personId, position, now);
 		}
+		initializeBlankTripShotContent(db, tripId);
+		if (input.shots && input.shots.mode !== 'blank') {
+			replaceTripShotContent(db, tripId, input.shots);
+		}
 		const readiness = tripReadiness(db, tripId);
 		if (!readiness.ready) throw new Error(`TRIP_NOT_READY:${readiness.issues.join('|')}`);
 		db.prepare("UPDATE trips SET status = 'active' WHERE id = ?").run(tripId);
@@ -432,6 +442,7 @@ export function updateTripGeneral(
 			);
 		if (changed.changes !== 1) throw new Error('TRIP_NOT_FOUND');
 		reconcileTripDays(db, tripId, general.startsOn, general.endsOn);
+		reconcileTripShotContentDays(db, tripId);
 		audit(db, tripId, 'trip.general.updated');
 	})();
 }

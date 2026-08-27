@@ -2,7 +2,9 @@
 	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 
 	import { tripDayState } from './day.svelte';
-	import { tripDays } from './itinerary';
+	import type { TripDay } from './itinerary';
+
+	let { days }: { days: TripDay[] } = $props();
 
 	function changeDay(event: Event): void {
 		const select = event.currentTarget;
@@ -31,14 +33,14 @@
 			value={tripDayState.selectedIndex}
 			onchange={changeDay}
 		>
-			{#each tripDays as day (day.date)}
+			{#each days as day (day.date)}
 				<option value={day.index}>{day.index + 1}. {day.dateLabel}</option>
 			{/each}
 		</select>
 		<button
 			class="btn btn-square shrink-0 btn-ghost btn-sm"
 			type="button"
-			disabled={tripDayState.selectedIndex === tripDays.length - 1}
+			disabled={tripDayState.selectedIndex === days.length - 1}
 			onclick={() => tripDayState.select(tripDayState.selectedIndex + 1)}
 			aria-label="Neste dag"
 			title="Neste dag"

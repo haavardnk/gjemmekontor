@@ -164,6 +164,29 @@
 						opprettes fra Trip Settings etterpå.
 					</span>
 				</label>
+				<label class="form-control">
+					<span class="label font-semibold">Startinnhold for opptak</span>
+					<select class="select-bordered select" name="shotContentMode">
+						<option value="blank">Tom opptaksplan</option>
+						<option value="standard">Standardmal</option>
+						{#if data.shotCloneSources.length}
+							<option value="clone">Kopier fra en reise</option>
+						{/if}
+					</select>
+				</label>
+				{#if data.shotCloneSources.length}
+					<label class="form-control">
+						<span class="label font-semibold">Reise å kopiere opptaksplan fra</span>
+						<select class="select-bordered select" name="shotSourceTripId">
+							<option value="">Velg reise når «Kopier» er valgt</option>
+							{#each data.shotCloneSources as source (source.tripId)}
+								<option value={source.tripId}>
+									{source.tripName} · {source.packName} · v{source.version}
+								</option>
+							{/each}
+						</select>
+					</label>
+				{/if}
 			</div>
 		</fieldset>
 

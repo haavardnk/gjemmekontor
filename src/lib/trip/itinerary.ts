@@ -43,15 +43,13 @@ export const tripDays: TripDay[] = dayDefinitions.map(([date, dateLabel, title, 
 	phase
 }));
 
-export function isTripDayIndex(value: unknown): value is number {
-	return (
-		typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < tripDays.length
-	);
+export function isTripDayIndex(value: unknown, dayCount = tripDays.length): value is number {
+	return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < dayCount;
 }
 
-export function dateKeyAt(date: Date): string {
+export function dateKeyAt(date: Date, timeZone = tripTimeZone): string {
 	const parts = new Intl.DateTimeFormat('en-CA', {
-		timeZone: tripTimeZone,
+		timeZone,
 		year: 'numeric',
 		month: '2-digit',
 		day: '2-digit'
@@ -60,7 +58,11 @@ export function dateKeyAt(date: Date): string {
 	return `${values.year}-${values.month}-${values.day}`;
 }
 
-export function tripDayIndexAt(date: Date): number | undefined {
-	const dateKey = dateKeyAt(date);
-	return tripDays.find((day) => day.date === dateKey)?.index;
+export function tripDayIndexAt(
+	date: Date,
+	days: readonly TripDay[] = tripDays,
+	timeZone = tripTimeZone
+): number | undefined {
+	const dateKey = dateKeyAt(date, timeZone);
+	return days.find((day) => day.date === dateKey)?.index;
 }

@@ -6,7 +6,12 @@ import { moduleCatalog } from '$lib/app/modules/catalog';
 import { gearCategorySchema, gearItemSchema, gearOwnerSchema } from '$lib/modules/gear/domain/gear';
 import { menuActiveSchema, menuArchiveSchema } from '$lib/modules/menu/domain/menu';
 import { ruleBookGameSchema } from '$lib/modules/rule-book/domain/rule-book';
-import { activityModuleIds, scenarioGroups, shotModules } from '$lib/modules/shots/domain/content';
+import {
+	activityModuleIds,
+	backupChecks,
+	scenarioGroups,
+	shotModules
+} from '$lib/modules/shots/domain/content';
 import { shotsDayPlan } from '$lib/modules/shots/domain/day-plan';
 import { cameraChoices } from '$lib/modules/shots/domain/digest';
 import { tripDays, tripTimeZone } from '$lib/trip/itinerary';
@@ -353,6 +358,7 @@ function importShotContent(db: Database.Database, now: string): void {
 	const content = JSON.stringify({
 		version: 1,
 		cameras: cameraChoices,
+		backupChecks,
 		modules: shotModules,
 		activityModuleIds,
 		scenarioGroups,

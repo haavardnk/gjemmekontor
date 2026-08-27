@@ -4,25 +4,20 @@
 	import { sharedState } from '$lib/client/state.svelte';
 	import type { TripDay } from '$lib/trip/itinerary';
 
-	import { backupChecks } from '../domain/content';
-	import {
-		cameraChoices,
-		mediaKey,
-		type MediaRow,
-		mediaRows,
-		offloadCameraChoices,
-		serializeMediaRow
-	} from '../domain/digest';
+	import { mediaKey, type MediaRow, mediaRows, serializeMediaRow } from '../domain/digest';
 
-	let { day }: { day: TripDay } = $props();
+	let { day, cameras, backupChecks }: { day: TripDay; cameras: string[]; backupChecks: string[] } =
+		$props();
 
 	let adding = $state(false);
 	let description = $state('');
-	let camera = $state<(typeof cameraChoices)[number]>('Pocket 4');
+	let camera = $state('Pocket 4');
 	let customCamera = $state('');
 	let filename = $state('');
 
 	const videoRows = $derived(mediaRows(sharedState.values, day.index));
+	const cameraChoices = $derived(cameras.includes('Annet') ? cameras : [...cameras, 'Annet']);
+	const offloadCameraChoices = $derived(cameraChoices.filter((choice) => choice !== 'Annet'));
 
 	function fieldKey(field: string): string {
 		return `shots:d${day.index}:${field}`;
@@ -51,7 +46,7 @@
 	function openAdd(): void {
 		adding = true;
 		description = '';
-		camera = 'Pocket 4';
+		camera = cameraChoices[0] ?? 'Annet';
 		customCamera = '';
 		filename = '';
 	}

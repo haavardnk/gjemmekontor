@@ -3,10 +3,20 @@
 
 	import { sharedState } from '$lib/client/state.svelte';
 
-	import { activityModuleIds, scenarioGroups, shotModules } from '../domain/content';
+	import type { ShotModule } from '../domain/content';
 	import type { ShotsDay } from '../domain/day-plan';
 
-	let { day }: { day: ShotsDay } = $props();
+	let {
+		day,
+		modules,
+		activityModuleIds,
+		scenarioGroups
+	}: {
+		day: ShotsDay;
+		modules: Record<string, ShotModule>;
+		activityModuleIds: string[];
+		scenarioGroups: Array<{ title: string; ids: string[] }>;
+	} = $props();
 	let scenarioQuery = $state('');
 	let expandedGroups = $state<Record<string, boolean>>({});
 
@@ -14,17 +24,17 @@
 		activityModuleIds.filter((id) => checked(fieldKey(`scenario:${id}`)))
 	);
 	const dayModules = $derived([
-		...day.modules.map((id) => ({ id, module: shotModules[id], optional: false })),
+		...day.modules.map((id) => ({ id, module: modules[id], optional: false })),
 		...selectedModuleIds
 			.filter((id) => !day.modules.includes(id))
-			.map((id) => ({ id, module: shotModules[id], optional: true }))
+			.map((id) => ({ id, module: modules[id], optional: true }))
 	]);
 	const normalizedScenarioQuery = $derived(scenarioQuery.trim().toLocaleLowerCase('nb-NO'));
 	const availableModuleIds = $derived(
 		activityModuleIds
 			.filter((id) => !day.modules.includes(id) && !selectedModuleIds.includes(id))
 			.filter((id) =>
-				[shotModules[id].title, ...shotModules[id].shots.map((shot) => shot.text)]
+				[modules[id].title, ...modules[id].shots.map((shot) => shot.text)]
 					.join(' ')
 					.toLocaleLowerCase('nb-NO')
 					.includes(normalizedScenarioQuery)
@@ -72,11 +82,11 @@
 	}
 
 	function roll(moduleId: string, index: number): 'A-roll' | 'B-roll' {
-		return shotModules[moduleId].aRoll.includes(index) ? 'A-roll' : 'B-roll';
+		return modules[moduleId].aRoll.includes(index) ? 'A-roll' : 'B-roll';
 	}
 
 	function camera(moduleId: string, index: number): string | undefined {
-		return shotModules[moduleId].shots[index]?.camera;
+		return modules[moduleId].shots[index]?.camera;
 	}
 </script>
 
@@ -191,7 +201,7 @@
 						</summary>
 						<div class="grid items-start gap-2 border-t border-base-300 p-2 sm:grid-cols-2">
 							{#each group.ids as moduleId (moduleId)}
-								{@const module = shotModules[moduleId]}
+								{@const module = modules[moduleId]}
 								<details
 									class="group rounded-lg border border-base-300 bg-base-100"
 									data-scenario-id={moduleId}
