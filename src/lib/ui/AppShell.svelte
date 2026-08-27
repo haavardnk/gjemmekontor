@@ -32,7 +32,7 @@
 		signingOut = true;
 		try {
 			await fetch('/api/auth/logout', { method: 'POST' });
-			window.location.assign('/login');
+			window.location.assign('/trips');
 		} finally {
 			signingOut = false;
 		}
@@ -47,23 +47,22 @@
 		utensils: Utensils,
 		video: Video
 	};
-	const enabledModuleIds = $derived(
-		new Set((page.data.enabledModuleIds ?? moduleCatalog.map((module) => module.id)) as ModuleId[])
-	);
+	const enabledModuleIds = $derived((page.data.enabledModuleIds ?? []) as ModuleId[]);
 	const enabledModules = $derived(
-		moduleCatalog.filter((module) => enabledModuleIds.has(module.id))
+		enabledModuleIds
+			.map((id) => moduleCatalog.find((module) => module.id === id))
+			.filter((module) => module !== undefined)
 	);
 	const links = $derived(
 		enabledModules.map((module) => ({
 			href: resolve(module.primaryPath),
 			path: module.primaryPath,
 			label: module.label,
-			icon: icons[module.icon],
-			mobileNavigation: module.mobileNavigation
+			icon: icons[module.icon]
 		}))
 	);
-	const quickLinks = $derived(links.filter((link) => link.mobileNavigation === 'quick'));
-	const moreLinks = $derived(links.filter((link) => link.mobileNavigation === 'more'));
+	const quickLinks = $derived(links.slice(0, 4));
+	const moreLinks = $derived(links.slice(4));
 	const moreActive = $derived(
 		moreLinks.some((link) => pathMatchesPrefix(page.url.pathname, link.path))
 	);
@@ -79,7 +78,7 @@
 	}
 
 	onMount(() => {
-		void sharedState.start([...enabledModuleIds]);
+		void sharedState.start(enabledModuleIds);
 		void tripDayState.start();
 		void warmAppShell(enabledModules.flatMap((module) => module.appShellPaths));
 		return (): void => {
@@ -123,8 +122,8 @@
 	{#each links as link (link.href)}
 		<a
 			class="min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs font-semibold text-base-content/60 aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary lg:flex"
-			class:flex={link.mobileNavigation === 'quick'}
-			class:hidden={link.mobileNavigation === 'more'}
+			class:flex={quickLinks.includes(link)}
+			class:hidden={moreLinks.includes(link)}
 			href={link.href}
 			aria-current={isCurrent(link.path) ? 'page' : undefined}
 		>

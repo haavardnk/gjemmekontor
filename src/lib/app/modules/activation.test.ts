@@ -19,9 +19,9 @@ describe('module activation', (): void => {
 		]);
 	});
 
-	test('uses catalog order rather than configuration order', (): void => {
-		expect(resolveEnabledModuleIds(['shopping-list', 'shots'])).toEqual(['shots', 'shopping-list']);
-		expect(firstEnabledModulePath(['shopping-list', 'shots'])).toBe('/shots');
+	test('preserves each trip module order', (): void => {
+		expect(resolveEnabledModuleIds(['shopping-list', 'shots'])).toEqual(['shopping-list', 'shots']);
+		expect(firstEnabledModulePath(['shopping-list', 'shots'])).toBe('/shopping-list');
 	});
 
 	test('returns only enabled manifests and shell paths', (): void => {

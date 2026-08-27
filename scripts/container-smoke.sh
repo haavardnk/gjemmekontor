@@ -16,7 +16,7 @@ start() {
 	docker run -d \
 		--name "$name" \
 		--mount "source=$volume,target=/data" \
-		-e APP_PASSWORD=test-password \
+		-e ADMIN_PASSWORD=test-administrator-password \
 		-e SESSION_SECRET=0123456789abcdef0123456789abcdef \
 		-e DATA_DIR=/data \
 		-e GOOGLE_MY_MAPS_ID=test-map \

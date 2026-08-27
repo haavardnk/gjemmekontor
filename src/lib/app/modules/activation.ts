@@ -26,12 +26,18 @@ export function resolveEnabledModuleIds(configured?: readonly string[]): ModuleI
 		}
 	}
 
-	return moduleCatalog.filter((module) => unique.has(module.id)).map((module) => module.id);
+	return requested.map((id) => {
+		if (!isModuleId(id)) throw new Error(`Unknown enabled module: ${id}`);
+		return id;
+	});
 }
 
 export function enabledModuleManifests(configured?: readonly string[]) {
-	const enabled = new Set(resolveEnabledModuleIds(configured));
-	return moduleCatalog.filter((module) => enabled.has(module.id));
+	return resolveEnabledModuleIds(configured).map((id) => {
+		const module = moduleCatalog.find((candidate) => candidate.id === id);
+		if (!module) throw new Error(`Unknown enabled module: ${id}`);
+		return module;
+	});
 }
 
 export function firstEnabledModulePath(configured?: readonly string[]): string {

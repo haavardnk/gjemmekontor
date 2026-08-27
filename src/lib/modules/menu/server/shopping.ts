@@ -1,7 +1,6 @@
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 
-import { resolveEnabledModuleIds } from '$lib/app/modules/activation';
 import {
 	type CurrentDish,
 	type KeyedMenuActive,
@@ -23,7 +22,6 @@ import {
 	getBringService
 } from '$lib/modules/shopping-list/server-public';
 import { apiError, apiSuccess } from '$lib/server/api';
-import { getRuntimeConfig } from '$lib/server/env';
 
 const cycleSchema = z.object({ archiveId: z.uuid(), cycleId: z.uuid() }).strict();
 const nameOverridesSchema = z
@@ -50,10 +48,6 @@ const applyRequestSchema = previewRequestSchema.extend({
 });
 
 type ScopeRequest = z.infer<typeof previewRequestSchema>;
-
-function shoppingEnabled(): boolean {
-	return resolveEnabledModuleIds(getRuntimeConfig().enabledModuleIds).includes('shopping-list');
-}
 
 function loadDishes(db: Database.Database, input: ScopeRequest): CurrentDish[] {
 	const read = db.prepare('SELECT value FROM state_entries WHERE key = ?');
@@ -102,9 +96,10 @@ function bringError(error: unknown): Response {
 export async function handleMenuShoppingPreview(
 	request: Request,
 	db: Database.Database,
-	bring: BringService = getBringService()
+	bring: BringService = getBringService(),
+	shoppingListEnabled = true
 ): Promise<Response> {
-	if (!shoppingEnabled()) return apiError('SHOPPING_LIST_DISABLED', 503);
+	if (!shoppingListEnabled) return apiError('SHOPPING_LIST_DISABLED', 503);
 	const parsed = previewRequestSchema.safeParse(await parseRequest(request));
 	if (!parsed.success) return apiError('INVALID_REQUEST', 400);
 	try {
@@ -128,9 +123,10 @@ export async function handleMenuShoppingApply(
 	request: Request,
 	db: Database.Database,
 	bring: BringService = getBringService(),
-	now: () => Date = () => new Date()
+	now: () => Date = () => new Date(),
+	shoppingListEnabled = true
 ): Promise<Response> {
-	if (!shoppingEnabled()) return apiError('SHOPPING_LIST_DISABLED', 503);
+	if (!shoppingListEnabled) return apiError('SHOPPING_LIST_DISABLED', 503);
 	const parsed = applyRequestSchema.safeParse(await parseRequest(request));
 	if (!parsed.success) return apiError('INVALID_REQUEST', 400);
 	try {

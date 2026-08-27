@@ -8,7 +8,11 @@
 	import AppShell from '$lib/ui/AppShell.svelte';
 
 	let { children } = $props();
-	const showShell = $derived(page.url.pathname !== '/login');
+	const showShell = $derived(
+		!page.url.pathname.startsWith('/trips') &&
+			!page.url.pathname.startsWith('/admin') &&
+			!/^\/t\/[^/]+\/unlock$/.test(page.url.pathname)
+	);
 
 	onMount(() => {
 		themeState.start();

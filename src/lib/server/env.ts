@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const runtimeEnvironmentSchema = z.object({
-	APP_PASSWORD: z.string().min(8),
+	ADMIN_PASSWORD: z.string().min(12).max(1024),
 	APP_VERSION: z
 		.union([
 			z.literal('unreleased'),
@@ -10,16 +10,14 @@ const runtimeEnvironmentSchema = z.object({
 		.optional(),
 	SESSION_SECRET: z.string().min(32),
 	DATA_DIR: z.string().min(1),
-	ENABLED_MODULES: z.string().min(1).optional(),
 	ORIGIN: z.url()
 });
 
 export type RuntimeConfig = {
-	appPassword: string;
+	adminPassword: string;
 	appVersion?: string;
 	sessionSecret: string;
 	dataDir: string;
-	enabledModuleIds?: string[];
 	origin: string;
 };
 
@@ -31,17 +29,12 @@ export function parseRuntimeConfig(environment: Record<string, string | undefine
 	}
 
 	return {
-		appPassword: result.data.APP_PASSWORD,
+		adminPassword: result.data.ADMIN_PASSWORD,
 		...(result.data.APP_VERSION && result.data.APP_VERSION !== 'unreleased'
 			? { appVersion: result.data.APP_VERSION }
 			: {}),
 		sessionSecret: result.data.SESSION_SECRET,
 		dataDir: result.data.DATA_DIR,
-		...(result.data.ENABLED_MODULES
-			? {
-					enabledModuleIds: result.data.ENABLED_MODULES.split(',').map((id) => id.trim())
-				}
-			: {}),
 		origin: result.data.ORIGIN
 	};
 }

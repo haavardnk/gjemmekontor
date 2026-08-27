@@ -6,13 +6,13 @@ describe('runtime environment', (): void => {
 	test('maps valid required variables', (): void => {
 		expect(
 			parseRuntimeConfig({
-				APP_PASSWORD: 'shared-password',
+				ADMIN_PASSWORD: 'administrator-password',
 				SESSION_SECRET: '0123456789abcdef0123456789abcdef',
 				DATA_DIR: '/data',
 				ORIGIN: 'https://gjemmekontor.example.com'
 			})
 		).toEqual({
-			appPassword: 'shared-password',
+			adminPassword: 'administrator-password',
 			sessionSecret: '0123456789abcdef0123456789abcdef',
 			dataDir: '/data',
 			origin: 'https://gjemmekontor.example.com'
@@ -22,29 +22,17 @@ describe('runtime environment', (): void => {
 	test('rejects missing and short required variables', (): void => {
 		expect(() =>
 			parseRuntimeConfig({
-				APP_PASSWORD: '',
+				ADMIN_PASSWORD: '',
 				SESSION_SECRET: 'short',
 				DATA_DIR: '',
 				ORIGIN: ''
 			})
-		).toThrow('Invalid runtime environment: APP_PASSWORD, SESSION_SECRET, DATA_DIR, ORIGIN');
-	});
-
-	test('maps an optional enabled-module list', (): void => {
-		expect(
-			parseRuntimeConfig({
-				APP_PASSWORD: 'shared-password',
-				SESSION_SECRET: '0123456789abcdef0123456789abcdef',
-				DATA_DIR: '/data',
-				ENABLED_MODULES: 'shots, shopping-list',
-				ORIGIN: 'https://gjemmekontor.example.com'
-			})
-		).toMatchObject({ enabledModuleIds: ['shots', 'shopping-list'] });
+		).toThrow('Invalid runtime environment: ADMIN_PASSWORD, SESSION_SECRET, DATA_DIR, ORIGIN');
 	});
 
 	test('maps only release-tag-derived application versions', (): void => {
 		const environment = {
-			APP_PASSWORD: 'shared-password',
+			ADMIN_PASSWORD: 'administrator-password',
 			SESSION_SECRET: '0123456789abcdef0123456789abcdef',
 			DATA_DIR: '/data',
 			ORIGIN: 'https://gjemmekontor.example.com'
