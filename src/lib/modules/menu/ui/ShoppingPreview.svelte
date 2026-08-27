@@ -2,6 +2,7 @@
 	import { CircleAlert, LoaderCircle, RefreshCw, ShoppingBasket, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
+	import { page } from '$app/state';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		type CurrentDish,
@@ -34,6 +35,7 @@
 	let nameOverrides = $state<Record<string, string>>({});
 	let replaceDescriptionBySourceRowId = $state<Record<string, boolean>>({});
 	let error = $state('');
+	const tripId = $derived(page.data.tripId ?? '');
 
 	const title = $derived(
 		scope === 'dish' ? `Legg til ${dishes[0]?.archive.name ?? 'rett'}` : 'Legg hele menyen til'
@@ -206,7 +208,7 @@
 				appliedCycles: Array<{ archiveId: string; cycleId: string }>;
 			};
 			const snapshot = shoppingListSnapshotSchema.safeParse(result.snapshot);
-			if (snapshot.success) await storeShoppingListSnapshot(snapshot.data);
+			if (snapshot.success) await storeShoppingListSnapshot(tripId, snapshot.data);
 			const applied = new Map(
 				result.appliedCycles.map((cycle) => [cycle.archiveId, cycle.cycleId])
 			);

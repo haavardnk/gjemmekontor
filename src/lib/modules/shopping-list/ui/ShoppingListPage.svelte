@@ -15,6 +15,7 @@
 	} from '@lucide/svelte';
 	import { onMount, tick } from 'svelte';
 
+	import { page } from '$app/state';
 	import {
 		storedShoppingListSnapshot,
 		storeShoppingListSnapshot
@@ -46,6 +47,7 @@
 	const refreshIntervalMs = 5_000;
 	let refreshInFlight = false;
 	let mutationRevision = 0;
+	const tripId = $derived(page.data.tripId ?? '');
 
 	const itemCount = $derived(snapshot?.items.length ?? 0);
 	const recentItems = $derived(snapshot ? [...snapshot.recentItems].reverse() : []);
@@ -101,7 +103,7 @@
 		}
 		snapshot = result.data;
 		serviceAvailable = true;
-		await storeShoppingListSnapshot(result.data);
+		await storeShoppingListSnapshot(tripId, result.data);
 		errorMessage = '';
 		return true;
 	}
@@ -277,7 +279,7 @@
 		window.addEventListener('focus', refreshWhenActive);
 		document.addEventListener('visibilitychange', refreshWhenActive);
 		const refreshInterval = window.setInterval(refreshWhenActive, refreshIntervalMs);
-		void storedShoppingListSnapshot().then((cached) => {
+		void storedShoppingListSnapshot(tripId).then((cached) => {
 			if (disposed) {
 				return;
 			}

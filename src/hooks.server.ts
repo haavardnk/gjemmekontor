@@ -37,7 +37,8 @@ function applySecurityHeaders(response: Response, pathname: string): void {
 	);
 	response.headers.set('X-Frame-Options', 'DENY');
 	if (
-		/^\/api\/(auth|state)(\/|$)/.test(pathname) ||
+		/^\/api\/auth(\/|$)/.test(pathname) ||
+		/^\/api\/trips\/[^/]+\/state(\/|$)/.test(pathname) ||
 		(moduleForApiPath(pathname) && !isCacheableModuleApi(pathname))
 	) {
 		response.headers.set('Cache-Control', 'no-store');
@@ -101,6 +102,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 			applySecurityHeaders(response, pathname);
 			return response;
 		}
+	}
+
+	const scopedTripApi = pathname.match(/^\/api\/trips\/([^/]+)(?:\/|$)/);
+	if (scopedTripApi && scopedTripApi[1] !== trip?.id) {
+		const response = apiError('TRIP_MISMATCH', 403);
+		applySecurityHeaders(response, pathname);
+		return response;
 	}
 
 	const requestedModule = pathname.startsWith('/api/')

@@ -66,6 +66,7 @@
 	let filterOpen = $state(false);
 	let routeScope = $state<'all' | 'current'>('all');
 	const logbookEnabled = $derived(page.data.enabledModuleIds?.includes('logbook') ?? true);
+	const tripId = $derived(page.data.tripId ?? '');
 	const currentMapDayIndex = $derived(tripDayState.todayIndex ?? tripDayState.selectedIndex);
 	const allActualRoutes = $derived(logbookEnabled ? actualRouteFeatures(sharedState.values) : []);
 	const actualRoutes = $derived(
@@ -203,7 +204,7 @@
 		if (response.error) {
 			errorMessage = mapErrorMessage(response.error);
 		}
-		await storeMapSnapshot(response.snapshot);
+		await storeMapSnapshot(tripId, response.snapshot);
 	}
 
 	async function load(method: 'GET' | 'POST' = 'GET'): Promise<void> {
@@ -303,7 +304,7 @@
 	}
 
 	async function loadOfflineMaps(): Promise<void> {
-		offlineMaps = await storedOfflineMaps();
+		offlineMaps = await storedOfflineMaps(tripId);
 		if (!navigator.onLine) {
 			return;
 		}
@@ -318,7 +319,7 @@
 	}
 
 	async function bootstrapMap(): Promise<void> {
-		const cached = await storedMapSnapshot();
+		const cached = await storedMapSnapshot(tripId);
 		if (cached) {
 			snapshot = cached.value;
 			statusMessage = 'Viser kartet som er lagret på enheten.';
@@ -332,7 +333,7 @@
 		downloadTotal = mapPackage.size;
 		offlineMessage = '';
 		try {
-			const record = await downloadOfflineMap(mapPackage, ({ received, total }) => {
+			const record = await downloadOfflineMap(tripId, mapPackage, ({ received, total }) => {
 				downloadReceived = received;
 				downloadTotal = total;
 			});
@@ -346,7 +347,7 @@
 	}
 
 	async function deletePackage(selectedMode: MapMode): Promise<void> {
-		await removeOfflineMap(selectedMode);
+		await removeOfflineMap(tripId, selectedMode);
 		offlineMaps = offlineMaps.filter((record) => record.id !== selectedMode);
 		offlineMessage = 'Kartpakken er slettet fra enheten.';
 	}

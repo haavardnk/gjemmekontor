@@ -348,5 +348,5 @@ export function handleSession(
 		? isTripAuthorized(dependencies.db, token, tripId, dependencies.config.sessionSecret, now)
 		: false;
 	if (!admin && !trip) return apiError('UNAUTHENTICATED', 401);
-	return apiSuccess({ authenticated: true, admin, trip });
+	return apiSuccess({ authenticated: true, admin, trip, tripId: trip ? tripId : undefined });
 }

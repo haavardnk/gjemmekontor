@@ -1,7 +1,11 @@
 import type { IDBPDatabase } from 'idb';
 import { SvelteDate } from 'svelte/reactivity';
 
-import { type GjemmekontorDatabase, openClientDatabase } from '$lib/client/database';
+import {
+	type GjemmekontorDatabase,
+	openClientDatabase,
+	tripClientDatabaseName
+} from '$lib/client/database';
 
 import { isTripDayIndex, tripDayIndexAt } from './itinerary';
 
@@ -16,11 +20,12 @@ export class TripDayState {
 	showTodayOffer = $state(false);
 	initialized = $state(false);
 
-	private readonly databaseName: string | undefined;
+	private readonly databaseNameOverride: string | undefined;
 	private readonly now: () => Date;
 	private databasePromise: Promise<IDBPDatabase<GjemmekontorDatabase>> | undefined;
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private started = false;
+	private tripId: string | undefined;
 	private readonly resumeToday = (): void => {
 		if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
 			return;
@@ -29,13 +34,19 @@ export class TripDayState {
 	};
 
 	constructor(options: TripDayStateOptions = {}) {
-		this.databaseName = options.databaseName;
+		this.tripId = options.databaseName ? 'test-trip' : undefined;
+		this.databaseNameOverride = options.databaseName;
 		this.now = options.now ?? (() => new SvelteDate());
 	}
 
 	private database(): Promise<IDBPDatabase<GjemmekontorDatabase>> {
 		if (!this.databasePromise) {
-			this.databasePromise = openClientDatabase(this.databaseName);
+			if (!this.tripId) {
+				throw new Error('TRIP_ID_REQUIRED');
+			}
+			this.databasePromise = openClientDatabase(
+				this.databaseNameOverride ?? tripClientDatabaseName(this.tripId)
+			);
 		}
 		return this.databasePromise;
 	}
@@ -87,10 +98,18 @@ export class TripDayState {
 		}
 	}
 
-	async start(): Promise<void> {
-		if (this.started) {
+	async start(tripId: string): Promise<void> {
+		if (this.started && this.tripId === tripId) {
 			return;
 		}
+		if (this.tripId && this.tripId !== tripId) {
+			await this.close();
+			this.selectedIndex = 0;
+			this.todayIndex = undefined;
+			this.showTodayOffer = false;
+			this.initialized = false;
+		}
+		this.tripId = tripId;
 		this.started = true;
 		await this.initialize();
 		if (!this.started) {
@@ -126,6 +145,7 @@ export class TripDayState {
 			database.close();
 			this.databasePromise = undefined;
 		}
+		this.tripId = undefined;
 	}
 }
 

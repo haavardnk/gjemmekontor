@@ -54,8 +54,8 @@ test('persists daily shots and manages Digest rows without mobile overflow', asy
 	await expect(page.locator('[data-scenario-id="brollVilla"]')).toBeVisible();
 	const boatBroll = page.locator('[data-scenario-id="brollBat"]');
 	await boatBroll.locator('summary').click();
-	const syncResponse = page.waitForResponse(
-		(response) => new URL(response.url()).pathname === '/api/state'
+	const syncResponse = page.waitForResponse((response) =>
+		/^\/api\/trips\/[^/]+\/state$/.test(new URL(response.url()).pathname)
 	);
 	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 	await syncResponse;

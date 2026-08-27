@@ -2,6 +2,7 @@
 	import { CirclePlus, FileCheck2, FileUp, Pencil, RefreshCw, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
+	import { page } from '$app/state';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		type MapApiResponse,
@@ -30,6 +31,7 @@
 	import LocationInput from './LocationInput.svelte';
 
 	let { day, mapEnabled }: { day: TripDay; mapEnabled: boolean } = $props();
+	const tripId = $derived(page.data.tripId ?? '');
 
 	let snapshot = $state<MapSnapshot>();
 	let locationsReady = $state(false);
@@ -328,7 +330,7 @@
 		void (async (): Promise<void> => {
 			try {
 				if (!mapEnabled) return;
-				const cached = await storedMapSnapshot();
+				const cached = await storedMapSnapshot(tripId);
 				snapshot = cached?.value;
 				if (!navigator.onLine) {
 					return;
@@ -340,7 +342,7 @@
 					}
 					const map = (await response.json()) as MapApiResponse;
 					snapshot = map.snapshot;
-					await storeMapSnapshot(map.snapshot);
+					await storeMapSnapshot(tripId, map.snapshot);
 				} catch {
 					return;
 				}

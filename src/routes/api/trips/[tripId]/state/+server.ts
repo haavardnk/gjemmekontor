@@ -3,4 +3,5 @@ import { handleGetState } from '$lib/server/state';
 
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = ({ request }) => handleGetState(request, getDatabase());
+export const GET: RequestHandler = ({ request, params }) =>
+	handleGetState(request, getDatabase(), params.tripId);

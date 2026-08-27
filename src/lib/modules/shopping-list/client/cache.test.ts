@@ -34,7 +34,7 @@ describe('shopping list cache', (): void => {
 	test('stores and restores the current Bring snapshot', async (): Promise<void> => {
 		const database = await openClientDatabase(databaseName());
 
-		await storeShoppingListSnapshot(snapshot, database);
+		await storeShoppingListSnapshot(database, snapshot);
 
 		expect(await storedShoppingListSnapshot(database)).toEqual(snapshot);
 		database.close();

@@ -56,7 +56,8 @@ test('merges rows created by two offline clients', async ({ browser }) => {
 		await expect(firstPage.getByText(secondDescription)).toBeVisible();
 
 		const serverDescriptions = await firstPage.evaluate(async (): Promise<string[]> => {
-			const response = await fetch('/api/state?since=0');
+			const session = (await (await fetch('/api/auth/session')).json()) as { tripId: string };
+			const response = await fetch(`/api/trips/${session.tripId}/state?since=0`);
 			const body = (await response.json()) as {
 				entries: Array<{ key: string; value: { description?: unknown } }>;
 			};

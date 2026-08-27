@@ -1,6 +1,4 @@
-import type { IDBPDatabase } from 'idb';
-
-import { type GjemmekontorDatabase, openClientDatabase } from '$lib/client/database';
+import { type ClientDatabaseSource, resolveClientDatabase } from '$lib/client/database';
 
 import {
 	isCurrentMapSnapshot,
@@ -32,11 +30,12 @@ const mapSnapshotKey = 'map:snapshot:current';
 const offlineMapPrefix = 'map:offline:';
 
 export async function storedMapSnapshot(
-	database?: IDBPDatabase<GjemmekontorDatabase>
+	source: ClientDatabaseSource
 ): Promise<MapSnapshotRecord | undefined> {
-	const clientDatabase = database ?? (await openClientDatabase());
+	const { database, close } = await resolveClientDatabase(source);
+	const clientDatabase = database;
 	const record = await clientDatabase.get('moduleData', mapSnapshotKey);
-	if (!database) {
+	if (close) {
 		clientDatabase.close();
 	}
 	return isCurrentMapSnapshot(record?.value)
@@ -45,24 +44,24 @@ export async function storedMapSnapshot(
 }
 
 export async function storeMapSnapshot(
-	snapshot: MapSnapshot,
-	database?: IDBPDatabase<GjemmekontorDatabase>
+	source: ClientDatabaseSource,
+	snapshot: MapSnapshot
 ): Promise<void> {
-	const clientDatabase = database ?? (await openClientDatabase());
+	const { database, close } = await resolveClientDatabase(source);
+	const clientDatabase = database;
 	await clientDatabase.put('moduleData', {
 		key: mapSnapshotKey,
 		value: snapshot,
 		updatedAt: Date.now()
 	});
-	if (!database) {
+	if (close) {
 		clientDatabase.close();
 	}
 }
 
-export async function storedOfflineMaps(
-	database?: IDBPDatabase<GjemmekontorDatabase>
-): Promise<OfflineMapRecord[]> {
-	const clientDatabase = database ?? (await openClientDatabase());
+export async function storedOfflineMaps(source: ClientDatabaseSource): Promise<OfflineMapRecord[]> {
+	const { database, close } = await resolveClientDatabase(source);
+	const clientDatabase = database;
 	const records = (await clientDatabase.getAll('moduleBlobs')).flatMap((record) => {
 		if (
 			!record.key.startsWith(offlineMapPrefix) ||
@@ -84,28 +83,26 @@ export async function storedOfflineMaps(
 		}
 		return [{ id: id as MapMode, data: record.data, version, size, updatedAt: record.updatedAt }];
 	});
-	if (!database) {
+	if (close) {
 		clientDatabase.close();
 	}
 	return records;
 }
 
-export async function removeOfflineMap(
-	mode: MapMode,
-	database?: IDBPDatabase<GjemmekontorDatabase>
-): Promise<void> {
-	const clientDatabase = database ?? (await openClientDatabase());
+export async function removeOfflineMap(source: ClientDatabaseSource, mode: MapMode): Promise<void> {
+	const { database, close } = await resolveClientDatabase(source);
+	const clientDatabase = database;
 	await clientDatabase.delete('moduleBlobs', `${offlineMapPrefix}${mode}`);
-	if (!database) {
+	if (close) {
 		clientDatabase.close();
 	}
 }
 
 export async function downloadOfflineMap(
+	source: ClientDatabaseSource,
 	mapPackage: OfflineMapPackage,
 	onProgress: (progress: OfflineMapProgress) => void,
-	fetcher: typeof fetch = fetch,
-	database?: IDBPDatabase<GjemmekontorDatabase>
+	fetcher: typeof fetch = fetch
 ): Promise<OfflineMapRecord> {
 	const response = await fetcher(mapPackage.url);
 	if (!response.ok || !response.body) {
@@ -141,14 +138,15 @@ export async function downloadOfflineMap(
 		size: received,
 		updatedAt: Date.now()
 	};
-	const clientDatabase = database ?? (await openClientDatabase());
+	const { database, close } = await resolveClientDatabase(source);
+	const clientDatabase = database;
 	await clientDatabase.put('moduleBlobs', {
 		key: `${offlineMapPrefix}${record.id}`,
 		data: record.data,
 		metadata: { version: record.version, size: record.size },
 		updatedAt: record.updatedAt
 	});
-	if (!database) {
+	if (close) {
 		clientDatabase.close();
 	}
 	return record;

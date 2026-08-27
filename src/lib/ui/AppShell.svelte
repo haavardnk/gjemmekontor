@@ -80,8 +80,11 @@
 	}
 
 	onMount(() => {
-		void sharedState.start(enabledModuleIds);
-		void tripDayState.start();
+		if (!page.data.tripId) {
+			return;
+		}
+		void sharedState.start(page.data.tripId, enabledModuleIds);
+		void tripDayState.start(page.data.tripId);
 		void warmAppShell(enabledModules.flatMap((module) => module.appShellPaths));
 		return (): void => {
 			sharedState.stop();

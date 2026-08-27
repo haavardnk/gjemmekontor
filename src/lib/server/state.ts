@@ -1,6 +1,8 @@
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 
+import { moduleForStateKey } from '$lib/app/modules/catalog';
+
 import { apiError, apiSuccess } from './api';
 
 const mutationSchema = z
@@ -35,13 +37,15 @@ type StateRow = {
 	updated_at: string;
 };
 
-function readRevision(db: Database.Database): number {
-	const row = db.prepare("SELECT value FROM meta WHERE key = 'global_revision'").get() as {
-		value: string;
-	};
-	const revision = Number.parseInt(row.value, 10);
+function readRevision(db: Database.Database, tripId: string): number {
+	const row = db.prepare('SELECT revision FROM trip_revisions WHERE trip_id = ?').get(tripId) as
+		{ revision: number } | undefined;
+	if (!row) {
+		throw new Error('TRIP_REVISION_NOT_FOUND');
+	}
+	const revision = row.revision;
 	if (!Number.isSafeInteger(revision) || revision < 0) {
-		throw new Error('INVALID_GLOBAL_REVISION');
+		throw new Error('INVALID_TRIP_REVISION');
 	}
 	return revision;
 }
@@ -59,32 +63,41 @@ function toStateEntry(row: StateRow): StateEntry {
 
 export function getState(
 	db: Database.Database,
+	tripId: string,
 	since: number
 ): { revision: number; entries: StateEntry[] } {
 	const rows = db
 		.prepare(
 			`SELECT key, value, revision, client_id, mutation_id, updated_at
-			 FROM state_entries WHERE revision > ? ORDER BY revision`
+			 FROM trip_state_entries
+			 WHERE trip_id = ? AND revision > ?
+			 ORDER BY revision`
 		)
-		.all(since) as StateRow[];
-	return { revision: readRevision(db), entries: rows.map(toStateEntry) };
+		.all(tripId, since) as StateRow[];
+	return { revision: readRevision(db, tripId), entries: rows.map(toStateEntry) };
 }
 
 export function syncState(
 	db: Database.Database,
+	tripId: string,
 	mutations: StateMutation[],
 	now: () => Date = (): Date => new Date()
 ): { revision: number; acknowledgedMutationIds: string[] } {
 	return db.transaction(() => {
-		let revision = readRevision(db);
+		let revision = readRevision(db, tripId);
 		const acknowledgedMutationIds: string[] = [];
-		const findReceipt = db.prepare('SELECT value FROM meta WHERE key = ?');
-		const writeReceipt = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');
-		const writeRevision = db.prepare("UPDATE meta SET value = ? WHERE key = 'global_revision'");
+		const findReceipt = db.prepare(
+			'SELECT revision FROM trip_mutation_receipts WHERE trip_id = ? AND mutation_id = ?'
+		);
+		const writeReceipt = db.prepare(
+			'INSERT INTO trip_mutation_receipts (trip_id, mutation_id, revision) VALUES (?, ?, ?)'
+		);
+		const writeRevision = db.prepare('UPDATE trip_revisions SET revision = ? WHERE trip_id = ?');
 		const writeEntry = db.prepare(`
-			INSERT INTO state_entries (key, value, revision, client_id, mutation_id, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?)
-			ON CONFLICT(key) DO UPDATE SET
+			INSERT INTO trip_state_entries
+				(trip_id, key, value, revision, client_id, mutation_id, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(trip_id, key) DO UPDATE SET
 				value = excluded.value,
 				revision = excluded.revision,
 				client_id = excluded.client_id,
@@ -93,8 +106,7 @@ export function syncState(
 		`);
 
 		for (const mutation of mutations) {
-			const receiptKey = `mutation:${mutation.mutationId}`;
-			if (findReceipt.get(receiptKey)) {
+			if (findReceipt.get(tripId, mutation.mutationId)) {
 				acknowledgedMutationIds.push(mutation.mutationId);
 				continue;
 			}
@@ -102,6 +114,7 @@ export function syncState(
 			revision += 1;
 			const updatedAt = now().toISOString();
 			writeEntry.run(
+				tripId,
 				mutation.key,
 				JSON.stringify(mutation.value),
 				revision,
@@ -109,26 +122,31 @@ export function syncState(
 				mutation.mutationId,
 				updatedAt
 			);
-			writeReceipt.run(receiptKey, String(revision));
+			writeReceipt.run(tripId, mutation.mutationId, revision);
 			acknowledgedMutationIds.push(mutation.mutationId);
 		}
 
-		writeRevision.run(String(revision));
+		writeRevision.run(revision, tripId);
 		return { revision, acknowledgedMutationIds };
 	})();
 }
 
-export function handleGetState(request: Request, db: Database.Database): Response {
+export function handleGetState(request: Request, db: Database.Database, tripId: string): Response {
 	const rawSince = new URL(request.url).searchParams.get('since') ?? '0';
 	const since = Number(rawSince);
 	if (!Number.isSafeInteger(since) || since < 0) {
 		return apiError('INVALID_REVISION', 400);
 	}
 
-	return apiSuccess(getState(db, since));
+	return apiSuccess(getState(db, tripId, since));
 }
 
-export async function handleSyncState(request: Request, db: Database.Database): Promise<Response> {
+export async function handleSyncState(
+	request: Request,
+	db: Database.Database,
+	tripId: string,
+	enabledModuleIds: readonly string[]
+): Promise<Response> {
 	let body: unknown;
 	try {
 		body = await request.json();
@@ -140,6 +158,11 @@ export async function handleSyncState(request: Request, db: Database.Database): 
 	if (!result.success) {
 		return apiError('INVALID_MUTATIONS', 400);
 	}
+	for (const mutation of result.data.mutations) {
+		const module = moduleForStateKey(mutation.key);
+		if (!module) return apiError('INVALID_STATE_KEY', 400);
+		if (!enabledModuleIds.includes(module.id)) return apiError('MODULE_DISABLED', 404);
+	}
 
-	return apiSuccess(syncState(db, result.data.mutations));
+	return apiSuccess(syncState(db, tripId, result.data.mutations));
 }

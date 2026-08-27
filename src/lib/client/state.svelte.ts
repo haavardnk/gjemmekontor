@@ -2,13 +2,16 @@ import type { IDBPDatabase } from 'idb';
 import { SvelteDate, SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 import { z } from 'zod';
 
+import { moduleForStateKey } from '$lib/app/modules/catalog';
+
 import {
 	getClientId,
 	type GjemmekontorDatabase,
 	type JsonValue,
 	openClientDatabase,
 	type PendingMutation,
-	type PendingUpload
+	type PendingUpload,
+	tripClientDatabaseName
 } from './database';
 
 const syncResponseSchema = z.object({
@@ -38,6 +41,7 @@ export type SyncStatus = {
 };
 
 type SharedStateOptions = {
+	tripId?: string;
 	databaseName?: string;
 	fetcher?: typeof fetch;
 	now?: () => number;
@@ -55,7 +59,7 @@ export class SharedState {
 	pendingUploadIds = $state<string[]>([]);
 	ready = $state(false);
 
-	private readonly databaseName: string | undefined;
+	private readonly databaseNameOverride: string | undefined;
 	private readonly fetcher: typeof fetch;
 	private readonly now: () => number;
 	private readonly randomId: () => string;
@@ -67,9 +71,11 @@ export class SharedState {
 	private started = false;
 	private closing = false;
 	private enabledModuleIds: Set<string> | undefined;
+	private tripId: string | undefined;
 
 	constructor(options: SharedStateOptions = {}) {
-		this.databaseName = options.databaseName;
+		this.tripId = options.tripId ?? (options.databaseName ? 'test-trip' : undefined);
+		this.databaseNameOverride = options.databaseName;
 		this.fetcher = options.fetcher ?? fetch;
 		this.now = options.now ?? Date.now;
 		this.randomId = options.randomId ?? (() => crypto.randomUUID());
@@ -77,9 +83,21 @@ export class SharedState {
 
 	private database(): Promise<IDBPDatabase<GjemmekontorDatabase>> {
 		if (!this.databasePromise) {
-			this.databasePromise = openClientDatabase(this.databaseName);
+			if (!this.tripId) {
+				throw new Error('TRIP_ID_REQUIRED');
+			}
+			this.databasePromise = openClientDatabase(
+				this.databaseNameOverride ?? tripClientDatabaseName(this.tripId)
+			);
 		}
 		return this.databasePromise;
+	}
+
+	private stateApiPath(path = ''): string {
+		if (!this.tripId) {
+			throw new Error('TRIP_ID_REQUIRED');
+		}
+		return `/api/trips/${encodeURIComponent(this.tripId)}/state${path}`;
 	}
 
 	private isOnline(): boolean {
@@ -291,6 +309,12 @@ export class SharedState {
 			const blockedStateKeys = new SvelteSet(queuedUploads.map((upload) => upload.relatedStateKey));
 			const pending = queuedMutations
 				.filter((mutation) => !blockedStateKeys.has(mutation.key))
+				.filter((mutation) => {
+					const module = moduleForStateKey(mutation.key);
+					return Boolean(
+						module && (!this.enabledModuleIds || this.enabledModuleIds.has(module.id))
+					);
+				})
 				.sort(
 					(left, right) =>
 						(left.sequence ?? left.clientTimestamp) - (right.sequence ?? right.clientTimestamp) ||
@@ -299,7 +323,7 @@ export class SharedState {
 				);
 			if (pending.length > 0) {
 				this.status = { phase: 'saving', pending: pending.length };
-				const pushResponse = await this.fetcher('/api/state/sync', {
+				const pushResponse = await this.fetcher(this.stateApiPath('/sync'), {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({
@@ -327,7 +351,7 @@ export class SharedState {
 
 			const revisionRecord = await db.get('meta', 'serverRevision');
 			const revision = typeof revisionRecord?.value === 'number' ? revisionRecord.value : 0;
-			const pullResponse = await this.fetcher(`/api/state?since=${revision}`);
+			const pullResponse = await this.fetcher(`${this.stateApiPath()}?since=${revision}`);
 			if (!pullResponse.ok) {
 				throw new Error('SYNC_PULL_FAILED');
 			}
@@ -359,9 +383,15 @@ export class SharedState {
 		}
 	}
 
-	async start(enabledModuleIds?: readonly string[]): Promise<void> {
-		if (this.started) {
+	async start(tripId: string, enabledModuleIds?: readonly string[]): Promise<void> {
+		if (this.started && this.tripId === tripId) {
+			this.enabledModuleIds = enabledModuleIds ? new SvelteSet(enabledModuleIds) : undefined;
 			return;
+		}
+		if (this.tripId && this.tripId !== tripId) {
+			await this.resetForTrip(tripId);
+		} else {
+			this.tripId = tripId;
 		}
 		this.enabledModuleIds = enabledModuleIds ? new SvelteSet(enabledModuleIds) : undefined;
 		this.started = true;
@@ -375,6 +405,28 @@ export class SharedState {
 		}
 		this.timer = setInterval(this.requestSync, 15_000);
 		await this.sync();
+	}
+
+	private async resetForTrip(tripId: string): Promise<void> {
+		this.closing = true;
+		this.stop();
+		if (this.syncPromise) {
+			await this.syncPromise;
+		}
+		if (this.databasePromise) {
+			const db = await this.databasePromise;
+			db.close();
+		}
+		this.databasePromise = undefined;
+		this.initializePromise = undefined;
+		this.syncPromise = undefined;
+		this.syncRequested = false;
+		this.values = {};
+		this.status = { phase: 'idle', pending: 0 };
+		this.pendingUploadIds = [];
+		this.ready = false;
+		this.tripId = tripId;
+		this.closing = false;
 	}
 
 	stop(): void {
@@ -404,6 +456,7 @@ export class SharedState {
 			this.databasePromise = undefined;
 		}
 		this.ready = false;
+		this.tripId = undefined;
 	}
 }
 

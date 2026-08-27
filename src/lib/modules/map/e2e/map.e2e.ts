@@ -903,7 +903,8 @@ test('replaces a planned day route with the accumulated GPX track', async ({ pag
 	await page.evaluate(
 		async ({ leg, id }) => {
 			leg.gpx.id = id;
-			const response = await fetch('/api/state/sync', {
+			const session = (await (await fetch('/api/auth/session')).json()) as { tripId: string };
+			const response = await fetch(`/api/trips/${session.tripId}/state/sync`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({

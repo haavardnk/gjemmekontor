@@ -61,36 +61,40 @@ export interface GjemmekontorDatabase extends DBSchema {
 	meta: { key: string; value: MetaRecord };
 }
 
-export const clientDatabaseName = 'gjemmekontor-data';
+export function tripClientDatabaseName(tripId: string): string {
+	if (!tripId.trim()) {
+		throw new Error('TRIP_ID_REQUIRED');
+	}
+	return `gjemmekontor-v0.2.0-trip-${tripId}`;
+}
 
-export function openClientDatabase(
-	name = clientDatabaseName
-): Promise<IDBPDatabase<GjemmekontorDatabase>> {
-	return openDB<GjemmekontorDatabase>(name, 2, {
-		upgrade(db, oldVersion): void {
-			if (oldVersion < 1) {
-				db.createObjectStore('state', { keyPath: 'key' });
-				db.createObjectStore('mutations', { keyPath: 'mutationId' });
-				db.createObjectStore('meta', { keyPath: 'key' });
-			}
-			if (oldVersion < 2) {
-				db.createObjectStore('moduleData', { keyPath: 'key' });
-				db.createObjectStore('moduleBlobs', { keyPath: 'key' });
-				db.createObjectStore('pendingUploads', { keyPath: 'id' });
-				const rawDatabase = db as unknown as IDBDatabase;
-				for (const legacyStore of [
-					'mapSnapshot',
-					'offlineMap',
-					'shoppingListSnapshot',
-					'pendingGpxUploads'
-				]) {
-					if (rawDatabase.objectStoreNames.contains(legacyStore)) {
-						rawDatabase.deleteObjectStore(legacyStore);
-					}
-				}
-			}
+export function openClientDatabase(name: string): Promise<IDBPDatabase<GjemmekontorDatabase>> {
+	return openDB<GjemmekontorDatabase>(name, 1, {
+		upgrade(db): void {
+			db.createObjectStore('state', { keyPath: 'key' });
+			db.createObjectStore('mutations', { keyPath: 'mutationId' });
+			db.createObjectStore('moduleData', { keyPath: 'key' });
+			db.createObjectStore('moduleBlobs', { keyPath: 'key' });
+			db.createObjectStore('pendingUploads', { keyPath: 'id' });
+			db.createObjectStore('meta', { keyPath: 'key' });
 		}
 	});
+}
+
+export function openTripClientDatabase(
+	tripId: string
+): Promise<IDBPDatabase<GjemmekontorDatabase>> {
+	return openClientDatabase(tripClientDatabaseName(tripId));
+}
+
+export type ClientDatabaseSource = string | IDBPDatabase<GjemmekontorDatabase>;
+
+export async function resolveClientDatabase(
+	source: ClientDatabaseSource
+): Promise<{ database: IDBPDatabase<GjemmekontorDatabase>; close: boolean }> {
+	return typeof source === 'string'
+		? { database: await openTripClientDatabase(source), close: true }
+		: { database: source, close: false };
 }
 
 export async function getClientId(db: IDBPDatabase<GjemmekontorDatabase>): Promise<string> {

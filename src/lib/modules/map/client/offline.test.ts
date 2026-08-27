@@ -44,7 +44,7 @@ describe('offline maps', (): void => {
 			features: []
 		} satisfies MapSnapshot;
 
-		await storeMapSnapshot(snapshot, database);
+		await storeMapSnapshot(database, snapshot);
 
 		expect((await storedMapSnapshot(database))?.value).toEqual(snapshot);
 		database.close();
@@ -92,6 +92,7 @@ describe('offline maps', (): void => {
 		});
 
 		const record = await downloadOfflineMap(
+			database,
 			{
 				mode: 'normal',
 				name: 'Vanlig kart',
@@ -100,14 +101,13 @@ describe('offline maps', (): void => {
 				url: '/api/map/offline/normal'
 			},
 			progress,
-			fetcher,
-			database
+			fetcher
 		);
 		expect(record).toMatchObject({ id: 'normal', size: 8, version: 'v1' });
 		expect(progress).toHaveBeenLastCalledWith({ received: 8, total: 8 });
 		expect(await storedOfflineMaps(database)).toHaveLength(1);
 
-		await removeOfflineMap('normal', database);
+		await removeOfflineMap(database, 'normal');
 		expect(await storedOfflineMaps(database)).toEqual([]);
 		database.close();
 	});
@@ -120,6 +120,7 @@ describe('offline maps', (): void => {
 
 		await expect(
 			downloadOfflineMap(
+				database,
 				{
 					mode: 'satellite',
 					name: 'Satellitt',
@@ -128,8 +129,7 @@ describe('offline maps', (): void => {
 					url: '/api/map/offline/satellite'
 				},
 				() => undefined,
-				fetcher,
-				database
+				fetcher
 			)
 		).rejects.toThrow('OFFLINE_MAP_SIZE_MISMATCH');
 		expect(await storedOfflineMaps(database)).toEqual([]);
@@ -144,6 +144,7 @@ describe('offline maps', (): void => {
 
 		await expect(
 			downloadOfflineMap(
+				database,
 				{
 					mode: 'nautical',
 					name: 'Sjøkart',
@@ -152,8 +153,7 @@ describe('offline maps', (): void => {
 					url: '/api/map/offline/nautical'
 				},
 				() => undefined,
-				fetcher,
-				database
+				fetcher
 			)
 		).rejects.toThrow('OFFLINE_MAP_INVALID');
 		expect(await storedOfflineMaps(database)).toEqual([]);

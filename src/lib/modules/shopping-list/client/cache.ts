@@ -1,6 +1,4 @@
-import type { IDBPDatabase } from 'idb';
-
-import { type GjemmekontorDatabase, openClientDatabase } from '$lib/client/database';
+import { type ClientDatabaseSource, resolveClientDatabase } from '$lib/client/database';
 import {
 	type ShoppingListSnapshot,
 	shoppingListSnapshotSchema
@@ -9,28 +7,30 @@ import {
 const snapshotKey = 'shopping-list:snapshot:current';
 
 export async function storedShoppingListSnapshot(
-	database?: IDBPDatabase<GjemmekontorDatabase>
+	source: ClientDatabaseSource
 ): Promise<ShoppingListSnapshot | undefined> {
-	const clientDatabase = database ?? (await openClientDatabase());
+	const { database, close } = await resolveClientDatabase(source);
+	const clientDatabase = database;
 	const record = await clientDatabase.get('moduleData', snapshotKey);
 	const current = shoppingListSnapshotSchema.safeParse(record?.value);
-	if (!database) {
+	if (close) {
 		clientDatabase.close();
 	}
 	return current.success ? current.data : undefined;
 }
 
 export async function storeShoppingListSnapshot(
-	snapshot: ShoppingListSnapshot,
-	database?: IDBPDatabase<GjemmekontorDatabase>
+	source: ClientDatabaseSource,
+	snapshot: ShoppingListSnapshot
 ): Promise<void> {
-	const clientDatabase = database ?? (await openClientDatabase());
+	const { database, close } = await resolveClientDatabase(source);
+	const clientDatabase = database;
 	await clientDatabase.put('moduleData', {
 		key: snapshotKey,
 		value: snapshot,
 		updatedAt: Date.now()
 	});
-	if (!database) {
+	if (close) {
 		clientDatabase.close();
 	}
 }

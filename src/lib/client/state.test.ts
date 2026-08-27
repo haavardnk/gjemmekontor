@@ -3,7 +3,7 @@ import 'fake-indexeddb/auto';
 import { deleteDB, openDB } from 'idb';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { openClientDatabase, type PendingUpload } from './database';
+import { openClientDatabase, type PendingUpload, tripClientDatabaseName } from './database';
 import { SharedState } from './state.svelte';
 
 const extraction = {
@@ -72,9 +72,9 @@ describe('client state', (): void => {
 		db.close();
 	});
 
-	test('drops unused version 1 module caches while preserving shared state and metadata', async (): Promise<void> => {
-		const name = databaseName();
-		const legacy = await openDB(name, 1, {
+	test('starts each trip in a clean database without importing legacy device data', async (): Promise<void> => {
+		const legacyName = databaseName();
+		const legacy = await openDB(legacyName, 1, {
 			upgrade(database): void {
 				database.createObjectStore('state', { keyPath: 'key' });
 				database.createObjectStore('mutations', { keyPath: 'mutationId' });
@@ -97,16 +97,63 @@ describe('client state', (): void => {
 		await legacy.put('mapSnapshot', { id: 'current', value: { stale: true } });
 		legacy.close();
 
-		const database = await openClientDatabase(name);
-		expect(database.version).toBe(2);
-		expect(await database.get('state', 'shots:d0:scenario:test')).toMatchObject({ value: true });
-		expect(await database.get('meta', 'selectedDay')).toEqual({
-			key: 'selectedDay',
-			value: { dayIndex: 2 }
-		});
+		const tripName = tripClientDatabaseName(crypto.randomUUID());
+		databaseNames.push(tripName);
+		const database = await openClientDatabase(tripName);
+		expect(database.version).toBe(1);
+		expect(await database.count('state')).toBe(0);
+		expect(await database.get('meta', 'selectedDay')).toBeUndefined();
 		expect(await database.count('moduleData')).toBe(0);
-		expect(Array.from(database.objectStoreNames)).not.toContain('mapSnapshot');
 		database.close();
+	});
+
+	test('isolates browser state and metadata between trips', async (): Promise<void> => {
+		const firstName = tripClientDatabaseName('trip-a');
+		const secondName = tripClientDatabaseName('trip-b');
+		databaseNames.push(firstName, secondName);
+		const first = await openClientDatabase(firstName);
+		const second = await openClientDatabase(secondName);
+		await first.put('state', {
+			key: 'shots:d0:test',
+			value: 'first',
+			revision: 1,
+			clientId: 'client-a',
+			mutationId: 'mutation-a',
+			updatedAt: '2026-08-27T00:00:00.000Z'
+		});
+		await first.put('meta', { key: 'selectedDay', value: { dayIndex: 4 } });
+
+		expect(await second.get('state', 'shots:d0:test')).toBeUndefined();
+		expect(await second.get('meta', 'selectedDay')).toBeUndefined();
+		first.close();
+		second.close();
+	});
+
+	test('clears in-memory state when the active trip changes', async (): Promise<void> => {
+		const firstName = tripClientDatabaseName('trip-a');
+		const secondName = tripClientDatabaseName('trip-b');
+		databaseNames.push(firstName, secondName);
+		const first = await openClientDatabase(firstName);
+		await first.put('state', {
+			key: 'shots:d0:test',
+			value: 'only-first-trip',
+			revision: 1,
+			clientId: 'client-a',
+			mutationId: 'mutation-a',
+			updatedAt: '2026-08-27T00:00:00.000Z'
+		});
+		first.close();
+		const state = new SharedState({
+			fetcher: vi.fn(async (): Promise<Response> => Response.json({ revision: 0, entries: [] }))
+		});
+
+		await state.start('trip-a');
+		expect(state.values['shots:d0:test']).toBe('only-first-trip');
+		await state.start('trip-b');
+
+		expect(state.values['shots:d0:test']).toBeUndefined();
+		expect(state.values).toEqual({});
+		await state.close();
 	});
 
 	test('persists a leg mutation and GPX blob atomically', async (): Promise<void> => {
@@ -247,7 +294,7 @@ describe('client state', (): void => {
 		const fetcher = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
 			const url = String(input);
 			calls.push(url);
-			if (url === '/api/state/sync') {
+			if (url === '/api/trips/test-trip/state/sync') {
 				return Response.json({ revision: 1, acknowledgedMutationIds: ['mutation-1'] });
 			}
 			return Response.json({
@@ -274,7 +321,7 @@ describe('client state', (): void => {
 		await db.put('mutations', {
 			mutationId: 'mutation-1',
 			clientId: 'client-a',
-			key: 'local:key',
+			key: 'shots:local:key',
 			value: 'local',
 			clientTimestamp: 1_000
 		});
@@ -284,7 +331,10 @@ describe('client state', (): void => {
 		db.close();
 		await state.close();
 
-		expect(calls).toEqual(['/api/state/sync', '/api/state?since=0']);
+		expect(calls).toEqual([
+			'/api/trips/test-trip/state/sync',
+			'/api/trips/test-trip/state?since=0'
+		]);
 		expect(mutationCount).toBe(0);
 		expect(state.values['remote:key']).toBe('remote');
 		expect(state.status).toEqual({ phase: 'synced', pending: 0 });
@@ -296,7 +346,7 @@ describe('client state', (): void => {
 		const fetcher = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
 			const url = String(input);
 			calls.push(url);
-			if (url === '/api/state/sync') {
+			if (url === '/api/trips/test-trip/state/sync') {
 				return Response.json({ revision: 1, acknowledgedMutationIds: ['mutation-gpx'] });
 			}
 			if (url.startsWith('/api/logbook/gpx/gpx-a?')) {
@@ -322,8 +372,8 @@ describe('client state', (): void => {
 		await state.close();
 
 		expect(calls[0]).toMatch(/^\/api\/logbook\/gpx\/gpx-a\?/);
-		expect(calls[1]).toBe('/api/state/sync');
-		expect(calls[2]).toBe('/api/state?since=0');
+		expect(calls[1]).toBe('/api/trips/test-trip/state/sync');
+		expect(calls[2]).toBe('/api/trips/test-trip/state?since=0');
 		expect(uploadCount).toBe(0);
 		expect(state.isUploadPending('gpx-a')).toBe(false);
 	});
@@ -351,9 +401,9 @@ describe('client state', (): void => {
 		database.close();
 		const state = new SharedState({ databaseName: name, fetcher });
 
-		await state.start(['shots']);
+		await state.start('test-trip', ['shots']);
 		const reopened = await openClientDatabase(name);
-		expect(calls).toEqual(['/api/state?since=0']);
+		expect(calls).toEqual(['/api/trips/test-trip/state?since=0']);
 		expect(await reopened.count('pendingUploads')).toBe(1);
 		expect(await reopened.count('mutations')).toBe(1);
 		reopened.close();
@@ -365,7 +415,7 @@ describe('client state', (): void => {
 		let pushed: { mutationId: string; sequence?: number }[] = [];
 		const fetcher = vi.fn(
 			async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-				if (String(input) === '/api/state/sync') {
+				if (String(input) === '/api/trips/test-trip/state/sync') {
 					pushed = (JSON.parse(String(init?.body)) as { mutations: { mutationId: string }[] })
 						.mutations;
 					return Response.json({
@@ -423,7 +473,7 @@ describe('client state', (): void => {
 				if (url.startsWith('/api/logbook/gpx/')) {
 					return Response.json({ checksum: 'abc', parserVersion: 1, extraction });
 				}
-				if (url === '/api/state/sync') {
+				if (url === '/api/trips/test-trip/state/sync') {
 					const mutations = (
 						JSON.parse(String(init?.body)) as { mutations: { mutationId: string }[] }
 					).mutations;
@@ -453,10 +503,10 @@ describe('client state', (): void => {
 		await state.close();
 
 		expect(calls.findIndex((call) => call.startsWith('/api/logbook/gpx/gpx-a?'))).toBeLessThan(
-			calls.findIndex((call) => call === '/api/state/sync')
+			calls.findIndex((call) => call === '/api/trips/test-trip/state/sync')
 		);
 		expect(calls.findIndex((call) => call.startsWith('/api/logbook/gpx/gpx-b?'))).toBeLessThan(
-			calls.lastIndexOf('/api/state/sync')
+			calls.lastIndexOf('/api/trips/test-trip/state/sync')
 		);
 		expect(mutationCount).toBe(0);
 		expect(uploadCount).toBe(0);

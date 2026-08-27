@@ -42,6 +42,12 @@ export function moduleForApiPath(pathname: string): (typeof moduleCatalog)[numbe
 	);
 }
 
+export function moduleForStateKey(key: string): (typeof moduleCatalog)[number] | undefined {
+	return moduleCatalog.find((module) =>
+		module.statePrefixes.some((prefix) => key.startsWith(prefix))
+	);
+}
+
 export function isCacheableModuleApi(pathname: string): boolean {
 	const module = moduleForApiPath(pathname);
 	return Boolean(

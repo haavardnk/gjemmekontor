@@ -49,11 +49,11 @@ const applyRequestSchema = previewRequestSchema.extend({
 
 type ScopeRequest = z.infer<typeof previewRequestSchema>;
 
-function loadDishes(db: Database.Database, input: ScopeRequest): CurrentDish[] {
-	const read = db.prepare('SELECT value FROM state_entries WHERE key = ?');
+function loadDishes(db: Database.Database, tripId: string, input: ScopeRequest): CurrentDish[] {
+	const read = db.prepare('SELECT value FROM trip_state_entries WHERE trip_id = ? AND key = ?');
 	return input.cycles.map(({ archiveId, cycleId }) => {
-		const archiveRow = read.get(menuArchiveKey(archiveId)) as { value: string } | undefined;
-		const activeRow = read.get(menuActiveKey(archiveId)) as { value: string } | undefined;
+		const archiveRow = read.get(tripId, menuArchiveKey(archiveId)) as { value: string } | undefined;
+		const activeRow = read.get(tripId, menuActiveKey(archiveId)) as { value: string } | undefined;
 		const archive = menuArchiveSchema.safeParse(
 			archiveRow ? JSON.parse(archiveRow.value) : undefined
 		);
@@ -96,6 +96,7 @@ function bringError(error: unknown): Response {
 export async function handleMenuShoppingPreview(
 	request: Request,
 	db: Database.Database,
+	tripId: string,
 	bring: BringService = getBringService(),
 	shoppingListEnabled = true
 ): Promise<Response> {
@@ -103,7 +104,7 @@ export async function handleMenuShoppingPreview(
 	const parsed = previewRequestSchema.safeParse(await parseRequest(request));
 	if (!parsed.success) return apiError('INVALID_REQUEST', 400);
 	try {
-		const dishes = loadDishes(db, parsed.data);
+		const dishes = loadDishes(db, tripId, parsed.data);
 		const planning = await bring.planningSnapshot();
 		return apiSuccess(
 			createMenuShoppingPreview(
@@ -122,6 +123,7 @@ export async function handleMenuShoppingPreview(
 export async function handleMenuShoppingApply(
 	request: Request,
 	db: Database.Database,
+	tripId: string,
 	bring: BringService = getBringService(),
 	now: () => Date = () => new Date(),
 	shoppingListEnabled = true
@@ -130,7 +132,7 @@ export async function handleMenuShoppingApply(
 	const parsed = applyRequestSchema.safeParse(await parseRequest(request));
 	if (!parsed.success) return apiError('INVALID_REQUEST', 400);
 	try {
-		const dishes = loadDishes(db, parsed.data);
+		const dishes = loadDishes(db, tripId, parsed.data);
 		if (menuShoppingFingerprint(dishes) !== parsed.data.fingerprint) {
 			return apiError('MENU_PREVIEW_STALE', 409);
 		}
