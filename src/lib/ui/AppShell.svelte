@@ -2,10 +2,12 @@
 	import {
 		Backpack,
 		BookOpen,
+		ChevronsUpDown,
 		Ellipsis,
 		LogOut,
 		Map,
 		ScrollText,
+		Settings,
 		ShoppingBasket,
 		Utensils,
 		Video
@@ -95,6 +97,24 @@
 		<BrandLogo class="size-10" label="" />
 	</a>
 	<div class="flex items-center gap-1">
+		<a
+			class="btn btn-square btn-ghost btn-sm"
+			href={resolve('/trips')}
+			aria-label="Velg reise"
+			title="Velg reise"
+		>
+			<ChevronsUpDown size={20} />
+		</a>
+		{#if page.data.adminAuthenticated && page.data.tripId}
+			<a
+				class="btn btn-square btn-ghost btn-sm"
+				href={resolve('/admin/trips/[tripId]', { tripId: page.data.tripId })}
+				aria-label="Trip Settings"
+				title="Trip Settings"
+			>
+				<Settings size={20} />
+			</a>
+		{/if}
 		<ThemeToggle />
 		<button
 			class="btn btn-square btn-ghost btn-sm"

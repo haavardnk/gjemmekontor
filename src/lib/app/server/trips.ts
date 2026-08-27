@@ -7,7 +7,7 @@ export type TripSummary = {
 	slug: string;
 	name: string;
 	welcomeText: string;
-	status: 'draft' | 'active' | 'completed';
+	status: 'draft' | 'active' | 'completed' | 'archived';
 	startsOn?: string;
 	endsOn?: string;
 	setupRequired: boolean;
@@ -68,6 +68,17 @@ export function listSelectableTrips(db: Database.Database): TripSummary[] {
 			`${tripSelect}
 			 WHERE t.visibility = 'listed' AND t.status != 'archived'
 			 ORDER BY t.starts_on IS NULL, t.starts_on DESC, t.name COLLATE NOCASE`
+		)
+		.all() as TripRow[];
+	return rows.map(summary);
+}
+
+export function listAdminTrips(db: Database.Database): TripSummary[] {
+	const rows = db
+		.prepare(
+			`${tripSelect}
+			 ORDER BY t.status = 'archived', t.starts_on IS NULL, t.starts_on DESC,
+			          t.name COLLATE NOCASE`
 		)
 		.all() as TripRow[];
 	return rows.map(summary);

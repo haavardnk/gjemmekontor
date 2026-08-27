@@ -1,0 +1,167 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+
+import { defaultModuleIds, type ModuleId } from '$lib/app/modules/catalog';
+
+import { createApplicationDatabase } from './database';
+import {
+	activateTrip,
+	addPersonToTrip,
+	createTrip,
+	getTripSettings,
+	removePersonFromTrip,
+	setTripModules,
+	setTripPassword,
+	tripReadiness,
+	updateTripGeneral
+} from './trip-settings';
+
+let dataDir = '';
+let db: ReturnType<typeof createApplicationDatabase>;
+
+beforeEach((): void => {
+	dataDir = mkdtempSync(join(tmpdir(), 'gjemmekontor-settings-'));
+	db = createApplicationDatabase(dataDir);
+});
+
+afterEach((): void => {
+	db.close();
+	rmSync(dataDir, { recursive: true, force: true });
+});
+
+const general = {
+	name: 'Sørlandet 2027',
+	destination: 'Sørlandet',
+	startsOn: '2027-07-01',
+	endsOn: '2027-07-03',
+	timezone: 'Europe/Oslo',
+	welcomeText: 'Velkommen om bord'
+};
+
+describe('trip settings', (): void => {
+	test('creates an active trip atomically with members and ordered modules', (): void => {
+		const personId = addPersonToTripDraft('Tina');
+		const order: ModuleId[] = ['gear', ...defaultModuleIds.filter((id) => id !== 'gear')];
+		const tripId = createTrip(db, {
+			...general,
+			password: 'shared-trip-password',
+			memberIds: [personId],
+			modules: {
+				order,
+				enabled: ['gear', 'menu'],
+				mapGoogleMyMapsId: '',
+				shoppingListUuid: ''
+			}
+		});
+
+		const settings = getTripSettings(db, tripId);
+		expect(settings).toMatchObject({
+			name: 'Sørlandet 2027',
+			status: 'active',
+			hasPassword: true
+		});
+		expect(settings?.modules.map((module) => module.id)).toEqual(order);
+		expect(settings?.people.find((person) => person.id === personId)?.member).toBe(true);
+		expect(db.prepare('SELECT COUNT(*) AS count FROM trip_days WHERE active = 1').get()).toEqual({
+			count: 3
+		});
+	});
+
+	test('deactivates removed dates and reuses their stable IDs', (): void => {
+		const tripId = createTestTrip();
+		const original = db
+			.prepare("SELECT id FROM trip_days WHERE trip_id = ? AND calendar_date = '2027-07-03'")
+			.get(tripId) as { id: string };
+
+		updateTripGeneral(db, tripId, { ...general, endsOn: '2027-07-02' });
+		expect(
+			db
+				.prepare("SELECT active FROM trip_days WHERE trip_id = ? AND calendar_date = '2027-07-03'")
+				.get(tripId)
+		).toEqual({ active: 0 });
+
+		updateTripGeneral(db, tripId, general);
+		expect(
+			db
+				.prepare(
+					"SELECT id, active FROM trip_days WHERE trip_id = ? AND calendar_date = '2027-07-03'"
+				)
+				.get(tripId)
+		).toEqual({ id: original.id, active: 1 });
+	});
+
+	test('keeps people global after they leave a trip', (): void => {
+		const tripId = createTestTrip();
+		const personId = addPersonToTrip(db, tripId, { displayName: 'Oskar' });
+		removePersonFromTrip(db, tripId, personId);
+
+		expect(db.prepare('SELECT display_name FROM people WHERE id = ?').get(personId)).toEqual({
+			display_name: 'Oskar'
+		});
+		expect(
+			getTripSettings(db, tripId)?.people.find((person) => person.id === personId)
+		).toMatchObject({ member: false });
+	});
+
+	test('moves an invalid module setup to draft until fixed', (): void => {
+		const tripId = createTestTrip();
+		setTripModules(db, tripId, {
+			order: [...defaultModuleIds],
+			enabled: ['map'],
+			mapGoogleMyMapsId: '',
+			shoppingListUuid: ''
+		});
+		expect(getTripSettings(db, tripId)?.status).toBe('draft');
+		expect(tripReadiness(db, tripId).issues).toContain('Kart trenger en Google My Maps-ID.');
+
+		setTripModules(db, tripId, {
+			order: [...defaultModuleIds],
+			enabled: ['map'],
+			mapGoogleMyMapsId: 'public-map-id',
+			shoppingListUuid: ''
+		});
+		expect(activateTrip(db, tripId)).toEqual({ ready: true, issues: [] });
+		expect(getTripSettings(db, tripId)?.status).toBe('active');
+	});
+
+	test('increments password versions without retaining plaintext', (): void => {
+		const tripId = createTestTrip();
+		const before = db
+			.prepare('SELECT credential_version, password_hash FROM trip_credentials WHERE trip_id = ?')
+			.get(tripId) as { credential_version: number; password_hash: string };
+		setTripPassword(db, tripId, 'replacement-trip-password');
+		const after = db
+			.prepare('SELECT credential_version, password_hash FROM trip_credentials WHERE trip_id = ?')
+			.get(tripId) as { credential_version: number; password_hash: string };
+		expect(after.credential_version).toBe(before.credential_version + 1);
+		expect(after.password_hash).not.toBe(before.password_hash);
+		expect(after.password_hash).not.toContain('replacement-trip-password');
+	});
+});
+
+function addPersonToTripDraft(displayName: string): string {
+	const id = crypto.randomUUID();
+	db.prepare(
+		`INSERT INTO people
+		 (id, display_name, short_name, color, archived_at, created_at, updated_at)
+		 VALUES (?, ?, NULL, NULL, NULL, '2026-08-27', '2026-08-27')`
+	).run(id, displayName);
+	return id;
+}
+
+function createTestTrip(): string {
+	return createTrip(db, {
+		...general,
+		password: 'shared-trip-password',
+		memberIds: [],
+		modules: {
+			order: [...defaultModuleIds],
+			enabled: ['gear'],
+			mapGoogleMyMapsId: '',
+			shoppingListUuid: ''
+		}
+	});
+}

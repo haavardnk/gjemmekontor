@@ -19,9 +19,9 @@
 			<h1 class="font-display text-4xl font-bold text-neutral">Reiser</h1>
 			<p class="mt-2 text-sm text-base-content/70">Opprett og konfigurer reisene i appen.</p>
 		</div>
-		<button class="btn btn-primary" type="button" disabled title="Kommer i neste trinn">
+		<a class="btn btn-primary" href={resolve('/admin/trips/new')}>
 			<Plus size={18} /> Ny reise
-		</button>
+		</a>
 	</header>
 
 	<section class="space-y-3" aria-label="Administrer reiser">
@@ -30,12 +30,19 @@
 				<div class="min-w-0 grow">
 					<h2 class="truncate text-lg font-bold">{trip.name}</h2>
 					<p class="mt-1 text-sm text-base-content/65">
-						{trip.setupRequired ? 'Oppsett må fullføres' : 'Klar for innlogging'}
+						{trip.status === 'archived'
+							? 'Arkivert'
+							: trip.setupRequired
+								? 'Oppsett må fullføres'
+								: 'Klar for innlogging'}
 					</p>
 				</div>
-				<button class="btn btn-outline btn-sm" type="button" disabled title="Kommer i neste trinn">
+				<a
+					class="btn btn-outline btn-sm"
+					href={resolve('/admin/trips/[tripId]', { tripId: trip.id })}
+				>
 					<Settings size={17} /> Innstillinger
-				</button>
+				</a>
 			</div>
 		{/each}
 	</section>
