@@ -9,6 +9,7 @@ import {
 } from '$lib/server/database';
 import { getRuntimeConfig } from '$lib/server/env';
 
+import { importLegacyKroatia2026 } from './legacy-trip-import';
 import { tripDatabaseMigrations } from './trip-schema';
 
 function combineMigrations(
@@ -34,6 +35,9 @@ export function createApplicationDatabase(dataDir: string): Database.Database {
 let database: Database.Database | undefined;
 
 export function getDatabase(): Database.Database {
-	if (!database) database = createApplicationDatabase(getRuntimeConfig().dataDir);
+	if (!database) {
+		database = createApplicationDatabase(getRuntimeConfig().dataDir);
+		importLegacyKroatia2026(database);
+	}
 	return database;
 }
