@@ -22,6 +22,13 @@ afterEach((): void => {
 });
 
 describe('Google map cache', (): void => {
+	test('uses a separate filesystem root for every trip', (): void => {
+		const root = temporaryDirectory();
+		expect(mapCachePaths(root, 'trip-a').directory).toBe(join(root, 'trips', 'trip-a', 'map'));
+		expect(mapCachePaths(root, 'trip-b').directory).toBe(join(root, 'trips', 'trip-b', 'map'));
+		expect(mapCachePaths(root, 'trip-a').snapshot).not.toBe(mapCachePaths(root, 'trip-b').snapshot);
+	});
+
 	test('writes a valid response and revalidates with conditional headers', async (): Promise<void> => {
 		let now = Date.parse('2026-08-20T00:00:00.000Z');
 		const fetchImplementation = vi
@@ -32,7 +39,7 @@ describe('Google map cache', (): void => {
 				})
 			)
 			.mockResolvedValueOnce(new Response(null, { status: 304 }));
-		const paths = mapCachePaths(temporaryDirectory());
+		const paths = mapCachePaths(temporaryDirectory(), 'trip-a');
 		const service = createMapService({
 			mapId: 'map-id',
 			paths,
@@ -63,7 +70,7 @@ describe('Google map cache', (): void => {
 		);
 		const service = createMapService({
 			mapId: 'map-id',
-			paths: mapCachePaths(temporaryDirectory()),
+			paths: mapCachePaths(temporaryDirectory(), 'trip-a'),
 			fetch: fetchImplementation
 		});
 
@@ -84,7 +91,7 @@ describe('Google map cache', (): void => {
 			.fn<typeof fetch>()
 			.mockResolvedValueOnce(new Response(fixture))
 			.mockResolvedValue(new Response('<kml><broken>'));
-		const paths = mapCachePaths(temporaryDirectory());
+		const paths = mapCachePaths(temporaryDirectory(), 'trip-a');
 		const service = createMapService({ mapId: 'map-id', paths, fetch: fetchImplementation });
 		const initial = await service.refresh();
 		const cachedJson = readFileSync(paths.snapshot, 'utf8');
@@ -99,7 +106,7 @@ describe('Google map cache', (): void => {
 		const fetchImplementation = vi
 			.fn<typeof fetch>()
 			.mockImplementation(async (): Promise<Response> => new Response(fixture));
-		const paths = mapCachePaths(temporaryDirectory());
+		const paths = mapCachePaths(temporaryDirectory(), 'trip-a');
 		const service = createMapService({ mapId: 'map-id', paths, fetch: fetchImplementation });
 		const current = await service.refresh();
 		writeFileSync(
@@ -128,7 +135,7 @@ describe('Google map cache', (): void => {
 			.mockResolvedValue(new Response(null, { status: 403 }));
 		const service = createMapService({
 			mapId: 'map-id',
-			paths: mapCachePaths(temporaryDirectory()),
+			paths: mapCachePaths(temporaryDirectory(), 'trip-a'),
 			fetch: fetchImplementation
 		});
 
@@ -155,14 +162,14 @@ describe('Google map cache', (): void => {
 		await expect(
 			createMapService({
 				mapId: 'map-id',
-				paths: mapCachePaths(temporaryDirectory()),
+				paths: mapCachePaths(temporaryDirectory(), 'trip-a'),
 				fetch: oversized
 			}).refresh()
 		).rejects.toMatchObject({ code: 'MAP_TOO_LARGE' });
 		await expect(
 			createMapService({
 				mapId: 'map-id',
-				paths: mapCachePaths(temporaryDirectory()),
+				paths: mapCachePaths(temporaryDirectory(), 'trip-a'),
 				fetch: invalidType
 			}).refresh()
 		).rejects.toMatchObject({ code: 'MAP_INVALID_RESPONSE' });
@@ -174,7 +181,7 @@ describe('Google map cache', (): void => {
 			.mockRejectedValue(new DOMException('The operation was aborted', 'AbortError'));
 		const service = createMapService({
 			mapId: 'map-id',
-			paths: mapCachePaths(temporaryDirectory()),
+			paths: mapCachePaths(temporaryDirectory(), 'trip-a'),
 			fetch: fetchImplementation
 		});
 
@@ -188,7 +195,7 @@ describe('Google map cache', (): void => {
 			.mockImplementation(async (): Promise<Response> => new Response(fixture));
 		const service = createMapService({
 			mapId: 'map-id',
-			paths: mapCachePaths(temporaryDirectory()),
+			paths: mapCachePaths(temporaryDirectory(), 'trip-a'),
 			fetch: fetchImplementation,
 			now: () => now
 		});

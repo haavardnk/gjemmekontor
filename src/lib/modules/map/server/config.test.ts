@@ -8,7 +8,6 @@ describe('Map runtime configuration', (): void => {
 			parseMapRuntimeConfig(
 				{
 					AISSTREAM_API_KEY: 'ais-key',
-					GOOGLE_MY_MAPS_ID: 'map-id',
 					BUNDLED_OFFLINE_MAP_DIR: '/app/offline'
 				},
 				'/data'
@@ -16,7 +15,6 @@ describe('Map runtime configuration', (): void => {
 		).toEqual({
 			aisStreamApiKey: 'ais-key',
 			dataDir: '/data',
-			googleMyMapsId: 'map-id',
 			bundledOfflineMapDir: '/app/offline',
 			tripadvisorTerraPhotosEnabled: false,
 			tripadvisorCacheDays: 30
@@ -28,7 +26,6 @@ describe('Map runtime configuration', (): void => {
 			parseMapRuntimeConfig(
 				{
 					AISSTREAM_API_KEY: 'ais-key',
-					GOOGLE_MY_MAPS_ID: 'map-id',
 					GOOGLE_PLACES_SERVER_API_KEY: 'server-key',
 					GOOGLE_PLACES_UI_KIT_API_KEY: 'ui-key',
 					TRIPADVISOR_TERRA_API_KEY: 'tripadvisor-key',
@@ -46,9 +43,11 @@ describe('Map runtime configuration', (): void => {
 		});
 	});
 
-	test('rejects missing Map credentials only when Map configuration is requested', (): void => {
-		expect(() => parseMapRuntimeConfig({}, '/data')).toThrow(
-			'Invalid Map environment: AISSTREAM_API_KEY, GOOGLE_MY_MAPS_ID'
-		);
+	test('allows optional providers to be disabled globally', (): void => {
+		expect(parseMapRuntimeConfig({}, '/data')).toEqual({
+			dataDir: '/data',
+			tripadvisorTerraPhotosEnabled: false,
+			tripadvisorCacheDays: 30
+		});
 	});
 });

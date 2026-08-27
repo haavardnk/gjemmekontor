@@ -14,7 +14,7 @@
 		Trash2,
 		X
 	} from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	import { page } from '$app/state';
@@ -49,6 +49,7 @@
 		OfflineMapPackage
 	} from '$lib/modules/map/domain/types';
 	import type { OfflineMapRecord } from '$lib/modules/map/public';
+	import type { MapOverlay } from '$lib/modules/map/server/config';
 	import MapSymbol from '$lib/modules/map/ui/MapSymbol.svelte';
 	import MapView from '$lib/modules/map/ui/MapView.svelte';
 	import PoiSheet from '$lib/modules/map/ui/PoiSheet.svelte';
@@ -57,6 +58,8 @@
 	import { tripDays } from '$lib/trip/itinerary';
 	import { mapErrorMessage } from '$lib/ui/copy';
 
+	let { defaultMode, enabledOverlays }: { defaultMode: MapMode; enabledOverlays: MapOverlay[] } =
+		$props();
 	let snapshot = $state<MapSnapshot>();
 	const visibleLayerIds = new SvelteSet<string>();
 	const visibleSourceStyleKeys = new SvelteSet<string>();
@@ -76,7 +79,7 @@
 		hiddenPlannedRouteIds(snapshot?.features ?? [], completedDayNumbers(allActualRoutes))
 	);
 	const totalNauticalMiles = $derived(logbookEnabled ? loggedNauticalMiles(sharedState.values) : 0);
-	let mode = $state<MapMode>('normal');
+	let mode = $state<MapMode>(untrack(() => defaultMode));
 	let online = $state(true);
 	let offlinePackages = $state<OfflineMapPackage[]>([]);
 	let offlineMaps = $state<OfflineMapRecord[]>([]);
@@ -97,6 +100,10 @@
 		features: [],
 		status: 'idle'
 	});
+	const aisAllowed = $derived(enabledOverlays.includes('ais'));
+	const depthContoursEnabled = $derived(enabledOverlays.includes('depth-contours'));
+	const modeStorageKey = $derived(`mapMode:${tripId}`);
+	const aisStorageKey = $derived(`mapAisEnabled:${tripId}`);
 
 	const selectedImportedFeature = $derived(
 		snapshot?.features.find((feature) => feature.id === selectedId)
@@ -276,8 +283,9 @@
 	}
 
 	function toggleAis(): void {
+		if (!aisAllowed) return;
 		aisEnabled = !aisEnabled;
-		localStorage.setItem('mapAisEnabled', String(aisEnabled));
+		localStorage.setItem(aisStorageKey, String(aisEnabled));
 		if (!aisEnabled) {
 			selectedAisMmsi = undefined;
 		}
@@ -286,7 +294,7 @@
 	function selectMode(selectedMode: MapMode): void {
 		mode = selectedMode;
 		selectedOpenFreeMapRestaurant = undefined;
-		localStorage.setItem('mapMode', selectedMode);
+		localStorage.setItem(modeStorageKey, selectedMode);
 	}
 
 	function closePoi(): void {
@@ -353,7 +361,7 @@
 	}
 
 	$effect(() => {
-		if (!aisPreferenceReady || !aisEnabled || !online || !pageVisible) {
+		if (!aisAllowed || !aisPreferenceReady || !aisEnabled || !online || !pageVisible) {
 			return;
 		}
 		let disposed = false;
@@ -398,11 +406,11 @@
 	});
 
 	onMount(() => {
-		const savedMode = localStorage.getItem('mapMode');
+		const savedMode = localStorage.getItem(modeStorageKey);
 		if (savedMode === 'normal' || savedMode === 'nautical' || savedMode === 'satellite') {
 			mode = savedMode;
 		}
-		aisEnabled = localStorage.getItem('mapAisEnabled') !== 'false';
+		aisEnabled = aisAllowed && localStorage.getItem(aisStorageKey) !== 'false';
 		aisPreferenceReady = true;
 		online = navigator.onLine;
 		pageVisible = document.visibilityState === 'visible';
@@ -441,6 +449,8 @@
 			{selectedId}
 			selectedFeature={selected}
 			{mode}
+			{tripId}
+			{depthContoursEnabled}
 			{actualRoutes}
 			{hiddenRouteIds}
 			aisVessels={visibleAisVessels}
@@ -601,39 +611,39 @@
 				<RotateCcw size={16} />
 				Nullstill filtre
 			</button>
-			<section class="border-b border-base-300 py-4" data-ais-controls>
-				<button
-					class={`flex min-h-14 w-full items-center gap-3 rounded-lg border border-base-300 px-3 py-2 text-left ${aisEnabled ? 'bg-primary/10' : ''}`}
-					type="button"
-					aria-pressed={aisEnabled}
-					onclick={toggleAis}
-					data-ais-toggle
-				>
-					<span
-						class="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
-					>
-						<Ship size={18} />
-					</span>
-					<span class="min-w-0 flex-1">
-						<span class="block text-sm font-bold">AIS-fartøy</span>
-						<span class="mt-0.5 block text-xs text-base-content/55" role="status">
-							{aisStatusLabel}
-						</span>
-					</span>
-					<span
-						class="relative h-6 w-11 shrink-0 rounded-full transition-colors"
-						class:bg-primary={aisEnabled}
-						class:bg-base-300={!aisEnabled}
-						aria-hidden="true"
+			{#if aisAllowed}<section class="border-b border-base-300 py-4" data-ais-controls>
+					<button
+						class={`flex min-h-14 w-full items-center gap-3 rounded-lg border border-base-300 px-3 py-2 text-left ${aisEnabled ? 'bg-primary/10' : ''}`}
+						type="button"
+						aria-pressed={aisEnabled}
+						onclick={toggleAis}
+						data-ais-toggle
 					>
 						<span
-							class="absolute top-1 size-4 rounded-full bg-white shadow transition-transform"
-							class:translate-x-6={aisEnabled}
-							class:translate-x-1={!aisEnabled}
-						></span>
-					</span>
-				</button>
-			</section>
+							class="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
+						>
+							<Ship size={18} />
+						</span>
+						<span class="min-w-0 flex-1">
+							<span class="block text-sm font-bold">AIS-fartøy</span>
+							<span class="mt-0.5 block text-xs text-base-content/55" role="status">
+								{aisStatusLabel}
+							</span>
+						</span>
+						<span
+							class="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+							class:bg-primary={aisEnabled}
+							class:bg-base-300={!aisEnabled}
+							aria-hidden="true"
+						>
+							<span
+								class="absolute top-1 size-4 rounded-full bg-white shadow transition-transform"
+								class:translate-x-6={aisEnabled}
+								class:translate-x-1={!aisEnabled}
+							></span>
+						</span>
+					</button>
+				</section>{/if}
 			<section class="border-b border-base-300 py-4">
 				<h3 class="mb-1 text-sm font-bold">Dagens kartpunkter</h3>
 				<p class="mb-3 text-xs leading-5 text-base-content/60">

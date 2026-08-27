@@ -8,6 +8,7 @@ import {
 	archiveTrip,
 	getTripSettings,
 	removePersonFromTrip,
+	setTripMapConfiguration,
 	setTripModules,
 	setTripPassword,
 	setTripVisibility,
@@ -15,6 +16,8 @@ import {
 	unarchiveTrip,
 	updateTripGeneral
 } from '$lib/app/server/trip-settings';
+import { handleRefreshMap } from '$lib/modules/map/server';
+import { getMapRuntimeConfig } from '$lib/modules/map/server/config';
 
 import type { Actions, PageServerLoad } from './$types';
 
@@ -29,13 +32,43 @@ function text(form: FormData, name: string): string {
 	return typeof value === 'string' ? value : '';
 }
 
+function mapMode(form: FormData): 'normal' | 'nautical' | 'satellite' {
+	const value = text(form, 'mapDefaultMode');
+	return value === 'nautical' || value === 'satellite' ? value : 'normal';
+}
+
 function actionError(cause: unknown, fallback: string) {
 	return fail(400, { errorMessage: cause instanceof Error ? fallback : fallback });
 }
 
 export const load: PageServerLoad = ({ params }) => {
 	const trip = settings(params.tripId);
-	return { settings: trip, readiness: tripReadiness(getDatabase(), trip.id) };
+	const db = getDatabase();
+	const mapRuntime = getMapRuntimeConfig();
+	const mapModule = trip.modules.find((module) => module.id === 'map');
+	return {
+		settings: trip,
+		readiness: tripReadiness(db, trip.id),
+		mapSummary: {
+			enabled: mapModule?.enabled === true,
+			configured: typeof mapModule?.config.googleMyMapsId === 'string',
+			aisProviderConfigured: Boolean(mapRuntime.aisStreamApiKey),
+			googlePlacesConfigured: Boolean(
+				mapRuntime.googlePlacesServerApiKey && mapRuntime.googlePlacesUiKitApiKey
+			),
+			tripadvisorConfigured: Boolean(mapRuntime.tripadvisorTerraApiKey),
+			mappings: (
+				db
+					.prepare('SELECT COUNT(*) AS count FROM trip_poi_provider_mappings WHERE trip_id = ?')
+					.get(trip.id) as { count: number }
+			).count,
+			enrichments: (
+				db
+					.prepare('SELECT COUNT(*) AS count FROM trip_poi_enrichment_cache WHERE trip_id = ?')
+					.get(trip.id) as { count: number }
+			).count
+		}
+	};
 };
 
 export const actions = {
@@ -67,6 +100,8 @@ export const actions = {
 	modules: async ({ request, params }) => {
 		const form = await request.formData();
 		try {
+			const currentMap =
+				settings(params.tripId).modules.find((module) => module.id === 'map')?.config ?? {};
 			const parsedOrder = JSON.parse(text(form, 'moduleOrder')) as unknown;
 			if (!Array.isArray(parsedOrder) || !parsedOrder.every((id) => typeof id === 'string')) {
 				throw new Error('INVALID_MODULE_ORDER');
@@ -77,13 +112,63 @@ export const actions = {
 					.getAll('enabledModuleId')
 					.filter((value): value is string => typeof value === 'string')
 					.filter(isModuleId),
-				mapGoogleMyMapsId: text(form, 'mapGoogleMyMapsId'),
+				mapGoogleMyMapsId:
+					typeof currentMap.googleMyMapsId === 'string' ? currentMap.googleMyMapsId : '',
+				mapDefaultMode:
+					currentMap.defaultMode === 'nautical' || currentMap.defaultMode === 'satellite'
+						? currentMap.defaultMode
+						: 'normal',
+				mapEnabledOverlays: Array.isArray(currentMap.enabledOverlays)
+					? currentMap.enabledOverlays.filter(
+							(value): value is 'ais' | 'depth-contours' =>
+								value === 'ais' || value === 'depth-contours'
+						)
+					: [],
+				mapOfflinePackages: Array.isArray(currentMap.offlinePackages)
+					? currentMap.offlinePackages.filter(
+							(value): value is 'normal' | 'nautical' | 'satellite' =>
+								value === 'normal' || value === 'nautical' || value === 'satellite'
+						)
+					: [],
 				shoppingListUuid: text(form, 'shoppingListUuid')
 			});
 			return { successMessage: 'Modulvalg og rekkefølge er lagret.' };
 		} catch (cause) {
 			return actionError(cause, 'Kunne ikke lagre modulinnstillingene.');
 		}
+	},
+	map: async ({ request, params }) => {
+		const form = await request.formData();
+		try {
+			setTripMapConfiguration(getDatabase(), params.tripId, {
+				mapGoogleMyMapsId: text(form, 'mapGoogleMyMapsId'),
+				mapDefaultMode: mapMode(form),
+				mapEnabledOverlays: form
+					.getAll('mapEnabledOverlay')
+					.filter(
+						(value): value is 'ais' | 'depth-contours' =>
+							value === 'ais' || value === 'depth-contours'
+					),
+				mapOfflinePackages: form
+					.getAll('mapOfflinePackage')
+					.filter(
+						(value): value is 'normal' | 'nautical' | 'satellite' =>
+							value === 'normal' || value === 'nautical' || value === 'satellite'
+					)
+			});
+			return { successMessage: 'Kartinnstillingene er lagret.' };
+		} catch (cause) {
+			return actionError(cause, 'Kunne ikke lagre kartinnstillingene.');
+		}
+	},
+	refreshMap: async ({ params }) => {
+		const response = await handleRefreshMap(params.tripId);
+		if (!response.ok) {
+			return fail(response.status, {
+				errorMessage: 'Kartet kunne ikke hentes. Kontroller Google My Maps-ID-en og delingen.'
+			});
+		}
+		return { successMessage: 'Kartforbindelsen virker, og kartet er oppdatert.' };
 	},
 	addExistingMember: async ({ request, params }) => {
 		const form = await request.formData();

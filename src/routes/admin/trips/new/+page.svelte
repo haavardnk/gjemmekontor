@@ -113,6 +113,49 @@
 					<input class="input-bordered input" name="mapGoogleMyMapsId" />
 				</label>
 				<label class="form-control">
+					<span class="label font-semibold">Standard kartvisning</span>
+					<select class="select-bordered select" name="mapDefaultMode">
+						<option value="normal">Vanlig kart</option>
+						<option value="nautical">Sjøkart</option>
+						<option value="satellite">Satellittkart</option>
+					</select>
+				</label>
+				<fieldset class="rounded-box border border-base-300 p-3">
+					<legend class="px-1 text-sm font-semibold">Kartoverlegg</legend>
+					<label class="flex items-center gap-2 text-sm">
+						<input
+							class="checkbox checkbox-sm checkbox-primary"
+							type="checkbox"
+							name="mapEnabledOverlay"
+							value="ais"
+							checked
+						/> AIS-fartøy
+					</label>
+					<label class="mt-2 flex items-center gap-2 text-sm">
+						<input
+							class="checkbox checkbox-sm checkbox-primary"
+							type="checkbox"
+							name="mapEnabledOverlay"
+							value="depth-contours"
+							checked
+						/> Dybdekoter
+					</label>
+				</fieldset>
+				<fieldset class="rounded-box border border-base-300 p-3">
+					<legend class="px-1 text-sm font-semibold">Tillatte offlinepakker</legend>
+					{#each [{ id: 'normal', label: 'Vanlig' }, { id: 'nautical', label: 'Sjøkart' }, { id: 'satellite', label: 'Satellitt' }] as option (option.id)}
+						<label class="mt-1 flex items-center gap-2 text-sm">
+							<input
+								class="checkbox checkbox-sm checkbox-primary"
+								type="checkbox"
+								name="mapOfflinePackage"
+								value={option.id}
+							/>
+							{option.label}
+						</label>
+					{/each}
+				</fieldset>
+				<label class="form-control">
 					<span class="label font-semibold">Bring-liste-ID</span>
 					<input class="input-bordered input" name="shoppingListUuid" />
 				</label>

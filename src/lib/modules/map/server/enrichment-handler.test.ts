@@ -24,10 +24,10 @@ const restaurant: OpenFreeMapRestaurant = {
 const config: MapRuntimeConfig = {
 	aisStreamApiKey: 'ais-key',
 	dataDir: '/tmp',
-	googleMyMapsId: 'map-id',
 	tripadvisorTerraPhotosEnabled: false,
 	tripadvisorCacheDays: 30
 };
+const tripId = '9dbf9624-01cd-4ae4-b02d-de227d92499e';
 
 let directory = '';
 let db: ReturnType<typeof createApplicationDatabase>;
@@ -61,7 +61,7 @@ describe('OpenFreeMap enrichment handler', (): void => {
 	});
 
 	test('accepts a restaurant and returns the shared provider response shape', async (): Promise<void> => {
-		const response = await handleOpenFreeMapPoiEnrichment(request(restaurant), db, config);
+		const response = await handleOpenFreeMapPoiEnrichment(tripId, request(restaurant), db, config);
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
 			featureId: expect.stringMatching(/^openfreemap:[a-f0-9]{64}$/),
@@ -71,7 +71,12 @@ describe('OpenFreeMap enrichment handler', (): void => {
 	});
 
 	test('uses the same stable feature identity for Tripadvisor photos', async (): Promise<void> => {
-		const response = await handleOpenFreeMapPoiEnrichmentPhotos(request(restaurant), db, config);
+		const response = await handleOpenFreeMapPoiEnrichmentPhotos(
+			tripId,
+			request(restaurant),
+			db,
+			config
+		);
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({
 			featureId: openFreeMapRestaurantFeatureId(restaurant),
@@ -85,7 +90,7 @@ describe('OpenFreeMap enrichment handler', (): void => {
 		{ ...restaurant, longitude: 181 },
 		{ ...restaurant, unexpected: true }
 	])('rejects untrusted or malformed payloads', async (body): Promise<void> => {
-		const response = await handleOpenFreeMapPoiEnrichment(request(body), db, config);
+		const response = await handleOpenFreeMapPoiEnrichment(tripId, request(body), db, config);
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({ error: 'INVALID_REQUEST' });
 	});

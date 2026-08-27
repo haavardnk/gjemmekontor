@@ -33,6 +33,7 @@ const providerQueryVersion = 3;
 
 export type PoiEnrichmentServiceDependencies = {
 	db: Database.Database;
+	tripId: string;
 	google?: { adapter: GooglePlacesAdapter; uiKitKey: string };
 	tripadvisor?: {
 		adapter: TripadvisorAdapter;
@@ -71,21 +72,26 @@ export function createPoiEnrichmentService(
 		return dependencies.db
 			.prepare(
 				`SELECT provider_id, source, mapped_at, retry_reason, retry_after, query_version
-				 FROM poi_provider_mappings WHERE feature_id = ? AND provider = ?`
+				 FROM trip_poi_provider_mappings
+				 WHERE trip_id = ? AND feature_id = ? AND provider = ?`
 			)
-			.get(featureId, provider) as MappingRow | undefined;
+			.get(dependencies.tripId, featureId, provider) as MappingRow | undefined;
 	}
 
 	function deleteMapping(featureId: string, provider: Provider): void {
 		dependencies.db
-			.prepare('DELETE FROM poi_provider_mappings WHERE feature_id = ? AND provider = ?')
-			.run(featureId, provider);
+			.prepare(
+				'DELETE FROM trip_poi_provider_mappings WHERE trip_id = ? AND feature_id = ? AND provider = ?'
+			)
+			.run(dependencies.tripId, featureId, provider);
 	}
 
 	function deleteCache(featureId: string): void {
 		dependencies.db
-			.prepare("DELETE FROM poi_enrichment_cache WHERE feature_id = ? AND provider = 'tripadvisor'")
-			.run(featureId);
+			.prepare(
+				"DELETE FROM trip_poi_enrichment_cache WHERE trip_id = ? AND feature_id = ? AND provider = 'tripadvisor'"
+			)
+			.run(dependencies.tripId, featureId);
 	}
 
 	function storeMapping(
@@ -96,10 +102,11 @@ export function createPoiEnrichmentService(
 	): void {
 		dependencies.db
 			.prepare(
-				`INSERT INTO poi_provider_mappings
-					(feature_id, provider, provider_id, source, mapped_at, retry_reason, retry_after, query_version)
-				 VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)
-				 ON CONFLICT(feature_id, provider) DO UPDATE SET
+				`INSERT INTO trip_poi_provider_mappings
+					(trip_id, feature_id, provider, provider_id, source, mapped_at,
+					 retry_reason, retry_after, query_version)
+				 VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+				 ON CONFLICT(trip_id, feature_id, provider) DO UPDATE SET
 					provider_id = excluded.provider_id,
 					source = excluded.source,
 					mapped_at = excluded.mapped_at,
@@ -108,6 +115,7 @@ export function createPoiEnrichmentService(
 					query_version = excluded.query_version`
 			)
 			.run(
+				dependencies.tripId,
 				featureId,
 				provider,
 				providerId,
@@ -129,10 +137,11 @@ export function createPoiEnrichmentService(
 			);
 		dependencies.db
 			.prepare(
-				`INSERT INTO poi_provider_mappings
-					(feature_id, provider, provider_id, source, mapped_at, retry_reason, retry_after, query_version)
-				 VALUES (?, ?, NULL, NULL, NULL, ?, ?, ?)
-				 ON CONFLICT(feature_id, provider) DO UPDATE SET
+				`INSERT INTO trip_poi_provider_mappings
+					(trip_id, feature_id, provider, provider_id, source, mapped_at,
+					 retry_reason, retry_after, query_version)
+				 VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?)
+				 ON CONFLICT(trip_id, feature_id, provider) DO UPDATE SET
 					provider_id = NULL,
 					source = NULL,
 					mapped_at = NULL,
@@ -140,7 +149,14 @@ export function createPoiEnrichmentService(
 					retry_after = excluded.retry_after,
 					query_version = excluded.query_version`
 			)
-			.run(featureId, provider, error.code, retryAt.toISOString(), providerQueryVersion);
+			.run(
+				dependencies.tripId,
+				featureId,
+				provider,
+				error.code,
+				retryAt.toISOString(),
+				providerQueryVersion
+			);
 	}
 
 	function activeFailure(
@@ -227,9 +243,9 @@ export function createPoiEnrichmentService(
 	function cachedTripadvisor(featureId: string): TripadvisorAvailableEnrichment | undefined {
 		const row = dependencies.db
 			.prepare(
-				"SELECT payload, expires_at, schema_version FROM poi_enrichment_cache WHERE feature_id = ? AND provider = 'tripadvisor'"
+				"SELECT payload, expires_at, schema_version FROM trip_poi_enrichment_cache WHERE trip_id = ? AND feature_id = ? AND provider = 'tripadvisor'"
 			)
-			.get(featureId) as CacheRow | undefined;
+			.get(dependencies.tripId, featureId) as CacheRow | undefined;
 		if (!row) return undefined;
 		if (Date.parse(row.expires_at) <= now()) {
 			deleteCache(featureId);
@@ -261,16 +277,17 @@ export function createPoiEnrichmentService(
 	function cacheTripadvisor(featureId: string, value: TripadvisorAvailableEnrichment): void {
 		dependencies.db
 			.prepare(
-				`INSERT INTO poi_enrichment_cache
-					(feature_id, provider, schema_version, payload, fetched_at, expires_at)
-					 VALUES (?, 'tripadvisor', ?, ?, ?, ?)
-				 ON CONFLICT(feature_id, provider) DO UPDATE SET
+				`INSERT INTO trip_poi_enrichment_cache
+					(trip_id, feature_id, provider, schema_version, payload, fetched_at, expires_at)
+					 VALUES (?, ?, 'tripadvisor', ?, ?, ?, ?)
+				 ON CONFLICT(trip_id, feature_id, provider) DO UPDATE SET
 					schema_version = excluded.schema_version,
 					payload = excluded.payload,
 					fetched_at = excluded.fetched_at,
 					expires_at = excluded.expires_at`
 			)
 			.run(
+				dependencies.tripId,
 				featureId,
 				tripadvisorCacheSchemaVersion,
 				JSON.stringify(value),

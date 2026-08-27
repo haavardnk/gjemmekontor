@@ -16,6 +16,11 @@ function text(form: FormData, name: string): string {
 	return typeof value === 'string' ? value : '';
 }
 
+function mapMode(form: FormData): 'normal' | 'nautical' | 'satellite' {
+	const value = text(form, 'mapDefaultMode');
+	return value === 'nautical' || value === 'satellite' ? value : 'normal';
+}
+
 export const actions = {
 	default: async ({ request }) => {
 		const form = await request.formData();
@@ -40,6 +45,19 @@ export const actions = {
 					order: [...defaultModuleIds],
 					enabled,
 					mapGoogleMyMapsId: text(form, 'mapGoogleMyMapsId'),
+					mapDefaultMode: mapMode(form),
+					mapEnabledOverlays: form
+						.getAll('mapEnabledOverlay')
+						.filter(
+							(value): value is 'ais' | 'depth-contours' =>
+								value === 'ais' || value === 'depth-contours'
+						),
+					mapOfflinePackages: form
+						.getAll('mapOfflinePackage')
+						.filter(
+							(value): value is 'normal' | 'nautical' | 'satellite' =>
+								value === 'normal' || value === 'nautical' || value === 'satellite'
+						),
 					shoppingListUuid: text(form, 'shoppingListUuid')
 				}
 			});

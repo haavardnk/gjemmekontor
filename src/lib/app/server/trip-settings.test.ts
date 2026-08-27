@@ -13,6 +13,7 @@ import {
 	createTrip,
 	getTripSettings,
 	removePersonFromTrip,
+	setTripMapConfiguration,
 	setTripModules,
 	setTripPassword,
 	tripReadiness,
@@ -53,6 +54,9 @@ describe('trip settings', (): void => {
 				order,
 				enabled: ['gear', 'menu'],
 				mapGoogleMyMapsId: '',
+				mapDefaultMode: 'normal',
+				mapEnabledOverlays: ['ais', 'depth-contours'],
+				mapOfflinePackages: [],
 				shoppingListUuid: ''
 			}
 		});
@@ -112,6 +116,9 @@ describe('trip settings', (): void => {
 			order: [...defaultModuleIds],
 			enabled: ['map'],
 			mapGoogleMyMapsId: '',
+			mapDefaultMode: 'normal',
+			mapEnabledOverlays: ['ais', 'depth-contours'],
+			mapOfflinePackages: [],
 			shoppingListUuid: ''
 		});
 		expect(getTripSettings(db, tripId)?.status).toBe('draft');
@@ -121,10 +128,21 @@ describe('trip settings', (): void => {
 			order: [...defaultModuleIds],
 			enabled: ['map'],
 			mapGoogleMyMapsId: 'public-map-id',
+			mapDefaultMode: 'nautical',
+			mapEnabledOverlays: ['depth-contours'],
+			mapOfflinePackages: ['nautical'],
 			shoppingListUuid: ''
 		});
 		expect(activateTrip(db, tripId)).toEqual({ ready: true, issues: [] });
 		expect(getTripSettings(db, tripId)?.status).toBe('active');
+		expect(
+			getTripSettings(db, tripId)?.modules.find((module) => module.id === 'map')?.config
+		).toEqual({
+			googleMyMapsId: 'public-map-id',
+			defaultMode: 'nautical',
+			enabledOverlays: ['depth-contours'],
+			offlinePackages: ['nautical']
+		});
 	});
 
 	test('increments password versions without retaining plaintext', (): void => {
@@ -139,6 +157,27 @@ describe('trip settings', (): void => {
 		expect(after.credential_version).toBe(before.credential_version + 1);
 		expect(after.password_hash).not.toBe(before.password_hash);
 		expect(after.password_hash).not.toContain('replacement-trip-password');
+	});
+
+	test('updates map configuration without changing module selection', (): void => {
+		const tripId = createTestTrip();
+		const before = getTripSettings(db, tripId)?.modules.map(({ id, enabled }) => ({ id, enabled }));
+
+		setTripMapConfiguration(db, tripId, {
+			mapGoogleMyMapsId: 'updated-map-id',
+			mapDefaultMode: 'satellite',
+			mapEnabledOverlays: ['ais'],
+			mapOfflinePackages: ['normal', 'satellite']
+		});
+
+		const settings = getTripSettings(db, tripId);
+		expect(settings?.modules.map(({ id, enabled }) => ({ id, enabled }))).toEqual(before);
+		expect(settings?.modules.find((module) => module.id === 'map')?.config).toEqual({
+			googleMyMapsId: 'updated-map-id',
+			defaultMode: 'satellite',
+			enabledOverlays: ['ais'],
+			offlinePackages: ['normal', 'satellite']
+		});
 	});
 });
 
@@ -161,6 +200,9 @@ function createTestTrip(): string {
 			order: [...defaultModuleIds],
 			enabled: ['gear'],
 			mapGoogleMyMapsId: '',
+			mapDefaultMode: 'normal',
+			mapEnabledOverlays: ['ais', 'depth-contours'],
+			mapOfflinePackages: [],
 			shoppingListUuid: ''
 		}
 	});

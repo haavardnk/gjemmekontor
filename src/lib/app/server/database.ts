@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 
 import { logbookDatabaseMigrations } from '$lib/modules/logbook/server/migrations';
+import { migrateLegacyMapFiles } from '$lib/modules/map/server/legacy-files';
 import { mapDatabaseMigrations } from '$lib/modules/map/server/migrations';
 import {
 	coreDatabaseMigrations,
@@ -36,8 +37,16 @@ let database: Database.Database | undefined;
 
 export function getDatabase(): Database.Database {
 	if (!database) {
-		database = createApplicationDatabase(getRuntimeConfig().dataDir);
-		importLegacyKroatia2026(database);
+		const dataDir = getRuntimeConfig().dataDir;
+		const nextDatabase = createApplicationDatabase(dataDir);
+		try {
+			const report = importLegacyKroatia2026(nextDatabase);
+			migrateLegacyMapFiles(dataDir, report.tripId);
+			database = nextDatabase;
+		} catch (error) {
+			nextDatabase.close();
+			throw error;
+		}
 	}
 	return database;
 }

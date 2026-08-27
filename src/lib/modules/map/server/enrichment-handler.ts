@@ -18,13 +18,23 @@ import { createGooglePlacesAdapter } from './google-places';
 import { getCurrentMapSnapshot } from './service';
 import { createTripadvisorAdapter } from './tripadvisor';
 
-const configuredServices = new WeakMap<Database.Database, PoiEnrichmentService>();
+const configuredServices = new WeakMap<Database.Database, Map<string, PoiEnrichmentService>>();
 
-function service(db: Database.Database, config: MapRuntimeConfig): PoiEnrichmentService {
-	let configuredService = configuredServices.get(db);
+function service(
+	db: Database.Database,
+	tripId: string,
+	config: MapRuntimeConfig
+): PoiEnrichmentService {
+	let services = configuredServices.get(db);
+	if (!services) {
+		services = new Map();
+		configuredServices.set(db, services);
+	}
+	let configuredService = services.get(tripId);
 	if (!configuredService) {
 		configuredService = createPoiEnrichmentService({
 			db,
+			tripId,
 			...(config.googlePlacesServerApiKey && config.googlePlacesUiKitApiKey
 				? {
 						google: {
@@ -43,16 +53,21 @@ function service(db: Database.Database, config: MapRuntimeConfig): PoiEnrichment
 					}
 				: {})
 		});
-		configuredServices.set(db, configuredService);
+		services.set(tripId, configuredService);
 	}
 	return configuredService;
 }
 
-async function trustedFeature(featureId: string): Promise<{
+async function trustedFeature(
+	tripId: string,
+	featureId: string,
+	db: Database.Database,
+	config: MapRuntimeConfig
+): Promise<{
 	feature: Awaited<ReturnType<typeof getCurrentMapSnapshot>>['features'][number];
 	sourceStyles: Awaited<ReturnType<typeof getCurrentMapSnapshot>>['sourceStyles'];
 }> {
-	const snapshot = await getCurrentMapSnapshot();
+	const snapshot = await getCurrentMapSnapshot(tripId, db, config);
 	const feature = snapshot.features.find((candidate) => candidate.id === featureId);
 	if (!feature) throw new Error('POI_NOT_FOUND');
 	if (!isPoiEnrichmentEligible(feature)) throw new Error('POI_NOT_ELIGIBLE');
@@ -102,13 +117,14 @@ async function requestedOpenFreeMapRestaurant(request: Request): Promise<{
 }
 
 export async function handleGetPoiEnrichment(
+	tripId: string,
 	featureId: string,
 	db: Database.Database = getDatabase(),
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	try {
-		const { feature, sourceStyles } = await trustedFeature(featureId);
-		return Response.json(await service(db, config).enrich(feature, sourceStyles), {
+		const { feature, sourceStyles } = await trustedFeature(tripId, featureId, db, config);
+		return Response.json(await service(db, tripId, config).enrich(feature, sourceStyles), {
 			headers: { 'cache-control': 'no-store' }
 		});
 	} catch (error) {
@@ -117,16 +133,17 @@ export async function handleGetPoiEnrichment(
 }
 
 export async function handleGetPoiEnrichmentPhotos(
+	tripId: string,
 	featureId: string,
 	db: Database.Database = getDatabase(),
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	try {
-		const { feature, sourceStyles } = await trustedFeature(featureId);
+		const { feature, sourceStyles } = await trustedFeature(tripId, featureId, db, config);
 		return Response.json(
 			{
 				featureId,
-				tripadvisor: await service(db, config).loadTripadvisorPhotos(feature, sourceStyles)
+				tripadvisor: await service(db, tripId, config).loadTripadvisorPhotos(feature, sourceStyles)
 			},
 			{ headers: { 'cache-control': 'no-store' } }
 		);
@@ -136,13 +153,14 @@ export async function handleGetPoiEnrichmentPhotos(
 }
 
 export async function handleOpenFreeMapPoiEnrichment(
+	tripId: string,
 	request: Request,
 	db: Database.Database = getDatabase(),
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	try {
 		const { feature, sourceStyles } = await requestedOpenFreeMapRestaurant(request);
-		return Response.json(await service(db, config).enrich(feature, sourceStyles), {
+		return Response.json(await service(db, tripId, config).enrich(feature, sourceStyles), {
 			headers: { 'cache-control': 'no-store' }
 		});
 	} catch (error) {
@@ -151,6 +169,7 @@ export async function handleOpenFreeMapPoiEnrichment(
 }
 
 export async function handleOpenFreeMapPoiEnrichmentPhotos(
+	tripId: string,
 	request: Request,
 	db: Database.Database = getDatabase(),
 	config: MapRuntimeConfig = getMapRuntimeConfig()
@@ -160,7 +179,7 @@ export async function handleOpenFreeMapPoiEnrichmentPhotos(
 		return Response.json(
 			{
 				featureId: feature.id,
-				tripadvisor: await service(db, config).loadTripadvisorPhotos(feature, sourceStyles)
+				tripadvisor: await service(db, tripId, config).loadTripadvisorPhotos(feature, sourceStyles)
 			},
 			{ headers: { 'cache-control': 'no-store' } }
 		);

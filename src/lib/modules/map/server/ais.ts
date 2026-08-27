@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import type Database from 'better-sqlite3';
 import WebSocket, { type RawData } from 'ws';
 
+import { getDatabase } from '$lib/app/server/database';
 import type {
 	AisApiResponse,
 	AisConnectionStatus,
@@ -12,7 +14,8 @@ import type {
 import type { MapBounds } from '$lib/modules/map/domain/types';
 import { apiError, apiSuccess } from '$lib/server/api';
 
-import { getMapRuntimeConfig } from './config';
+import { getMapRuntimeConfig, loadTripMapConfig, type MapRuntimeConfig } from './config';
+import { mapCachePaths } from './google';
 import { getCurrentMapSnapshot } from './service';
 
 const endpoint = 'wss://stream.aisstream.io/v0/stream';
@@ -606,24 +609,48 @@ export function createAisService(dependencies: AisServiceDependencies): {
 	return { getSnapshot, stop };
 }
 
-let configuredService: ReturnType<typeof createAisService> | undefined;
+const configuredServices = new WeakMap<
+	Database.Database,
+	Map<string, ReturnType<typeof createAisService>>
+>();
 
-function getConfiguredAisService(): ReturnType<typeof createAisService> {
+function getConfiguredAisService(
+	db: Database.Database,
+	tripId: string,
+	config: MapRuntimeConfig
+): ReturnType<typeof createAisService> {
+	const tripConfig = loadTripMapConfig(db, tripId);
+	if (!tripConfig.enabledOverlays.includes('ais')) throw new Error('AIS_DISABLED');
+	if (!config.aisStreamApiKey) throw new Error('AIS_NOT_CONFIGURED');
+	let services = configuredServices.get(db);
+	if (!services) {
+		services = new Map();
+		configuredServices.set(db, services);
+	}
+	const key = `${tripId}:${tripConfig.configVersion}`;
+	let configuredService = services.get(key);
 	if (!configuredService) {
-		const config = getMapRuntimeConfig();
 		configuredService = createAisService({
 			apiKey: config.aisStreamApiKey,
-			cachePath: join(config.dataDir, 'map', 'ais-vessels.json'),
-			getBounds: async () => (await getCurrentMapSnapshot()).bounds
+			cachePath: join(mapCachePaths(config.dataDir, tripId).directory, 'ais-vessels.json'),
+			getBounds: async () => (await getCurrentMapSnapshot(tripId, db, config)).bounds
 		});
+		services.set(key, configuredService);
 	}
 	return configuredService;
 }
 
-export function handleGetAis(): Response {
+export function handleGetAis(
+	tripId: string,
+	db: Database.Database = getDatabase(),
+	config: MapRuntimeConfig = getMapRuntimeConfig()
+): Response {
 	try {
-		return apiSuccess(getConfiguredAisService().getSnapshot());
-	} catch {
+		return apiSuccess(getConfiguredAisService(db, tripId, config).getSnapshot());
+	} catch (error) {
+		if (error instanceof Error && error.message === 'AIS_DISABLED') {
+			return apiError('AIS_DISABLED', 409);
+		}
 		return apiError('AIS_UNAVAILABLE', 503);
 	}
 }

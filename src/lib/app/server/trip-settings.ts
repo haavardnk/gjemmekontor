@@ -5,6 +5,12 @@ import type Database from 'better-sqlite3';
 import { z } from 'zod';
 
 import { isModuleId, moduleCatalog, type ModuleId } from '$lib/app/modules/catalog';
+import type { MapMode } from '$lib/modules/map/domain/types';
+import {
+	type MapOverlay,
+	mapOverlayValues,
+	parseMapRuntimeConfig
+} from '$lib/modules/map/server/config';
 
 const isoDate = z
 	.string()
@@ -57,8 +63,16 @@ export type ModuleSettingsInput = {
 	order: ModuleId[];
 	enabled: ModuleId[];
 	mapGoogleMyMapsId: string;
+	mapDefaultMode: MapMode;
+	mapEnabledOverlays: MapOverlay[];
+	mapOfflinePackages: MapMode[];
 	shoppingListUuid: string;
 };
+
+export type MapSettingsInput = Pick<
+	ModuleSettingsInput,
+	'mapGoogleMyMapsId' | 'mapDefaultMode' | 'mapEnabledOverlays' | 'mapOfflinePackages'
+>;
 
 export type TripSettings = TripGeneralInput & {
 	id: string;
@@ -218,17 +232,36 @@ function normalizedModuleInput(input: ModuleSettingsInput): ModuleSettingsInput 
 	const order = parseModuleOrder(input.order);
 	const enabled = input.enabled.filter(isModuleId);
 	if (new Set(enabled).size !== enabled.length) throw new Error('INVALID_ENABLED_MODULES');
+	const mapDefaultMode = z.enum(['normal', 'nautical', 'satellite']).parse(input.mapDefaultMode);
+	const mapEnabledOverlays = z.array(z.enum(mapOverlayValues)).parse(input.mapEnabledOverlays);
+	const mapOfflinePackages = z
+		.array(z.enum(['normal', 'nautical', 'satellite']))
+		.parse(input.mapOfflinePackages);
+	if (
+		new Set(mapEnabledOverlays).size !== mapEnabledOverlays.length ||
+		new Set(mapOfflinePackages).size !== mapOfflinePackages.length
+	) {
+		throw new Error('INVALID_MAP_CONFIGURATION');
+	}
 	return {
 		order,
 		enabled,
 		mapGoogleMyMapsId: input.mapGoogleMyMapsId.trim(),
+		mapDefaultMode,
+		mapEnabledOverlays,
+		mapOfflinePackages,
 		shoppingListUuid: input.shoppingListUuid.trim()
 	};
 }
 
 function moduleConfig(moduleId: ModuleId, input: ModuleSettingsInput): Record<string, unknown> {
 	if (moduleId === 'map') {
-		return input.mapGoogleMyMapsId ? { googleMyMapsId: input.mapGoogleMyMapsId } : {};
+		return {
+			...(input.mapGoogleMyMapsId ? { googleMyMapsId: input.mapGoogleMyMapsId } : {}),
+			defaultMode: input.mapDefaultMode,
+			enabledOverlays: input.mapEnabledOverlays,
+			offlinePackages: input.mapOfflinePackages
+		};
 	}
 	if (moduleId === 'shopping-list') {
 		return input.shoppingListUuid ? { listUuid: input.shoppingListUuid } : {};
@@ -256,6 +289,14 @@ export function tripReadiness(db: Database.Database, tripId: string): TripReadin
 		const config = JSON.parse(module.config_json) as Record<string, unknown>;
 		if (module.module_id === 'map' && !config.googleMyMapsId) {
 			issues.push('Kart trenger en Google My Maps-ID.');
+		}
+		if (
+			module.module_id === 'map' &&
+			Array.isArray(config.enabledOverlays) &&
+			config.enabledOverlays.includes('ais') &&
+			!parseMapRuntimeConfig(process.env, '.').aisStreamApiKey
+		) {
+			issues.push('AIS-overlegget trenger AISSTREAM_API_KEY.');
 		}
 		if (module.module_id === 'shopping-list' && !config.listUuid) {
 			issues.push('Handleliste trenger en Bring-liste-ID.');
@@ -459,6 +500,56 @@ export function setTripModules(
 	})();
 }
 
+export function setTripMapConfiguration(
+	db: Database.Database,
+	tripId: string,
+	input: MapSettingsInput
+): void {
+	const mapGoogleMyMapsId = input.mapGoogleMyMapsId.trim();
+	const mapDefaultMode = z.enum(['normal', 'nautical', 'satellite']).parse(input.mapDefaultMode);
+	const mapEnabledOverlays = z.array(z.enum(mapOverlayValues)).parse(input.mapEnabledOverlays);
+	const mapOfflinePackages = z
+		.array(z.enum(['normal', 'nautical', 'satellite']))
+		.parse(input.mapOfflinePackages);
+	if (
+		new Set(mapEnabledOverlays).size !== mapEnabledOverlays.length ||
+		new Set(mapOfflinePackages).size !== mapOfflinePackages.length
+	) {
+		throw new Error('INVALID_MAP_CONFIGURATION');
+	}
+	const configJson = JSON.stringify({
+		...(mapGoogleMyMapsId ? { googleMyMapsId: mapGoogleMyMapsId } : {}),
+		defaultMode: mapDefaultMode,
+		enabledOverlays: mapEnabledOverlays,
+		offlinePackages: mapOfflinePackages
+	});
+	const now = nowIso();
+	db.transaction((): void => {
+		const current = db
+			.prepare(
+				`SELECT config_version, config_json FROM trip_modules
+				 WHERE trip_id = ? AND module_id = 'map'`
+			)
+			.get(tripId) as { config_version: number; config_json: string } | undefined;
+		if (!current) throw new Error('TRIP_NOT_FOUND');
+		if (current.config_json === configJson) return;
+		const version = current.config_version + 1;
+		db.prepare(
+			`UPDATE trip_modules SET config_version = ?, config_json = ?, configured_at = ?, updated_at = ?
+			 WHERE trip_id = ? AND module_id = 'map'`
+		).run(version, configJson, now, now, tripId);
+		db.prepare(
+			`INSERT INTO trip_module_config_history
+			 (id, trip_id, module_id, config_version, config_json, changed_at, changed_by_session)
+			 VALUES (?, ?, 'map', ?, ?, ?, NULL)`
+		).run(randomUUID(), tripId, version, configJson, now);
+		if (!tripReadiness(db, tripId).ready) {
+			db.prepare("UPDATE trips SET status = 'draft', updated_at = ? WHERE id = ?").run(now, tripId);
+			db.prepare('DELETE FROM session_trip_grants WHERE trip_id = ?').run(tripId);
+		}
+		audit(db, tripId, 'trip.map.updated');
+	})();
+}
 export function activateTrip(db: Database.Database, tripId: string): TripReadiness {
 	return db.transaction((): TripReadiness => {
 		const readiness = tripReadiness(db, tripId);

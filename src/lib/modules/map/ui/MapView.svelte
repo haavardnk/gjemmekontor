@@ -38,6 +38,8 @@
 		selectedId,
 		selectedFeature,
 		mode,
+		tripId,
+		depthContoursEnabled,
 		offlineMap,
 		actualRoutes,
 		hiddenRouteIds,
@@ -53,6 +55,8 @@
 		selectedId: string | undefined;
 		selectedFeature: MapFeature | undefined;
 		mode: MapMode;
+		tripId: string;
+		depthContoursEnabled: boolean;
 		offlineMap: OfflineMapRecord | undefined;
 		actualRoutes: ActualRouteFeature[];
 		hiddenRouteIds: Set<string>;
@@ -84,7 +88,7 @@
 	let resettingCamera = false;
 	let selectedPoint: Position | undefined;
 	const protocol = new Protocol({ metadata: true });
-	const cameraStorageKey = 'mapCamera';
+	const cameraStorageKey = $derived(`mapCamera:${tripId}`);
 	const minimumMovingSpeedKnots = 0.3;
 	const metersPerSecondToKnots = 1.9438444924406;
 	const vesselSpeedLabel = $derived(
@@ -636,27 +640,31 @@
 				attribution:
 					'<a href="https://www.openseamap.org/">OpenSeaMap</a> contributors, ODbL / CC BY-SA 2.0'
 			});
-			map.addSource('depth-contours', {
-				type: 'raster',
-				tiles: ['/api/map/depth-contours/{z}/{x}/{y}'],
-				tileSize: 256,
-				maxzoom: 18,
-				attribution:
-					'<a href="https://depth.openseamap.org/">OpenSeaMap water depths</a> contributors'
-			});
+			if (depthContoursEnabled) {
+				map.addSource('depth-contours', {
+					type: 'raster',
+					tiles: ['/api/map/depth-contours/{z}/{x}/{y}'],
+					tileSize: 256,
+					maxzoom: 18,
+					attribution:
+						'<a href="https://depth.openseamap.org/">OpenSeaMap water depths</a> contributors'
+				});
+			}
 			map.addLayer({
 				id: 'marine-profile',
 				type: 'raster',
 				source: 'marine-profile',
 				paint: { 'raster-opacity': 0.7 }
 			});
-			map.addLayer({
-				id: 'depth-contours',
-				type: 'raster',
-				source: 'depth-contours',
-				minzoom: 7,
-				paint: { 'raster-opacity': 0.9 }
-			});
+			if (depthContoursEnabled) {
+				map.addLayer({
+					id: 'depth-contours',
+					type: 'raster',
+					source: 'depth-contours',
+					minzoom: 7,
+					paint: { 'raster-opacity': 0.9 }
+				});
+			}
 			map.addLayer({
 				id: 'seamarks',
 				type: 'raster',

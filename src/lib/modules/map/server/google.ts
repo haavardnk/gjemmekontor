@@ -50,8 +50,8 @@ export type MapServiceDependencies = {
 	now?: () => number;
 };
 
-export function mapCachePaths(dataDir: string): MapCachePaths {
-	const directory = join(dataDir, 'map');
+export function mapCachePaths(dataDir: string, tripId: string): MapCachePaths {
+	const directory = join(dataDir, 'trips', tripId, 'map');
 	return {
 		directory,
 		kml: join(directory, 'latest.kml'),

@@ -39,6 +39,9 @@
 	const availablePeople = $derived(
 		data.settings.people.filter((person) => !person.member && !person.archived)
 	);
+	const mapConfig = $derived(
+		data.settings.modules.find((module) => module.id === 'map')?.config ?? {}
+	);
 
 	$effect(() => {
 		const fingerprint = JSON.stringify(data.settings.modules);
@@ -295,14 +298,6 @@
 				</div>
 				<div class="mt-4 grid gap-4 sm:grid-cols-2">
 					<label class="form-control">
-						<span class="label font-semibold">Kart · Google My Maps-ID</span>
-						<input
-							class="input-bordered input"
-							name="mapGoogleMyMapsId"
-							bind:value={mapGoogleMyMapsId}
-						/>
-					</label>
-					<label class="form-control">
 						<span class="label font-semibold">Handleliste · Bring-liste-ID</span>
 						<input
 							class="input-bordered input"
@@ -315,6 +310,107 @@
 					><Save size={18} /> Lagre moduler</button
 				>
 			</form>
+
+			<section class="card border border-base-300 bg-base-100 p-5">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<h2 class="text-xl font-bold">Kart</h2>
+						<p class="mt-1 text-sm text-base-content/65">
+							{data.mapSummary.mappings} leverandørkoblinger · {data.mapSummary.enrichments}
+							lagrede Tripadvisor-oppslag
+						</p>
+						<p class="mt-1 text-xs text-base-content/55">
+							AIS {data.mapSummary.aisProviderConfigured ? 'klar' : 'mangler nøkkel'} · Google Places
+							{data.mapSummary.googlePlacesConfigured ? 'klar' : 'av'} · Tripadvisor
+							{data.mapSummary.tripadvisorConfigured ? 'klar' : 'av'}
+						</p>
+					</div>
+					<span
+						class="badge"
+						class:badge-success={data.mapSummary.enabled && data.mapSummary.configured}
+						class:badge-warning={!data.mapSummary.enabled || !data.mapSummary.configured}
+					>
+						{data.mapSummary.enabled && data.mapSummary.configured ? 'Konfigurert' : 'Ikke klar'}
+					</span>
+				</div>
+				<form method="post" action="?/map" class="mt-4">
+					<div class="grid gap-4 sm:grid-cols-2">
+						<label class="form-control">
+							<span class="label font-semibold">Google My Maps-ID</span>
+							<input
+								class="input-bordered input"
+								name="mapGoogleMyMapsId"
+								bind:value={mapGoogleMyMapsId}
+							/>
+						</label>
+						<label class="form-control">
+							<span class="label font-semibold">Standardvisning</span>
+							<select
+								class="select-bordered select"
+								name="mapDefaultMode"
+								value={String(mapConfig.defaultMode ?? 'normal')}
+							>
+								<option value="normal">Vanlig kart</option>
+								<option value="nautical">Sjøkart</option>
+								<option value="satellite">Satellittkart</option>
+							</select>
+						</label>
+						<fieldset class="rounded-box border border-base-300 p-3">
+							<legend class="px-1 text-sm font-semibold">Overlegg</legend>
+							<label class="mt-1 flex items-center gap-2 text-sm">
+								<input
+									class="checkbox checkbox-sm checkbox-primary"
+									type="checkbox"
+									name="mapEnabledOverlay"
+									value="ais"
+									checked={Array.isArray(mapConfig.enabledOverlays)
+										? mapConfig.enabledOverlays.includes('ais')
+										: true}
+								/>
+								AIS-fartøy
+							</label>
+							<label class="mt-2 flex items-center gap-2 text-sm">
+								<input
+									class="checkbox checkbox-sm checkbox-primary"
+									type="checkbox"
+									name="mapEnabledOverlay"
+									value="depth-contours"
+									checked={Array.isArray(mapConfig.enabledOverlays)
+										? mapConfig.enabledOverlays.includes('depth-contours')
+										: true}
+								/>
+								Dybdekoter i sjøkart
+							</label>
+						</fieldset>
+						<fieldset class="rounded-box border border-base-300 p-3">
+							<legend class="px-1 text-sm font-semibold">Tillatte offlinepakker</legend>
+							{#each [{ id: 'normal', label: 'Vanlig' }, { id: 'nautical', label: 'Sjøkart' }, { id: 'satellite', label: 'Satellitt' }] as option (option.id)}
+								<label class="mt-1 flex items-center gap-2 text-sm">
+									<input
+										class="checkbox checkbox-sm checkbox-primary"
+										type="checkbox"
+										name="mapOfflinePackage"
+										value={option.id}
+										checked={Array.isArray(mapConfig.offlinePackages) &&
+											mapConfig.offlinePackages.includes(option.id)}
+									/>
+									{option.label}
+								</label>
+							{/each}
+						</fieldset>
+					</div>
+					<button class="btn mt-4 btn-primary" type="submit"><Save size={18} /> Lagre kart</button>
+				</form>
+				<form method="post" action="?/refreshMap" class="mt-4">
+					<button
+						class="btn btn-outline"
+						type="submit"
+						disabled={!data.mapSummary.enabled || !data.mapSummary.configured}
+					>
+						Test og oppdater kart
+					</button>
+				</form>
+			</section>
 
 			<section class="card border border-base-300 bg-base-100 p-5">
 				<h2 class="mb-4 text-xl font-bold">Tilgang og status</h2>
