@@ -55,7 +55,6 @@
 	import PoiSheet from '$lib/modules/map/ui/PoiSheet.svelte';
 	import VesselSheet from '$lib/modules/map/ui/VesselSheet.svelte';
 	import { tripDayState } from '$lib/trip/day.svelte';
-	import { tripDays } from '$lib/trip/itinerary';
 	import { mapErrorMessage } from '$lib/ui/copy';
 
 	let { defaultMode, enabledOverlays }: { defaultMode: MapMode; enabledOverlays: MapOverlay[] } =
@@ -70,15 +69,20 @@
 	let routeScope = $state<'all' | 'current'>('all');
 	const logbookEnabled = $derived(page.data.enabledModuleIds?.includes('logbook') ?? true);
 	const tripId = $derived(page.data.tripId ?? '');
+	const tripDays = $derived(page.data.tripDays ?? []);
 	const currentMapDayIndex = $derived(tripDayState.todayIndex ?? tripDayState.selectedIndex);
-	const allActualRoutes = $derived(logbookEnabled ? actualRouteFeatures(sharedState.values) : []);
+	const allActualRoutes = $derived(
+		logbookEnabled ? actualRouteFeatures(sharedState.values, tripDays) : []
+	);
 	const actualRoutes = $derived(
 		visibleActualRoutes(allActualRoutes, currentMapDayIndex, routeScope === 'current')
 	);
 	const hiddenRouteIds = $derived(
 		hiddenPlannedRouteIds(snapshot?.features ?? [], completedDayNumbers(allActualRoutes))
 	);
-	const totalNauticalMiles = $derived(logbookEnabled ? loggedNauticalMiles(sharedState.values) : 0);
+	const totalNauticalMiles = $derived(
+		logbookEnabled ? loggedNauticalMiles(sharedState.values, tripDays) : 0
+	);
 	let mode = $state<MapMode>(untrack(() => defaultMode));
 	let online = $state(true);
 	let offlinePackages = $state<OfflineMapPackage[]>([]);

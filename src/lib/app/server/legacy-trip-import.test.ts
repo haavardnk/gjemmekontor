@@ -133,7 +133,10 @@ function seedLegacyData(db: Database.Database): void {
 		),
 		stateValue('gear:packed:8691fb8c-7b58-4c60-835d-755af7e4a7de', true, 7),
 		stateValue('shots:d0:module:utreise:0', true, 8),
-		stateValue('digest:d0:story', 'Første reisedag', 9)
+		stateValue('digest:d0:story', 'Første reisedag', 9),
+		stateValue('logbook:d0:destination', { kind: 'text', name: 'Split' }, 10),
+		stateValue('logbook:d0:notes', 'Eksisterende loggnotat', 11),
+		stateValue('logbook:d0:leg:4482ea93-f143-467a-8f12-d7dd76d1763b', { persisted: 'exactly' }, 12)
 	];
 	const insertState = db.prepare(`
 		INSERT INTO state_entries
@@ -152,7 +155,7 @@ function seedLegacyData(db: Database.Database): void {
 		);
 		insertReceipt.run(`mutation:${value.mutationId}`, String(value.revision));
 	}
-	db.prepare("UPDATE meta SET value = '9' WHERE key = 'global_revision'").run();
+	db.prepare("UPDATE meta SET value = '12' WHERE key = 'global_revision'").run();
 	db.prepare(
 		`INSERT INTO gpx_uploads
 		(id, leg_key, filename, content_type, checksum, byte_size, parser_version,
@@ -195,8 +198,8 @@ describe('Kroatia 2026 import', (): void => {
 
 		expect(report).toEqual({
 			tripId: kroatia2026TripId,
-			stateEntries: 9,
-			mutationReceipts: 9,
+			stateEntries: 12,
+			mutationReceipts: 12,
 			people: 6,
 			recipes: 1,
 			menuEntries: 1,
@@ -222,6 +225,46 @@ describe('Kroatia 2026 import', (): void => {
 		expect(db.prepare('SELECT COUNT(*) AS count FROM trip_days WHERE active = 1').get()).toEqual({
 			count: 19
 		});
+		expect(
+			db
+				.prepare(
+					`SELECT u.trip_id, d.trip_id AS day_trip_id, d.position, u.checksum,
+					        u.byte_size, hex(u.original) AS original, u.leg_key
+					 FROM trip_gpx_uploads u JOIN trip_days d ON d.id = u.trip_day_id`
+				)
+				.get()
+		).toEqual({
+			trip_id: kroatia2026TripId,
+			day_trip_id: kroatia2026TripId,
+			position: 0,
+			checksum: '0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c',
+			byte_size: 4,
+			original: Buffer.from('gpx!').toString('hex').toUpperCase(),
+			leg_key: expect.stringMatching(
+				/^logbook:day:[0-9a-f-]+:leg:4482ea93-f143-467a-8f12-d7dd76d1763b$/
+			)
+		});
+		const firstDay = db
+			.prepare('SELECT id FROM trip_days WHERE trip_id = ? AND position = 0')
+			.get(kroatia2026TripId) as { id: string };
+		expect(
+			db
+				.prepare(
+					`SELECT key, value FROM trip_state_entries
+					 WHERE trip_id = ? AND key LIKE 'logbook:%' ORDER BY revision`
+				)
+				.all(kroatia2026TripId)
+		).toEqual([
+			{
+				key: `logbook:day:${firstDay.id}:destination`,
+				value: '{"kind":"text","name":"Split"}'
+			},
+			{ key: `logbook:day:${firstDay.id}:notes`, value: '"Eksisterende loggnotat"' },
+			{
+				key: `logbook:day:${firstDay.id}:leg:4482ea93-f143-467a-8f12-d7dd76d1763b`,
+				value: '{"persisted":"exactly"}'
+			}
+		]);
 		expect(db.prepare('SELECT COUNT(*) AS count FROM sessions').get()).toEqual({ count: 0 });
 		expect(
 			db

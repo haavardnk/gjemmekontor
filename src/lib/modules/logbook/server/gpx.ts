@@ -13,12 +13,14 @@ import {
 import { apiError, apiSuccess } from '$lib/server/api';
 
 const uploadIdSchema = z.uuid();
-const legKeySchema = z.string().regex(/^logbook:d(?:[0-9]|1[0-8]):leg:[A-Za-z0-9-]+$/);
+const legKeySchema = z.string().regex(/^logbook:day:[A-Za-z0-9-]{1,100}:leg:[A-Za-z0-9-]+$/);
 const filenameSchema = z.string().min(1).max(200);
 const clientIdSchema = z.string().min(1).max(200);
 
 type StoredGpx = {
 	id: string;
+	trip_id: string;
+	trip_day_id: string;
 	leg_key: string;
 	filename: string;
 	content_type: string;
@@ -55,8 +57,22 @@ function responseBody(row: StoredGpx): GpxUploadResponse {
 	};
 }
 
-function storedGpx(db: Database.Database, id: string): StoredGpx | undefined {
-	return db.prepare('SELECT * FROM gpx_uploads WHERE id = ?').get(id) as StoredGpx | undefined;
+function storedGpx(db: Database.Database, tripId: string, id: string): StoredGpx | undefined {
+	return db
+		.prepare('SELECT * FROM trip_gpx_uploads WHERE trip_id = ? AND id = ?')
+		.get(tripId, id) as StoredGpx | undefined;
+}
+
+function tripDayForLeg(
+	db: Database.Database,
+	tripId: string,
+	legKey: string
+): { id: string } | undefined {
+	const dayId = legKey.match(/^logbook:day:([A-Za-z0-9-]+):leg:/)?.[1];
+	if (!dayId) return undefined;
+	return db
+		.prepare('SELECT id FROM trip_days WHERE trip_id = ? AND id = ? AND active = 1')
+		.get(tripId, dayId) as { id: string } | undefined;
 }
 
 function noStore(response: Response): Response {
@@ -68,6 +84,7 @@ export async function handlePutGpx(
 	request: Request,
 	id: string,
 	db: Database.Database,
+	tripId: string,
 	now: () => Date = (): Date => new Date()
 ): Promise<Response> {
 	if (!uploadIdSchema.safeParse(id).success) {
@@ -80,6 +97,8 @@ export async function handlePutGpx(
 	if (!legKey.success || !filename.success || !clientId.success) {
 		return noStore(apiError('GPX_METADATA_INVALID', 400));
 	}
+	const tripDay = tripDayForLeg(db, tripId, legKey.data);
+	if (!tripDay) return noStore(apiError('GPX_TRIP_DAY_INVALID', 400));
 	if (request.headers.get('content-type')?.split(';')[0] !== 'application/gpx+xml') {
 		return noStore(apiError('GPX_CONTENT_TYPE_INVALID', 415));
 	}
@@ -95,13 +114,18 @@ export async function handlePutGpx(
 		return noStore(apiError('GPX_TOO_LARGE', 413));
 	}
 	const checksum = createHash('sha256').update(bytes).digest('hex');
-	const existing = storedGpx(db, id);
+	const existing = storedGpx(db, tripId, id);
 	if (existing) {
 		return noStore(
-			existing.checksum === checksum
+			existing.checksum === checksum &&
+				existing.leg_key === legKey.data &&
+				existing.filename === filename.data
 				? apiSuccess(responseBody(existing))
 				: apiError('GPX_UPLOAD_CONFLICT', 409)
 		);
+	}
+	if (db.prepare('SELECT 1 FROM trip_gpx_uploads WHERE id = ?').get(id)) {
+		return noStore(apiError('GPX_UPLOAD_CONFLICT', 409));
 	}
 	let xml: string;
 	let extraction: GpxExtraction;
@@ -117,12 +141,14 @@ export async function handlePutGpx(
 	}
 	const createdAt = now().toISOString();
 	db.prepare(
-		`INSERT INTO gpx_uploads (
-			id, leg_key, filename, content_type, checksum, byte_size, parser_version,
+		`INSERT INTO trip_gpx_uploads (
+			id, trip_id, trip_day_id, leg_key, filename, content_type, checksum, byte_size, parser_version,
 			extraction, original, client_id, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	).run(
 		id,
+		tripId,
+		tripDay.id,
 		legKey.data,
 		filename.data,
 		'application/gpx+xml',
@@ -134,18 +160,18 @@ export async function handlePutGpx(
 		clientId.data,
 		createdAt
 	);
-	const row = storedGpx(db, id);
+	const row = storedGpx(db, tripId, id);
 	if (!row) {
 		return noStore(apiError('GPX_ARCHIVE_FAILED', 500));
 	}
 	return noStore(apiSuccess(responseBody(row), 201));
 }
 
-export function handleGetGpx(id: string, db: Database.Database): Response {
+export function handleGetGpx(id: string, db: Database.Database, tripId: string): Response {
 	if (!uploadIdSchema.safeParse(id).success) {
 		return noStore(apiError('GPX_ID_INVALID', 400));
 	}
-	const row = storedGpx(db, id);
+	const row = storedGpx(db, tripId, id);
 	if (!row) {
 		return noStore(apiError('GPX_NOT_FOUND', 404));
 	}

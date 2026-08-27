@@ -129,8 +129,22 @@ describe('trip day selection', (): void => {
 			now: () => new Date('2027-01-01T23:30:00.000Z')
 		});
 		const days = [
-			{ index: 0, date: '2027-01-01', dateLabel: 'Dag 1', title: 'Start', phase: 'Reise' },
-			{ index: 1, date: '2027-01-02', dateLabel: 'Dag 2', title: 'Videre', phase: 'Reise' }
+			{
+				id: 'day-one',
+				index: 0,
+				date: '2027-01-01',
+				dateLabel: 'Dag 1',
+				title: 'Start',
+				phase: 'Reise'
+			},
+			{
+				id: 'day-two',
+				index: 1,
+				date: '2027-01-02',
+				dateLabel: 'Dag 2',
+				title: 'Videre',
+				phase: 'Reise'
+			}
 		];
 
 		await state.start('test-trip', days, 'Europe/Oslo');

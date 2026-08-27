@@ -2,7 +2,7 @@ import type { Feature, LineString } from 'geojson';
 
 import type { JsonValue } from '$lib/client/database';
 import type { MapFeature } from '$lib/modules/map/public';
-import { tripDays } from '$lib/trip/itinerary';
+import type { TripDay } from '$lib/trip/itinerary';
 
 import { logbookLegs } from './logbook';
 
@@ -25,9 +25,12 @@ export function layerDayNumbers(name: string): number[] {
 	return Array.from({ length: last - first + 1 }, (_value, index) => first + index);
 }
 
-export function actualRouteFeatures(values: Record<string, JsonValue>): ActualRouteFeature[] {
-	return tripDays.flatMap((day) =>
-		logbookLegs(values, day.index).flatMap((leg) =>
+export function actualRouteFeatures(
+	values: Record<string, JsonValue>,
+	days: readonly TripDay[]
+): ActualRouteFeature[] {
+	return days.flatMap((day) =>
+		logbookLegs(values, day.id).flatMap((leg) =>
 			(leg.gpx?.segments ?? []).map((segment, segmentIndex): ActualRouteFeature => ({
 				type: 'Feature',
 				id: `${leg.gpx?.id}:${segmentIndex}`,
@@ -47,11 +50,14 @@ export function completedDayNumbers(routes: ActualRouteFeature[]): Set<number> {
 	return new Set(routes.map((route) => route.properties.dayIndex + 1));
 }
 
-export function loggedNauticalMiles(values: Record<string, JsonValue>): number {
-	return tripDays.reduce(
+export function loggedNauticalMiles(
+	values: Record<string, JsonValue>,
+	days: readonly TripDay[]
+): number {
+	return days.reduce(
 		(total, day) =>
 			total +
-			logbookLegs(values, day.index).reduce(
+			logbookLegs(values, day.id).reduce(
 				(dayTotal, leg) => dayTotal + (leg.gpx?.nauticalMiles ?? 0),
 				0
 			),

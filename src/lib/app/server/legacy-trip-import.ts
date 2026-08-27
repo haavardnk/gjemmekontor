@@ -327,14 +327,51 @@ function importGear(
 }
 
 function importServerModuleData(db: Database.Database): void {
-	db.prepare(
+	const legacyGpx = db.prepare('SELECT * FROM gpx_uploads ORDER BY id').all() as Array<{
+		id: string;
+		leg_key: string;
+		filename: string;
+		content_type: string;
+		checksum: string;
+		byte_size: number;
+		parser_version: number;
+		extraction: string;
+		original: Buffer;
+		client_id: string;
+		created_at: string;
+	}>;
+	const tripDay = db.prepare(
+		'SELECT id FROM trip_days WHERE trip_id = ? AND position = ? AND active = 1'
+	);
+	const insertGpx = db.prepare(
 		`INSERT INTO trip_gpx_uploads
-		 (id, trip_id, leg_key, filename, content_type, checksum, byte_size,
+		 (id, trip_id, trip_day_id, leg_key, filename, content_type, checksum, byte_size,
 		  parser_version, extraction, original, client_id, created_at)
-		 SELECT id, ?, leg_key, filename, content_type, checksum, byte_size,
-		  parser_version, extraction, original, client_id, created_at
-		 FROM gpx_uploads`
-	).run(kroatia2026TripId);
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	);
+	for (const gpx of legacyGpx) {
+		const dayIndex = Number(gpx.leg_key.match(/^logbook:d(\d+):leg:/)?.[1]);
+		const day = Number.isInteger(dayIndex)
+			? (tripDay.get(kroatia2026TripId, dayIndex) as { id: string } | undefined)
+			: undefined;
+		if (!day) throw new Error(`INVALID_GPX_LEG_KEY:${gpx.leg_key}`);
+		const legKey = gpx.leg_key.replace(/^logbook:d\d+:leg:/, `logbook:day:${day.id}:leg:`);
+		insertGpx.run(
+			gpx.id,
+			kroatia2026TripId,
+			day.id,
+			legKey,
+			gpx.filename,
+			gpx.content_type,
+			gpx.checksum,
+			gpx.byte_size,
+			gpx.parser_version,
+			gpx.extraction,
+			gpx.original,
+			gpx.client_id,
+			gpx.created_at
+		);
+	}
 
 	db.prepare(
 		`INSERT INTO trip_poi_provider_mappings
@@ -351,6 +388,16 @@ function importServerModuleData(db: Database.Database): void {
 		 SELECT ?, feature_id, provider, schema_version, payload, fetched_at, expires_at
 		 FROM poi_enrichment_cache`
 	).run(kroatia2026TripId);
+}
+
+function migratedStateKey(db: Database.Database, key: string): string {
+	const match = key.match(/^logbook:d(\d+):(.*)$/);
+	if (!match) return key;
+	const day = db
+		.prepare('SELECT id FROM trip_days WHERE trip_id = ? AND position = ? AND active = 1')
+		.get(kroatia2026TripId, Number(match[1])) as { id: string } | undefined;
+	if (!day) throw new Error(`INVALID_LOGBOOK_DAY_KEY:${key}`);
+	return `logbook:day:${day.id}:${match[2]}`;
 }
 
 function importShotContent(db: Database.Database, now: string): void {
@@ -529,7 +576,7 @@ export function importLegacyKroatia2026(
 			JSON.parse(row.value);
 			insertState.run(
 				kroatia2026TripId,
-				row.key,
+				migratedStateKey(db, row.key),
 				row.value,
 				row.revision,
 				row.client_id,

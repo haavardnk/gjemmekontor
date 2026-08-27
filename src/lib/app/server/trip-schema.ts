@@ -64,7 +64,8 @@ export const tripDatabaseMigrations: readonly DatabaseMigration[] = [
 				phase TEXT NOT NULL CHECK (length(trim(phase)) BETWEEN 1 AND 100),
 				created_at TEXT NOT NULL,
 				updated_at TEXT NOT NULL,
-				UNIQUE (trip_id, calendar_date)
+				UNIQUE (trip_id, calendar_date),
+				UNIQUE (trip_id, id)
 			);
 			CREATE UNIQUE INDEX trip_days_active_position
 				ON trip_days(trip_id, position) WHERE active = 1;
@@ -174,6 +175,7 @@ export const tripDatabaseMigrations: readonly DatabaseMigration[] = [
 			CREATE TABLE trip_gpx_uploads (
 				id TEXT PRIMARY KEY,
 				trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+				trip_day_id TEXT NOT NULL REFERENCES trip_days(id),
 				leg_key TEXT NOT NULL,
 				filename TEXT NOT NULL,
 				content_type TEXT NOT NULL,
@@ -183,9 +185,10 @@ export const tripDatabaseMigrations: readonly DatabaseMigration[] = [
 				extraction TEXT NOT NULL CHECK (json_valid(extraction)),
 				original BLOB NOT NULL,
 				client_id TEXT NOT NULL,
-				created_at TEXT NOT NULL
+				created_at TEXT NOT NULL,
+				FOREIGN KEY (trip_id, trip_day_id) REFERENCES trip_days(trip_id, id)
 			);
-			CREATE INDEX trip_gpx_uploads_leg ON trip_gpx_uploads(trip_id, leg_key);
+			CREATE INDEX trip_gpx_uploads_leg ON trip_gpx_uploads(trip_id, trip_day_id, leg_key);
 
 			CREATE TABLE trip_poi_provider_mappings (
 				trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,

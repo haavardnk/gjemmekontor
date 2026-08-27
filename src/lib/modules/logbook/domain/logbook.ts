@@ -71,15 +71,12 @@ export type LogbookLeg = z.infer<typeof logbookLegSchema>;
 export type LogbookGpx = z.infer<typeof logbookGpxSchema>;
 export type KeyedLogbookLeg = LogbookLeg & { key: string };
 
-export function logbookLegKey(dayIndex: number, id: string): string {
-	return `logbook:d${dayIndex}:leg:${id}`;
+export function logbookLegKey(dayId: string, id: string): string {
+	return `logbook:day:${dayId}:leg:${id}`;
 }
 
-export function logbookLegs(
-	values: Record<string, JsonValue>,
-	dayIndex: number
-): KeyedLogbookLeg[] {
-	const prefix = `logbook:d${dayIndex}:leg:`;
+export function logbookLegs(values: Record<string, JsonValue>, dayId: string): KeyedLogbookLeg[] {
+	const prefix = `logbook:day:${dayId}:leg:`;
 	return Object.entries(values)
 		.filter(([key]) => key.startsWith(prefix))
 		.flatMap(([key, value]) => {

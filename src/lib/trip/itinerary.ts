@@ -1,4 +1,5 @@
 export type TripDay = {
+	id: string;
 	index: number;
 	date: string;
 	dateLabel: string;
@@ -36,6 +37,7 @@ const dayDefinitions = [
 ] as const;
 
 export const tripDays: TripDay[] = dayDefinitions.map(([date, dateLabel, title, phase], index) => ({
+	id: date,
 	index,
 	date,
 	dateLabel,

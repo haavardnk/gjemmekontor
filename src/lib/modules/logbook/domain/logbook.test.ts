@@ -35,7 +35,7 @@ describe('Logbook', (): void => {
 	});
 
 	test('uses independent UUID leg keys', (): void => {
-		expect(logbookLegKey(3, 'row-a')).toBe('logbook:d3:leg:row-a');
+		expect(logbookLegKey('day-id', 'row-a')).toBe('logbook:day:day-id:leg:row-a');
 	});
 
 	test('round-trips GPX metadata while retaining legacy legs', (): void => {
@@ -75,16 +75,16 @@ describe('Logbook', (): void => {
 		const earlier = { ...leg, departure: '08:30', createdAt: '2026-09-05T09:00:00.000Z' };
 		const deleted = { ...leg, tombstone: true };
 		const values: Record<string, JsonValue> = {
-			[logbookLegKey(0, 'later')]: serializeLogbookLeg(leg),
-			[logbookLegKey(0, 'earlier')]: serializeLogbookLeg(earlier),
-			[logbookLegKey(0, 'deleted')]: serializeLogbookLeg(deleted),
-			[logbookLegKey(1, 'other')]: serializeLogbookLeg(leg),
-			'logbook:d0:leg:invalid': null
+			[logbookLegKey('day-a', 'later')]: serializeLogbookLeg(leg),
+			[logbookLegKey('day-a', 'earlier')]: serializeLogbookLeg(earlier),
+			[logbookLegKey('day-a', 'deleted')]: serializeLogbookLeg(deleted),
+			[logbookLegKey('day-b', 'other')]: serializeLogbookLeg(leg),
+			'logbook:day:day-a:leg:invalid': null
 		};
 
-		expect(logbookLegs(values, 0).map((item) => item.key)).toEqual([
-			'logbook:d0:leg:earlier',
-			'logbook:d0:leg:later'
+		expect(logbookLegs(values, 'day-a').map((item) => item.key)).toEqual([
+			'logbook:day:day-a:leg:earlier',
+			'logbook:day:day-a:leg:later'
 		]);
 	});
 

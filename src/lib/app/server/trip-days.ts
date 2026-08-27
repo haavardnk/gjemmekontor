@@ -6,10 +6,11 @@ export function listTripDays(db: Database.Database, tripId: string): TripDay[] {
 	return (
 		db
 			.prepare(
-				`SELECT position, calendar_date, date_label, title, phase
+				`SELECT id, position, calendar_date, date_label, title, phase
 				 FROM trip_days WHERE trip_id = ? AND active = 1 ORDER BY position`
 			)
 			.all(tripId) as Array<{
+			id: string;
 			position: number;
 			calendar_date: string;
 			date_label: string;
@@ -17,6 +18,7 @@ export function listTripDays(db: Database.Database, tripId: string): TripDay[] {
 			phase: string;
 		}>
 	).map((day) => ({
+		id: day.id,
 		index: day.position,
 		date: day.calendar_date,
 		dateLabel: day.date_label,

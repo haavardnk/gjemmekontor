@@ -126,15 +126,15 @@ describe('trip routes', (): void => {
 
 	test('emits each GPX segment independently and ignores legacy legs', (): void => {
 		const values: Record<string, JsonValue> = {
-			[logbookLegKey(0, 'gpx')]: serializeLogbookLeg(leg),
-			[logbookLegKey(0, 'legacy')]: serializeLogbookLeg({ ...leg, gpx: undefined })
+			[logbookLegKey(tripDays[0].id, 'gpx')]: serializeLogbookLeg(leg),
+			[logbookLegKey(tripDays[0].id, 'legacy')]: serializeLogbookLeg({ ...leg, gpx: undefined })
 		};
-		const routes = actualRouteFeatures(values);
+		const routes = actualRouteFeatures(values, tripDays);
 
 		expect(routes).toHaveLength(2);
 		expect(routes.map((route) => route.geometry.coordinates)).toEqual(leg.gpx?.segments);
 		expect(completedDayNumbers(routes)).toEqual(new Set([1]));
-		expect(loggedNauticalMiles(values)).toBe(4);
+		expect(loggedNauticalMiles(values, tripDays)).toBe(4);
 	});
 
 	test('hides planned routes when any represented day is complete', (): void => {
@@ -152,16 +152,34 @@ describe('trip routes', (): void => {
 
 	test('shows all actual routes or only the selected trip day', (): void => {
 		const values: Record<string, JsonValue> = {
-			[logbookLegKey(0, 'day-one')]: serializeLogbookLeg(leg),
-			[logbookLegKey(1, 'day-two')]: serializeLogbookLeg({
+			[logbookLegKey(tripDays[0].id, 'day-one')]: serializeLogbookLeg(leg),
+			[logbookLegKey(tripDays[1].id, 'day-two')]: serializeLogbookLeg({
 				...leg,
 				gpx: leg.gpx ? { ...leg.gpx, id: '019d0d25-8ea0-7000-8000-000000000002' } : undefined
 			})
 		};
-		const routes = actualRouteFeatures(values);
+		const routes = actualRouteFeatures(values, tripDays);
 
 		expect(visibleActualRoutes(routes, 0, false)).toHaveLength(4);
 		expect(visibleActualRoutes(routes, 1, true)).toHaveLength(2);
 		expect(visibleActualRoutes(routes, 1, true)[0]?.properties.dayIndex).toBe(1);
+	});
+
+	test('uses the supplied trip calendar instead of the Kroatia day range', (): void => {
+		const customDay = {
+			id: 'custom-day-id',
+			index: 25,
+			date: '2027-01-26',
+			dateLabel: 'Dag 26',
+			title: 'Ekstra dag',
+			phase: 'Reise'
+		};
+		const values: Record<string, JsonValue> = {
+			[logbookLegKey(customDay.id, 'custom')]: serializeLogbookLeg(leg)
+		};
+
+		expect(actualRouteFeatures(values, [customDay])).toHaveLength(2);
+		expect(loggedNauticalMiles(values, [customDay])).toBe(4);
+		expect(actualRouteFeatures(values, tripDays)).toHaveLength(0);
 	});
 });

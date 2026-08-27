@@ -54,11 +54,11 @@
 	let readingGpx = $state(false);
 	let formError = $state('');
 
-	const legs = $derived(logbookLegs(sharedState.values, day.index));
+	const legs = $derived(logbookLegs(sharedState.values, day.id));
 	const totals = $derived(logbookTotals(legs));
-	const destinationKey = $derived(`logbook:d${day.index}:destination`);
-	const weatherKey = $derived(`logbook:d${day.index}:weather`);
-	const notesKey = $derived(`logbook:d${day.index}:notes`);
+	const destinationKey = $derived(`logbook:day:${day.id}:destination`);
+	const weatherKey = $derived(`logbook:day:${day.id}:weather`);
+	const notesKey = $derived(`logbook:day:${day.id}:notes`);
 	const destination = $derived(parseLocation(sharedState.values[destinationKey]));
 	const gpxDateMismatch = $derived(gpx !== undefined && localDate(gpx.departureAt) !== day.date);
 	const points = $derived(
@@ -262,7 +262,7 @@
 			formError = 'Kontroller tidene og tallene før du lagrer.';
 			return;
 		}
-		const key = editingKey ?? logbookLegKey(day.index, crypto.randomUUID());
+		const key = editingKey ?? logbookLegKey(day.id, crypto.randomUUID());
 		const parsedGpx = parsed.data.gpx;
 		if (gpxFile && parsedGpx) {
 			const extraction = {
