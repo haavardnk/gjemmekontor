@@ -14,6 +14,7 @@ A shared, offline-first travel app for a sailing trip in Croatia.
 - Live shared Bring shopping list with completion, restore, detail editing, and cached offline access
 - Shared meal planning with recipe import, cooking mode, and Bring shopping list integration
 - Shared gear planning and packing with categories, owners, purchasing status, and progress
+- Shared trip rule book with a randomized daily participant rotation
 - Offline editing and synchronization between devices
 - Installable progressive web app
 
@@ -38,7 +39,7 @@ Configure the required runtime values in `.env` before starting the app.
 Product features are statically bundled modules under `src/lib/modules`. Enable a subset with a comma-separated runtime value such as:
 
 ```env
-ENABLED_MODULES=map,shots,logbook,shopping-list,menu,gear
+ENABLED_MODULES=map,shots,logbook,shopping-list,menu,gear,rule-book
 ```
 
 The module catalog controls navigation, protected routes and APIs, PWA page warming, state namespaces, and optional cross-module capabilities. Disabled modules retain their data. See [Deployment](docs/deployment.md) for module-specific configuration.

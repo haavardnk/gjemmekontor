@@ -20,7 +20,7 @@ describe('module catalog', (): void => {
 			moduleCatalog
 				.filter((module) => module.mobileNavigation === 'more')
 				.map((module) => module.id)
-		).toEqual(['logbook', 'gear']);
+		).toEqual(['logbook', 'gear', 'rule-book']);
 	});
 
 	test('rejects duplicate state prefixes', (): void => {

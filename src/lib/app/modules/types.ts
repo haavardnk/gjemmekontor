@@ -1,5 +1,5 @@
 export type ModuleIconName =
-	'backpack' | 'book-open' | 'map' | 'shopping-basket' | 'utensils' | 'video';
+	'backpack' | 'book-open' | 'map' | 'scroll-text' | 'shopping-basket' | 'utensils' | 'video';
 
 export type MobileNavigationPlacement = 'quick' | 'more';
 

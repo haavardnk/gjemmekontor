@@ -5,6 +5,7 @@
 		Ellipsis,
 		LogOut,
 		Map,
+		ScrollText,
 		ShoppingBasket,
 		Utensils,
 		Video
@@ -41,6 +42,7 @@
 		backpack: Backpack,
 		'book-open': BookOpen,
 		map: Map,
+		'scroll-text': ScrollText,
 		'shopping-basket': ShoppingBasket,
 		utensils: Utensils,
 		video: Video

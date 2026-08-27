@@ -14,7 +14,8 @@ describe('module activation', (): void => {
 			'logbook',
 			'shopping-list',
 			'menu',
-			'gear'
+			'gear',
+			'rule-book'
 		]);
 	});
 
