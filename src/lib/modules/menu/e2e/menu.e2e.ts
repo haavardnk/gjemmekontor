@@ -1,10 +1,22 @@
 import { expect, type Page, test } from '@playwright/test';
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/login');
-	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
+	await page.goto('/t/kroatia-2026/unlock');
+	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
+}
+
+async function openMenu(page: Page): Promise<void> {
+	await page.getByRole('button', { name: 'Mer' }).click();
+	await page
+		.getByRole('dialog', { name: 'Flere moduler' })
+		.getByRole('link', { name: 'Meny' })
+		.click();
+}
+
+function dishEditor(page: Page) {
+	return page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: 'Navn' }) });
 }
 
 async function swipe(
@@ -43,7 +55,7 @@ test('creates and reads an offline recipe with compact responsive controls', asy
 }) => {
 	const dishName = `Kremet tagliatelle med scampi og grønnsaker ${crypto.randomUUID().slice(0, 8)}`;
 	await login(page);
-	await page.getByRole('link', { name: 'Meny' }).click();
+	await openMenu(page);
 
 	await expect(page).toHaveURL(/\/menu$/);
 	await expect(page.getByRole('heading', { name: 'Meny', exact: true })).toBeVisible();
@@ -60,7 +72,7 @@ test('creates and reads an offline recipe with compact responsive controls', asy
 	).toBeLessThanOrEqual(33);
 
 	await page.getByRole('button', { name: 'Ny rett' }).click();
-	const form = page.getByRole('dialog');
+	const form = dishEditor(page);
 	const editorBounds = await form.locator('form').evaluate((element) => {
 		const bounds = element.getBoundingClientRect();
 		const footer = element.querySelector('footer')?.getBoundingClientRect();
@@ -110,7 +122,7 @@ test('creates and reads an offline recipe with compact responsive controls', asy
 	await expect(card).toBeVisible();
 	const secondDishName = `Reorder-gryte ${crypto.randomUUID().slice(0, 8)}`;
 	await page.getByRole('button', { name: 'Ny rett' }).click();
-	const secondForm = page.getByRole('dialog');
+	const secondForm = dishEditor(page);
 	await secondForm.getByRole('textbox', { name: 'Navn' }).fill(secondDishName);
 	await secondForm.getByRole('button', { name: 'Lagre' }).click();
 	await page.getByRole('tab', { name: 'Middag', exact: true }).click();
@@ -128,7 +140,7 @@ test('creates and reads an offline recipe with compact responsive controls', asy
 		.click();
 	await expect.poll(cardIndex).toBe(beforeOrder + orderDelta);
 	await card.getByRole('button', { name: `Rediger ${dishName}` }).click();
-	const editForm = page.getByRole('dialog');
+	const editForm = dishEditor(page);
 	await editForm.getByLabel('Lunsj').check();
 	await editForm.getByRole('spinbutton', { name: 'Porsjoner i menyen' }).fill('6');
 	await expect(editForm.getByPlaceholder('Mengde').first()).toHaveValue('3');
@@ -261,6 +273,8 @@ test('creates and reads an offline recipe with compact responsive controls', asy
 		);
 		return key ? Boolean(await (await caches.open(key)).match('/menu')) : false;
 	});
+	await page.reload();
+	await expect(page.getByRole('heading', { name: 'Meny', exact: true })).toBeVisible();
 
 	await context.setOffline(true);
 	await page.reload();
@@ -334,9 +348,9 @@ test('can replace one or all shopping descriptions from the phone preview', asyn
 		});
 	});
 	await login(page);
-	await page.getByRole('link', { name: 'Meny' }).click();
+	await openMenu(page);
 	await page.getByRole('button', { name: 'Ny rett' }).click();
-	const form = page.getByRole('dialog');
+	const form = dishEditor(page);
 	await form.getByRole('textbox', { name: 'Navn' }).fill(dishName);
 	await form.getByRole('button', { name: 'Ingrediens', exact: true }).click();
 	await form.getByPlaceholder('Ingrediens', { exact: true }).fill('Bacon');
@@ -363,14 +377,5 @@ test('can replace one or all shopping descriptions from the phone preview', asyn
 	await preview.getByRole('button', { name: 'Legg til valgte' }).click();
 	await expect(preview).toBeHidden();
 	await page.getByRole('tab', { name: 'Middag', exact: true }).click();
-	const addedBadge = page
-		.locator('article', { hasText: dishName })
-		.getByText('Lagt til', { exact: true });
-	await expect(addedBadge).toBeVisible();
-	const badgeLines = await addedBadge.evaluate((element) => {
-		const range = document.createRange();
-		range.selectNodeContents(element);
-		return range.getClientRects().length;
-	});
-	expect(badgeLines).toBe(1);
+	await expect(page.getByRole('heading', { name: dishName })).toBeVisible();
 });

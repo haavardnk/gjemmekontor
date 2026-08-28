@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('follows the system theme and persists a manual override', async ({ page }) => {
 	await page.emulateMedia({ colorScheme: 'light' });
-	await page.goto('/login');
+	await page.goto('/trips');
 	const root = page.locator('html');
 	await expect(root).toHaveAttribute('data-theme', 'gjemmekontor');
 	await expect(page.getByRole('button', { name: 'Bruk mørkt tema' })).toBeVisible();

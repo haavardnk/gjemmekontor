@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 async function login(page: import('@playwright/test').Page): Promise<void> {
-	await page.goto('/login');
-	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
+	await page.goto('/t/kroatia-2026/unlock');
+	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
 }

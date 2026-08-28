@@ -1,45 +1,48 @@
 import { expect, test } from '@playwright/test';
 
-test('requires the configured shared password', async ({ page }) => {
-	const loginResponse = await page.request.get('/login');
+test('selects a trip and requires its shared password', async ({ page }) => {
+	const loginResponse = await page.request.get('/t/kroatia-2026/unlock');
 	const loginHtml = await loginResponse.text();
 	expect(loginHtml).toMatch(/<form\b[^>]*\bmethod="post"/);
 
 	await page.goto('/');
-	await expect(page).toHaveURL(/\/login$/);
+	await expect(page).toHaveURL(/\/trips$/);
 	await expect(page.getByRole('img', { name: 'Gjemmekontor' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Velg reise' })).toBeVisible();
+	await page.getByRole('link', { name: /Kroatia 2026/ }).click();
+	await expect(page).toHaveURL(/\/t\/kroatia-2026\/unlock$/);
 	await expect(
 		page.getByRole('heading', { name: 'Velkommen om bord på S/Y Bad Buoy' })
 	).toBeVisible();
 
-	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('wrong-password');
+	await page.locator('#password').fill('wrong-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
-	await expect(page.getByText('Passordet er ikke riktig.')).toBeVisible();
+	await expect(page.getByText('Reisepassordet er ikke riktig.')).toBeVisible();
 
-	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
+	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
 	await expect(page.getByRole('link', { name: 'Gjemmekontor' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Kart' })).toHaveAttribute('aria-current', 'page');
 
 	await page.getByRole('button', { name: 'Logg ut' }).click();
-	await expect(page).toHaveURL(/\/login$/);
+	await expect(page).toHaveURL(/\/trips$/);
 });
 
 test('accepts the native login form without putting the password in the URL', async ({
 	request
 }) => {
-	const response = await request.post('/login', {
+	const response = await request.post('/t/kroatia-2026/unlock', {
 		form: { password: 'test-password' },
 		headers: {
 			accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-			origin: 'http://localhost:4173'
+			origin: 'http://127.0.0.1:4173'
 		},
 		maxRedirects: 0
 	});
 	expect(response.status()).toBe(303);
 	expect(response.headers().location).toBe('/map');
-	expect(response.url()).toBe('http://localhost:4173/login');
+	expect(response.url()).toBe('http://127.0.0.1:4173/t/kroatia-2026/unlock');
 	expect(response.url()).not.toContain('password');
 });
 
@@ -64,7 +67,7 @@ test('publishes Monsieur Bintang install icons and transparent favicon', async (
 		}
 	]);
 
-	await page.goto('/login');
+	await page.goto('/trips');
 	await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /\/favicon\.png$/);
 	const pixels = await page.evaluate(async () => {
 		async function samples(path: string): Promise<number[][]> {

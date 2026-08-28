@@ -32,6 +32,7 @@
 		orderedDishesInCategory,
 		reactivateDish,
 		type RecipeArchiveView,
+		serializeMenuActive,
 		type TripMenuDish
 	} from '$lib/modules/menu/domain/menu';
 	import SyncStatus from '$lib/ui/SyncStatus.svelte';
@@ -220,13 +221,13 @@
 		)
 			return;
 		await apiMutation(`/api/menu/entries/${dish.entryId}`, 'PATCH', {
-			active: consumeDishCategory(dish.active, category)
+			active: serializeMenuActive(consumeDishCategory(dish.active, category))
 		});
 	}
 
 	async function move(dish: TripMenuDish, from: MealCategory, to: MealCategory): Promise<void> {
 		await apiMutation(`/api/menu/entries/${dish.entryId}`, 'PATCH', {
-			active: moveDishCategory(dish.active, from, to)
+			active: serializeMenuActive(moveDishCategory(dish.active, from, to))
 		});
 	}
 
@@ -246,19 +247,17 @@
 			reordered[targetIndex]!,
 			reordered[currentIndex]!
 		];
-		await Promise.all(
-			reordered.map((candidate, position) =>
-				apiMutation(`/api/menu/entries/${candidate.entryId}`, 'PATCH', {
-					active: {
-						...candidate.active,
-						categoryOrder: {
-							...candidate.active.categoryOrder,
-							[category]: position
-						}
+		for (const [position, candidate] of reordered.entries()) {
+			await apiMutation(`/api/menu/entries/${candidate.entryId}`, 'PATCH', {
+				active: serializeMenuActive({
+					...candidate.active,
+					categoryOrder: {
+						...candidate.active.categoryOrder,
+						[category]: position
 					}
 				})
-			)
-		);
+			});
+		}
 	}
 
 	async function archiveRecipe(archive: RecipeArchiveView): Promise<void> {

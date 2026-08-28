@@ -79,6 +79,11 @@
 		moreDialog.showModal();
 	}
 
+	function closeMore(): void {
+		moreOpen = false;
+		moreDialog.close();
+	}
+
 	onMount(() => {
 		if (!page.data.tripId) {
 			return;
@@ -191,7 +196,7 @@
 				<a
 					class="flex min-h-24 flex-col items-center justify-center gap-2 rounded-box border border-base-300 bg-base-200/55 p-3 font-semibold text-base-content/70 aria-[current=page]:border-primary/35 aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
 					href={link.href}
-					onclick={() => moreDialog.close()}
+					onclick={closeMore}
 					aria-current={isCurrent(link.path) ? 'page' : undefined}
 				>
 					<link.icon size={25} />

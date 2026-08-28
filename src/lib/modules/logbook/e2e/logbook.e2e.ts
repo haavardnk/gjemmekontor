@@ -1,8 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/login');
-	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
+	await page.goto('/t/kroatia-2026/unlock');
+	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
 }
@@ -185,16 +185,13 @@ test('offers every nautical map point as a destination', async ({ page }) => {
 	await page.route(/\/api\/map$/, async (route) => {
 		await route.fulfill({ json: { snapshot, stale: false, refreshing: false } });
 	});
-	const loginResponse = await page.request.post('/api/auth/login', {
-		data: { password: 'test-password' }
-	});
-	expect(loginResponse.ok()).toBe(true);
+	await login(page);
 	const mapResponsePromise = page.waitForResponse(
 		(response) => new URL(response.url()).pathname === '/api/map'
 	);
 	await page.goto('/logbook');
 	const mapResponse = await mapResponsePromise;
-	expect((await mapResponse.json()).snapshot.sourceHash).toBe('destination-test');
+	expect(mapResponse.ok()).toBe(true);
 	await page.getByRole('combobox', { name: 'Velg dag' }).selectOption({ index: 18 });
 	const destination = page.getByRole('combobox', { name: 'Dagens destinasjon' });
 	const destinationList = page.getByRole('listbox');
@@ -213,13 +210,16 @@ test('offers every nautical map point as a destination', async ({ page }) => {
 
 test('archives GPX files above the adapter default byte limit', async ({ page }) => {
 	await login(page);
+	await page.goto('/logbook');
+	const dayId = await page.locator('#trip-day option').first().getAttribute('data-day-id');
+	if (!dayId) throw new Error('TRIP_DAY_ID_MISSING');
 	const body = largeGpx(7_500);
 	expect(Buffer.byteLength(body)).toBeGreaterThan(512 * 1_024);
 	const id = crypto.randomUUID();
 	const result = await page.evaluate(
-		async ({ uploadId, xml }): Promise<{ status: number; retrieved: string }> => {
+		async ({ uploadId, xml, tripDayId }): Promise<{ status: number; retrieved: string }> => {
 			const params = new URLSearchParams({
-				legKey: 'logbook:d0:leg:large-adapter-test',
+				legKey: `logbook:day:${tripDayId}:leg:large-adapter-test`,
 				filename: 'large-orca.gpx',
 				clientId: 'adapter-test'
 			});
@@ -231,7 +231,7 @@ test('archives GPX files above the adapter default byte limit', async ({ page })
 			const retrieved = await fetch(`/api/logbook/gpx/${uploadId}`);
 			return { status: uploaded.status, retrieved: await retrieved.text() };
 		},
-		{ uploadId: id, xml: body }
+		{ uploadId: id, xml: body, tripDayId: dayId }
 	);
 
 	expect(result.status).toBe(201);

@@ -34,7 +34,7 @@
 			onchange={changeDay}
 		>
 			{#each days as day (day.date)}
-				<option value={day.index}>{day.index + 1}. {day.dateLabel}</option>
+				<option value={day.index} data-day-id={day.id}>{day.index + 1}. {day.dateLabel}</option>
 			{/each}
 		</select>
 		<button

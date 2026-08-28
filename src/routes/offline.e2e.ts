@@ -4,8 +4,8 @@ test('loads the authenticated app shell without a network connection', async ({
 	context,
 	page
 }) => {
-	await page.goto('/login');
-	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
+	await page.goto('/t/kroatia-2026/unlock');
+	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
 	await page.waitForFunction(async (): Promise<boolean> => {

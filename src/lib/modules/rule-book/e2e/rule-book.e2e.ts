@@ -18,8 +18,8 @@ async function useSecondTripDay(page: Page): Promise<void> {
 }
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/login');
-	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
+	await page.goto('/t/kroatia-2026/unlock');
+	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
 }
@@ -36,18 +36,18 @@ test('starts a fixed rotation and keeps a numbered rule book', async ({ page }) 
 	await expect(page.getByRole('heading', { name: 'Regelboka', level: 1 })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Mer' })).toHaveAttribute('aria-current', 'page');
 
-	const firstName = `Ada ${crypto.randomUUID().slice(0, 8)}`;
-	const secondName = `Bo ${crypto.randomUUID().slice(0, 8)}`;
-	const participantInput = page.getByRole('textbox', { name: 'Navn på person' });
-	for (const name of [firstName, secondName]) {
-		await participantInput.fill(name);
-		await page.getByRole('button', { name: 'Legg til' }).click();
-		await expect(page.getByRole('textbox', { name: `Navn på ${name}` })).toBeVisible();
+	const includedNames = ['Håvard', 'Tina'];
+	const excludedNames = ['Tomine', 'Odd', 'Lise', 'Oskar'];
+	for (const name of [...includedNames, ...excludedNames]) {
+		await expect(page.getByRole('checkbox', { name })).toBeChecked();
+	}
+	for (const name of excludedNames) {
+		await page.getByRole('checkbox', { name }).uncheck();
 	}
 
 	await page.getByRole('button', { name: 'Start spillet' }).click();
 	await expect(
-		page.getByText(new RegExp(`(${firstName}|${secondName}) lager dagens regel`), { exact: true })
+		page.getByText(new RegExp(`(${includedNames.join('|')}) lager dagens regel`), { exact: true })
 	).toBeVisible();
 	const editParticipantsButton = page.getByRole('button', { name: 'Endre deltakere' });
 	await expect(editParticipantsButton).toBeVisible();
@@ -61,8 +61,12 @@ test('starts a fixed rotation and keeps a numbered rule book', async ({ page }) 
 	expect(confirmationMessage).toBe('Vil du endre deltakerne? Det trekkes en ny rekkefølge.');
 
 	await page.getByText('Rekkefølge', { exact: true }).click();
-	await expect(page.getByRole('listitem').filter({ hasText: firstName })).toBeVisible();
-	await expect(page.getByRole('listitem').filter({ hasText: secondName })).toBeVisible();
+	for (const name of includedNames) {
+		await expect(page.getByRole('listitem').filter({ hasText: name })).toBeVisible();
+	}
+	for (const name of excludedNames) {
+		await expect(page.getByRole('listitem').filter({ hasText: name })).toHaveCount(0);
+	}
 
 	const rule = `Den siste som står opp lager kaffe ${crypto.randomUUID().slice(0, 8)}`;
 	await page.getByRole('textbox', { name: '§ 1' }).fill(rule);
@@ -70,7 +74,7 @@ test('starts a fixed rotation and keeps a numbered rule book', async ({ page }) 
 	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toHaveValue(rule);
 	await expect(page.getByText('Mandag 7. september', { exact: true })).toBeVisible();
 	await expect(
-		page.getByText(new RegExp(`(${firstName}|${secondName}) lager den neste regelen`), {
+		page.getByText(new RegExp(`(${includedNames.join('|')}) lager den neste regelen`), {
 			exact: true
 		})
 	).toBeVisible();
@@ -88,8 +92,9 @@ test('starts a fixed rotation and keeps a numbered rule book', async ({ page }) 
 	await expect(book.getByText(rule, { exact: true })).toBeVisible();
 	await expect(book.getByText('§ 2', { exact: true })).toBeVisible();
 	await expect(book.getByText(missedRule, { exact: true })).toBeVisible();
-	await expect(book).not.toContainText(firstName);
-	await expect(book).not.toContainText(secondName);
+	for (const name of includedNames) {
+		await expect(book).not.toContainText(name);
+	}
 
 	await page.reload();
 	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toHaveValue(rule);

@@ -17,6 +17,7 @@ const activeTripMarker = `${base}/__active_trip__`;
 
 function tripPageRequest(request: Request | string, tripId: string): Request {
 	const url = new URL(typeof request === 'string' ? request : request.url, worker.location.origin);
+	url.search = '';
 	url.searchParams.set('__trip_cache', tripId);
 	return new Request(url, {
 		headers: { accept: 'text/html' },
@@ -54,7 +55,9 @@ async function cachePage(request: Request, response: Response, tripId: string): 
 async function navigationResponse(request: Request): Promise<Response> {
 	const tripId = await rememberedActiveTrip();
 	try {
-		return await fetch(request);
+		const response = await fetch(request);
+		if (tripId) await cachePage(request, response.clone(), tripId);
+		return response;
 	} catch (error) {
 		const cached = tripId ? await caches.match(tripPageRequest(request, tripId)) : undefined;
 		if (cached) {

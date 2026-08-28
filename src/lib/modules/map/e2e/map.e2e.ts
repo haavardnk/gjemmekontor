@@ -7,6 +7,8 @@ const googleIconHref = 'https://www.gstatic.com/mapspro/images/stock/503-wht-bla
 const anchorageStyleKey = 'source-style-anchorage';
 const marinaStyleKey = 'source-style-marina';
 const sourceMapId = 'test-map';
+const tripId = '82a8d607-acc9-4c50-a948-463e6a34ef25';
+const mapCameraStorageKey = `mapCamera:${tripId}`;
 const sourceUrl = `https://www.google.com/maps/d/viewer?mid=${sourceMapId}`;
 const transparentPng = Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEAQH/2W4WAAAAAElFTkSuQmCC',
@@ -263,13 +265,20 @@ async function mockMap(page: Page, mapSnapshot = snapshot): Promise<void> {
 }
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/login');
-	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
+	await page.goto('/t/kroatia-2026/unlock');
+	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
 }
 
 async function openMoreModule(page: Page, name: 'Loggbok' | 'Utstyr'): Promise<void> {
+	if (name === 'Loggbok') {
+		await page
+			.getByRole('navigation', { name: 'Hovednavigasjon' })
+			.getByRole('link', { name })
+			.click();
+		return;
+	}
 	await page.getByRole('button', { name: 'Mer' }).click();
 	await page.getByRole('dialog').getByRole('link', { name }).click();
 }
@@ -347,8 +356,9 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await expect(page.getByRole('link', { name: 'Opptak' })).toBeVisible();
 	await page.getByRole('button', { name: 'Mer' }).click();
 	const moreDialog = page.getByRole('dialog');
-	await expect(moreDialog.getByRole('link', { name: 'Loggbok' })).toBeVisible();
+	await expect(moreDialog.getByRole('link', { name: 'Meny' })).toBeVisible();
 	await expect(moreDialog.getByRole('link', { name: 'Utstyr' })).toBeVisible();
+	await expect(moreDialog.getByRole('link', { name: 'Regelbok' })).toBeVisible();
 	await page.keyboard.press('Escape');
 	const attribution = page.locator('.maplibregl-ctrl-attrib');
 	await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
@@ -776,22 +786,24 @@ test('centers the selected POI after closing the mobile sheet', async ({ page })
 	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Stiniva');
 	await page.getByRole('button', { name: /Stiniva-bukten/ }).click();
 	await expect(page.getByRole('heading', { name: 'Stiniva-bukten' })).toBeVisible();
-	await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapCamera'))).not.toBeNull();
-	const openedCenter = await page.evaluate(() => {
-		const value = sessionStorage.getItem('mapCamera');
+	await expect
+		.poll(() => page.evaluate((key) => sessionStorage.getItem(key), mapCameraStorageKey))
+		.not.toBeNull();
+	const openedCenter = await page.evaluate((key) => {
+		const value = sessionStorage.getItem(key);
 		if (!value) throw new Error('MAP_CAMERA_MISSING');
 		return (JSON.parse(value) as { center: [number, number] }).center;
-	});
+	}, mapCameraStorageKey);
 	expect(openedCenter).not.toEqual([16.25, 43.25]);
 	await page.getByRole('button', { name: 'Lukk detaljer' }).click();
 	await expect
 		.poll(() =>
-			page.evaluate(() => {
-				const value = sessionStorage.getItem('mapCamera');
+			page.evaluate((key) => {
+				const value = sessionStorage.getItem(key);
 				if (!value) return Number.POSITIVE_INFINITY;
 				const center = (JSON.parse(value) as { center: [number, number] }).center;
 				return Math.max(Math.abs(center[0] - 16.25), Math.abs(center[1] - 43.25));
-			})
+			}, mapCameraStorageKey)
 		)
 		.toBeLessThan(1e-10);
 });
@@ -808,34 +820,38 @@ test('restores map position and zoom after app navigation', async ({ page }) => 
 	await page.mouse.down();
 	await page.mouse.move(box.x + box.width / 2 + 70, box.y + box.height / 2 + 50, { steps: 10 });
 	await page.mouse.up();
-	await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapCamera'))).not.toBeNull();
-	const zoomBefore = await page.evaluate(() => {
-		const value = sessionStorage.getItem('mapCamera');
+	await expect
+		.poll(() => page.evaluate((key) => sessionStorage.getItem(key), mapCameraStorageKey))
+		.not.toBeNull();
+	const zoomBefore = await page.evaluate((key) => {
+		const value = sessionStorage.getItem(key);
 		return value ? (JSON.parse(value) as { zoom: number }).zoom : 0;
-	});
+	}, mapCameraStorageKey);
 	await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
 	await expect
 		.poll(() =>
-			page.evaluate(() => {
-				const value = sessionStorage.getItem('mapCamera');
+			page.evaluate((key) => {
+				const value = sessionStorage.getItem(key);
 				return value ? (JSON.parse(value) as { zoom: number }).zoom : 0;
-			})
+			}, mapCameraStorageKey)
 		)
 		.toBeGreaterThan(zoomBefore + 0.5);
-	const camera = await page.evaluate(() => {
-		const value = sessionStorage.getItem('mapCamera');
+	const camera = await page.evaluate((key) => {
+		const value = sessionStorage.getItem(key);
 		if (!value) throw new Error('MAP_CAMERA_MISSING');
 		const parsed = JSON.parse(value) as { bearing: number };
 		parsed.bearing = 32;
 		const updated = JSON.stringify(parsed);
-		sessionStorage.setItem('mapCamera', updated);
+		sessionStorage.setItem(key, updated);
 		return updated;
-	});
+	}, mapCameraStorageKey);
 	await page.getByRole('link', { name: 'Opptak' }).click();
 	await expect(page).toHaveURL(/\/shots/);
 	await page.getByRole('link', { name: 'Kart' }).click();
 	await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready', 'true');
-	await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapCamera'))).toBe(camera);
+	await expect
+		.poll(() => page.evaluate((key) => sessionStorage.getItem(key), mapCameraStorageKey))
+		.toBe(camera);
 	await expect(
 		page.getByRole('button', { name: 'Tilbakestill kartretning mot nord' })
 	).toBeVisible();
@@ -843,7 +859,9 @@ test('restores map position and zoom after app navigation', async ({ page }) => 
 	await expect(resetView).toBeVisible();
 	await resetView.click();
 	await expect(resetView).toHaveCount(0);
-	await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mapCamera'))).toBeNull();
+	await expect
+		.poll(() => page.evaluate((key) => sessionStorage.getItem(key), mapCameraStorageKey))
+		.toBeNull();
 });
 
 test('shows all map points after the Google day folders end', async ({ page }) => {
@@ -899,9 +917,13 @@ test('uses the device date for today instead of another page selection', async (
 test('replaces a planned day route with the accumulated GPX track', async ({ page }) => {
 	await mockMap(page);
 	await login(page);
+	await openMoreModule(page, 'Loggbok');
+	const dayId = await page.locator('#trip-day option').first().getAttribute('data-day-id');
+	if (!dayId) throw new Error('TRIP_DAY_ID_MISSING');
+	await page.getByRole('link', { name: 'Kart' }).click();
 	const gpxId = crypto.randomUUID();
 	await page.evaluate(
-		async ({ leg, id }) => {
+		async ({ leg, id, tripDayId }) => {
 			leg.gpx.id = id;
 			const session = (await (await fetch('/api/auth/session')).json()) as { tripId: string };
 			const response = await fetch(`/api/trips/${session.tripId}/state/sync`, {
@@ -912,7 +934,7 @@ test('replaces a planned day route with the accumulated GPX track', async ({ pag
 						{
 							mutationId: crypto.randomUUID(),
 							clientId: 'map-test',
-							key: `logbook:d0:leg:${crypto.randomUUID()}`,
+							key: `logbook:day:${tripDayId}:leg:${crypto.randomUUID()}`,
 							value: leg,
 							clientTimestamp: Date.now()
 						}
@@ -921,7 +943,7 @@ test('replaces a planned day route with the accumulated GPX track', async ({ pag
 			});
 			if (!response.ok) throw new Error('STATE_SETUP_FAILED');
 		},
-		{ leg: actualLeg, id: gpxId }
+		{ leg: actualLeg, id: gpxId, tripDayId: dayId }
 	);
 	await page.reload();
 
@@ -1059,9 +1081,9 @@ test('restores the cached map snapshot when the map API is unavailable', async (
 	await expect
 		.poll(() =>
 			page.evaluate(
-				(): Promise<boolean> =>
+				(databaseName): Promise<boolean> =>
 					new Promise((resolve, reject) => {
-						const request = indexedDB.open('gjemmekontor-data');
+						const request = indexedDB.open(databaseName);
 						request.onerror = (): void => reject(request.error);
 						request.onsuccess = (): void => {
 							const database = request.result;
@@ -1073,7 +1095,8 @@ test('restores the cached map snapshot when the map API is unavailable', async (
 								resolve(record.result !== undefined);
 							};
 						};
-					})
+					}),
+				`gjemmekontor-v0.2.0-trip-${tripId}`
 			)
 		)
 		.toBe(true);

@@ -1,8 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/login');
-	await page.getByRole('textbox', { name: 'Passord', exact: true }).fill('test-password');
+	await page.goto('/t/kroatia-2026/unlock');
+	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
 }
@@ -13,7 +13,8 @@ test('plans, filters, reorders, purchases, and packs shared gear', async ({ page
 	const suffix = crypto.randomUUID().slice(0, 8);
 	const firstCategoryName = `Sikkerhet ${suffix}`;
 	const secondCategoryName = `Elektronikk ${suffix}`;
-	const ownerName = `Håvard ${suffix}`;
+	const ownerName = 'Håvard';
+	const secondOwnerName = 'Tina';
 	const purchaseItemName = `Redningsvest ${suffix}`;
 	const availableItemName = `Kartplotter ${suffix}`;
 
@@ -33,19 +34,12 @@ test('plans, filters, reorders, purchases, and packs shared gear', async ({ page
 		await expect(categoryDialog).not.toBeVisible();
 	}
 
-	await page.getByRole('button', { name: 'Personer' }).click();
-	const ownersDialog = page.getByRole('dialog');
-	await ownersDialog.getByRole('textbox', { name: 'Navn på person' }).fill(ownerName);
-	await ownersDialog.getByRole('button', { name: 'Legg til' }).click();
-	await expect(ownersDialog.getByRole('textbox', { name: `Navn på ${ownerName}` })).toBeVisible();
-	await ownersDialog.getByRole('button', { name: 'Ferdig' }).click();
-
 	const firstCategory = page.getByRole('group', { name: firstCategoryName });
 	await firstCategory.getByRole('button', { name: 'Legg til utstyr' }).click();
 	let itemDialog = page.getByRole('dialog');
 	await itemDialog.getByRole('textbox', { name: 'Utstyrsnavn' }).fill(purchaseItemName);
 	await itemDialog.getByRole('spinbutton', { name: 'Antall' }).fill('2');
-	await itemDialog.getByRole('combobox', { name: 'Person' }).selectOption({ label: ownerName });
+	await itemDialog.getByRole('checkbox', { name: ownerName }).check();
 	await itemDialog.getByRole('combobox', { name: 'Tilgjengelighet' }).selectOption('need-to-buy');
 	await itemDialog.getByRole('textbox', { name: 'Notater' }).fill('Automatisk vest');
 	await itemDialog.getByRole('button', { name: 'Lagre' }).click();
@@ -56,6 +50,7 @@ test('plans, filters, reorders, purchases, and packs shared gear', async ({ page
 	await secondCategory.getByRole('button', { name: 'Legg til utstyr' }).click();
 	itemDialog = page.getByRole('dialog');
 	await itemDialog.getByRole('textbox', { name: 'Utstyrsnavn' }).fill(availableItemName);
+	await itemDialog.getByRole('checkbox', { name: secondOwnerName }).check();
 	await itemDialog.getByRole('button', { name: 'Lagre' }).click();
 	await expect(itemDialog).not.toBeVisible();
 
