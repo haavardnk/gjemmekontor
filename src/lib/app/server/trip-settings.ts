@@ -335,13 +335,14 @@ export function createTrip(
 		memberIds: string[];
 		modules: ModuleSettingsInput;
 		shots?: { mode: 'blank' | 'standard' } | { mode: 'clone'; sourceTripId: string };
-	}
+	},
+	options: { tripId?: string } = {}
 ): string {
 	const general = parseGeneral(input);
 	const password = tripPasswordSchema.parse(input.password);
 	const modules = normalizedModuleInput(input.modules);
 	if (modules.enabled.length === 0) throw new Error('AT_LEAST_ONE_MODULE_REQUIRED');
-	const tripId = randomUUID();
+	const tripId = options.tripId ? z.uuid().parse(options.tripId) : randomUUID();
 	const now = nowIso();
 
 	db.transaction((): void => {

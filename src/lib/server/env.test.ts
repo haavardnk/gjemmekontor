@@ -38,16 +38,16 @@ describe('runtime environment', (): void => {
 			ORIGIN: 'https://gjemmekontor.example.com'
 		};
 
-		expect(parseRuntimeConfig({ ...environment, APP_VERSION: '0.1.0' })).toMatchObject({
-			appVersion: '0.1.0'
+		expect(parseRuntimeConfig({ ...environment, APP_VERSION: '1.2.3' })).toMatchObject({
+			appVersion: '1.2.3'
 		});
 		expect(parseRuntimeConfig({ ...environment, APP_VERSION: 'unreleased' })).not.toHaveProperty(
 			'appVersion'
 		);
-		expect(() => parseRuntimeConfig({ ...environment, APP_VERSION: 'v0.1.0' })).toThrow(
+		expect(() => parseRuntimeConfig({ ...environment, APP_VERSION: 'v1.2.3' })).toThrow(
 			'Invalid runtime environment: APP_VERSION'
 		);
-		expect(() => parseRuntimeConfig({ ...environment, APP_VERSION: '00.1.0' })).toThrow(
+		expect(() => parseRuntimeConfig({ ...environment, APP_VERSION: '01.2.3' })).toThrow(
 			'Invalid runtime environment: APP_VERSION'
 		);
 	});

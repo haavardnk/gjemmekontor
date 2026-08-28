@@ -15,7 +15,7 @@ afterEach((): void => {
 });
 
 describe('database', (): void => {
-	test('creates the complete version 1 schema', (): void => {
+	test('creates the core session schema', (): void => {
 		const dataDir = mkdtempSync(join(tmpdir(), 'gjemmekontor-'));
 		temporaryDirectories.push(dataDir);
 
@@ -25,16 +25,12 @@ describe('database', (): void => {
 			.all()
 			.map((row) => (row as { name: string }).name);
 
-		expect(tables).toEqual(['meta', 'sessions', 'state_entries']);
+		expect(tables).toEqual(['sessions']);
 		expect(first.pragma('journal_mode', { simple: true })).toBe('wal');
 		expect(first.pragma('foreign_keys', { simple: true })).toBe(1);
 		expect(first.pragma('busy_timeout', { simple: true })).toBe(5000);
 		expect(first.pragma('synchronous', { simple: true })).toBe(1);
 		expect(first.pragma('user_version', { simple: true })).toBe(1);
-		const revision = first
-			.prepare("SELECT value FROM meta WHERE key = 'global_revision'")
-			.get() as { value: string };
-		expect(revision.value).toBe('0');
 		first.close();
 	});
 });

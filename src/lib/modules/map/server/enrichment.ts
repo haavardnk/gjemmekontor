@@ -254,18 +254,8 @@ export function createPoiEnrichmentService(
 		try {
 			const parsed = tripadvisorEnrichmentSchema.parse(JSON.parse(row.payload));
 			if (parsed.status !== 'available') throw new Error('INVALID_TRIPADVISOR_CACHE');
-			if (row.schema_version > tripadvisorCacheSchemaVersion) {
+			if (row.schema_version !== tripadvisorCacheSchemaVersion) {
 				throw new Error('UNSUPPORTED_TRIPADVISOR_CACHE');
-			}
-			if (row.schema_version < tripadvisorCacheSchemaVersion) {
-				const hasLegacyPhotoLimit = parsed.photos.length > 0 && parsed.photos.length < 5;
-				const hasVersionOneEmptyPhotos = row.schema_version === 1 && parsed.photos.length === 0;
-				const upgraded =
-					parsed.photosLoaded && (hasLegacyPhotoLimit || hasVersionOneEmptyPhotos)
-						? { ...parsed, photosLoaded: false }
-						: parsed;
-				cacheTripadvisor(featureId, upgraded);
-				return upgraded;
 			}
 			return parsed;
 		} catch {

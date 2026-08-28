@@ -28,7 +28,7 @@ test('plans, filters, reorders, purchases, and packs shared gear', async ({ page
 
 	for (const categoryName of [firstCategoryName, secondCategoryName]) {
 		await page.getByRole('button', { name: 'Kategori', exact: true }).click();
-		const categoryDialog = page.getByRole('dialog');
+		const categoryDialog = page.getByRole('dialog', { name: 'Ny kategori' });
 		await categoryDialog.getByRole('textbox', { name: 'Kategorinavn' }).fill(categoryName);
 		await categoryDialog.getByRole('button', { name: 'Lagre' }).click();
 		await expect(categoryDialog).not.toBeVisible();

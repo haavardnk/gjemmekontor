@@ -1,6 +1,4 @@
-import type { TripDay } from '$lib/trip/itinerary';
-
-export const kroatia2026TimeZone = 'Europe/Zagreb';
+import type { TripDay } from './itinerary';
 
 const dayDefinitions = [
 	[

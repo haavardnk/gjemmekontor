@@ -1,11 +1,7 @@
-import type { DatabaseMigration } from '$lib/server/database';
+import type Database from 'better-sqlite3';
 
-export const tripDatabaseMigrations: readonly DatabaseMigration[] = [
-	(): void => undefined,
-	(): void => undefined,
-	(): void => undefined,
-	(db): void => {
-		db.exec(`
+export function createTripSchema(db: Database.Database): void {
+	db.exec(`
 			CREATE TABLE trips (
 				id TEXT PRIMARY KEY,
 				slug TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -326,5 +322,4 @@ export const tripDatabaseMigrations: readonly DatabaseMigration[] = [
 					REFERENCES trip_gear_items(trip_id, gear_item_id) ON DELETE CASCADE
 			);
 		`);
-	}
-];
+}

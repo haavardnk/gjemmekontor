@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 
-import { deleteDB, openDB } from 'idb';
+import { deleteDB } from 'idb';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { openClientDatabase, type PendingUpload, tripClientDatabaseName } from './database';
@@ -70,41 +70,6 @@ describe('client state', (): void => {
 			'state'
 		]);
 		db.close();
-	});
-
-	test('starts each trip in a clean database without importing legacy device data', async (): Promise<void> => {
-		const legacyName = databaseName();
-		const legacy = await openDB(legacyName, 1, {
-			upgrade(database): void {
-				database.createObjectStore('state', { keyPath: 'key' });
-				database.createObjectStore('mutations', { keyPath: 'mutationId' });
-				database.createObjectStore('meta', { keyPath: 'key' });
-				database.createObjectStore('mapSnapshot', { keyPath: 'id' });
-				database.createObjectStore('offlineMap', { keyPath: 'id' });
-				database.createObjectStore('shoppingListSnapshot', { keyPath: 'id' });
-				database.createObjectStore('pendingGpxUploads', { keyPath: 'id' });
-			}
-		});
-		await legacy.put('state', {
-			key: 'shots:d0:scenario:test',
-			value: true,
-			revision: 0,
-			clientId: 'client-a',
-			mutationId: 'mutation-a',
-			updatedAt: '2026-08-25T00:00:00.000Z'
-		});
-		await legacy.put('meta', { key: 'selectedDay', value: { dayIndex: 2 } });
-		await legacy.put('mapSnapshot', { id: 'current', value: { stale: true } });
-		legacy.close();
-
-		const tripName = tripClientDatabaseName(crypto.randomUUID());
-		databaseNames.push(tripName);
-		const database = await openClientDatabase(tripName);
-		expect(database.version).toBe(1);
-		expect(await database.count('state')).toBe(0);
-		expect(await database.get('meta', 'selectedDay')).toBeUndefined();
-		expect(await database.count('moduleData')).toBe(0);
-		database.close();
 	});
 
 	test('isolates browser state and metadata between trips', async (): Promise<void> => {

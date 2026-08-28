@@ -38,7 +38,7 @@ describe('Logbook', (): void => {
 		expect(logbookLegKey('day-id', 'row-a')).toBe('logbook:day:day-id:leg:row-a');
 	});
 
-	test('round-trips GPX metadata while retaining legacy legs', (): void => {
+	test('round-trips legs with and without uploaded GPX metadata', (): void => {
 		const gpxLeg: LogbookLeg = {
 			...leg,
 			gpx: {

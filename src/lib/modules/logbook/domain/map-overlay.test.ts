@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 
-import { kroatia2026Days as tripDays } from '$lib/app/server/kroatia-2026-source';
 import type { JsonValue } from '$lib/client/database';
 import type { MapFeature } from '$lib/modules/map/public';
+import { kroatia2026Days as tripDays } from '$lib/trip/kroatia-2026';
 
 import { type LogbookLeg, logbookLegKey, serializeLogbookLeg } from './logbook';
 import {
@@ -124,10 +124,10 @@ describe('trip routes', (): void => {
 		});
 	});
 
-	test('emits each GPX segment independently and ignores legacy legs', (): void => {
+	test('emits each GPX segment independently and ignores legs without GPX', (): void => {
 		const values: Record<string, JsonValue> = {
 			[logbookLegKey(tripDays[0].id, 'gpx')]: serializeLogbookLeg(leg),
-			[logbookLegKey(tripDays[0].id, 'legacy')]: serializeLogbookLeg({ ...leg, gpx: undefined })
+			[logbookLegKey(tripDays[0].id, 'manual')]: serializeLogbookLeg({ ...leg, gpx: undefined })
 		};
 		const routes = actualRouteFeatures(values, tripDays);
 

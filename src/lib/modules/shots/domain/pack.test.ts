@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { kroatia2026Days as tripDays } from '$lib/app/server/kroatia-2026-source';
+import { kroatia2026Days as tripDays } from '$lib/trip/kroatia-2026';
 
 import { activityModuleIds, backupChecks, scenarioGroups, shotModules } from './content';
 import { shotsDayPlan } from './day-plan';

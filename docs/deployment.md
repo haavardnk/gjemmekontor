@@ -99,7 +99,7 @@ After deployment, open one eligible restaurant or marina and verify in Google Cl
 
 Set `TRIPADVISOR_TERRA_API_KEY` to enable shared Tripadvisor ratings and links. Details are cached server-side for `TRIPADVISOR_CACHE_DAYS`, so all four users share the first successful lookup. Enable `TRIPADVISOR_TERRA_PHOTOS_ENABLED=true` only when photo access is active; photos are requested once, when first expanded, and then added to the shared cache.
 
-The key must come from the current Tripadvisor Terra dashboard. The server calls `https://terra.tripadvisor.com/api` with the key in the `X-API-Key` header; legacy Content API keys and endpoints are not interchangeable. The Catalog Nearby response supplies the matched ID, rating, count, and Tripadvisor links in one call. A separate catalog-details request is made only for a manual or previously stored ID whose shared details cache has expired.
+The key must come from the current Tripadvisor Terra dashboard. The server calls `https://terra.tripadvisor.com/api` with the key in the `X-API-Key` header; obsolete Content API keys and endpoints are not interchangeable. The Catalog Nearby response supplies the matched ID, rating, count, and Tripadvisor links in one call. A separate catalog-details request is made only for a manual or previously stored ID whose shared details cache has expired.
 
 ## Bring
 
@@ -125,6 +125,6 @@ docker compose pull
 docker compose up -d
 ```
 
-Database schema updates run at startup and are forward-only. After the v0.2.0 conversion, sign in
-as administrator, finish the imported trip's password and module setup, then sign in to the trip on
-each device.
+The released trip-based database uses schema version 4. Fresh installations create that schema
+directly, and existing version 4 databases open without conversion. Back up the database before any
+future release that announces a schema change.
