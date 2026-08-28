@@ -33,20 +33,23 @@ export function createApplicationDatabase(dataDir: string): Database.Database {
 	return createCoreDatabase(dataDir, applicationDatabaseMigrations);
 }
 
+export function initializeApplicationDatabase(dataDir: string): Database.Database {
+	const nextDatabase = createApplicationDatabase(dataDir);
+	try {
+		const report = importLegacyKroatia2026(nextDatabase);
+		migrateLegacyMapFiles(dataDir, report.tripId);
+		return nextDatabase;
+	} catch (error) {
+		nextDatabase.close();
+		throw error;
+	}
+}
+
 let database: Database.Database | undefined;
 
 export function getDatabase(): Database.Database {
 	if (!database) {
-		const dataDir = getRuntimeConfig().dataDir;
-		const nextDatabase = createApplicationDatabase(dataDir);
-		try {
-			const report = importLegacyKroatia2026(nextDatabase);
-			migrateLegacyMapFiles(dataDir, report.tripId);
-			database = nextDatabase;
-		} catch (error) {
-			nextDatabase.close();
-			throw error;
-		}
+		database = initializeApplicationDatabase(getRuntimeConfig().dataDir);
 	}
 	return database;
 }

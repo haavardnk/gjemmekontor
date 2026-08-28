@@ -9,9 +9,10 @@
 	const days = $derived(page.data.tripDays ?? []);
 	const day = $derived(days[tripDayState.selectedIndex] ?? days[0]);
 	const mapEnabled = $derived(page.data.enabledModuleIds?.includes('map') ?? true);
+	const timeZone = $derived(page.data.tripTimezone ?? 'Europe/Oslo');
 </script>
 
-<svelte:head><title>Loggbok · Gjemmekontor</title></svelte:head>
+<svelte:head><title>Loggbok · {page.data.tripName} · Gjemmekontor</title></svelte:head>
 
 <DaySelector {days} />
 
@@ -23,5 +24,5 @@
 		</div>
 		<h1 class="font-display mt-1 text-3xl font-bold text-neutral">Loggbok</h1>
 	</header>
-	<LogbookView {day} {mapEnabled} />
+	<LogbookView {day} {mapEnabled} {timeZone} />
 </section>

@@ -2,7 +2,7 @@
 
 ![Monsieur Bintang](static/monsieur-bintang-readme.png)
 
-A shared, offline-first travel app for a sailing trip in Croatia.
+A shared, offline-first app for planning and using multiple trips.
 
 ## Features
 
@@ -34,15 +34,15 @@ npm run test:e2e
 
 Configure the required runtime values in `.env` before starting the app.
 
-## Modules
+## Trips and modules
 
-Product features are statically bundled modules under `src/lib/modules`. Enable a subset with a comma-separated runtime value such as:
+Product features are statically bundled modules under `src/lib/modules`. An administrator creates
+trips, adds people, sets the trip dates and password, enables modules, orders their navigation, and
+configures their connections in Trip Settings. Disabled modules retain their data.
 
-```env
-ENABLED_MODULES=map,shots,logbook,shopping-list,menu,gear,rule-book
-```
-
-The module catalog controls navigation, protected routes and APIs, PWA page warming, state namespaces, and optional cross-module capabilities. Disabled modules retain their data. See [Deployment](docs/deployment.md) for module-specific configuration.
+The module catalog controls protected routes and APIs, PWA page warming, state namespaces, and
+optional cross-module capabilities. See [Deployment](docs/deployment.md) for shared provider
+configuration.
 
 ## Deployment
 

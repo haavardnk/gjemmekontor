@@ -14,7 +14,11 @@ import {
 } from '$lib/modules/shots/domain/content';
 import { shotsDayPlan } from '$lib/modules/shots/domain/day-plan';
 import { cameraChoices } from '$lib/modules/shots/domain/digest';
-import { tripDays, tripTimeZone } from '$lib/trip/itinerary';
+
+import { kroatia2026Days, kroatia2026TimeZone } from './kroatia-2026-source';
+
+const tripDays = kroatia2026Days;
+const tripTimeZone = kroatia2026TimeZone;
 
 export const kroatia2026TripId = '82a8d607-acc9-4c50-a948-463e6a34ef25';
 export const kroatia2026Slug = 'kroatia-2026';
@@ -480,6 +484,16 @@ function validateImport(db: Database.Database, sourceStateCount: number): Legacy
 	return report;
 }
 
+function removeLegacyStorage(db: Database.Database): void {
+	db.exec(`
+		DROP TABLE state_entries;
+		DROP TABLE gpx_uploads;
+		DROP TABLE poi_provider_mappings;
+		DROP TABLE poi_enrichment_cache;
+		DELETE FROM meta WHERE key = 'global_revision' OR key LIKE 'mutation:%';
+	`);
+}
+
 export function importLegacyKroatia2026(
 	db: Database.Database,
 	options: LegacyTripImportOptions = {}
@@ -495,6 +509,7 @@ export function importLegacyKroatia2026(
 				importMarker,
 				JSON.stringify(report)
 			);
+			removeLegacyStorage(db);
 			return report;
 		}
 		if (tableCount(db, 'trips') > 0) throw new Error('LEGACY_TRIP_IMPORT_CONFLICT');
@@ -610,6 +625,7 @@ export function importLegacyKroatia2026(
 			importMarker,
 			JSON.stringify(report)
 		);
+		removeLegacyStorage(db);
 
 		return report;
 	})();

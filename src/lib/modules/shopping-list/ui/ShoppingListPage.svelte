@@ -301,7 +301,7 @@
 	});
 </script>
 
-<svelte:head><title>Handleliste · Gjemmekontor</title></svelte:head>
+<svelte:head><title>Handleliste · {page.data.tripName} · Gjemmekontor</title></svelte:head>
 
 <section
 	class="mx-auto min-h-[calc(100dvh-7.5rem)] max-w-3xl px-4 py-5 pb-10 lg:min-h-[calc(100dvh-3.5rem)] lg:py-7"

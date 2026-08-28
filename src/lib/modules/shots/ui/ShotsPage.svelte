@@ -30,7 +30,7 @@
 	);
 </script>
 
-<svelte:head><title>Opptak · Gjemmekontor</title></svelte:head>
+<svelte:head><title>Opptak · {page.data.tripName} · Gjemmekontor</title></svelte:head>
 
 <DaySelector {days} />
 

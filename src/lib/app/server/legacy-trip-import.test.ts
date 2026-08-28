@@ -354,6 +354,24 @@ describe('Kroatia 2026 import', (): void => {
 			{ key: 'digest:d0:story', value: '"Første reisedag"' }
 		]);
 		expect(importLegacyKroatia2026(db)).toEqual(report);
+		const tables = db
+			.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+			.all()
+			.map((row) => (row as { name: string }).name);
+		for (const removed of [
+			'gpx_uploads',
+			'poi_enrichment_cache',
+			'poi_provider_mappings',
+			'state_entries'
+		]) {
+			expect(tables).not.toContain(removed);
+		}
+		expect(
+			db.prepare("SELECT COUNT(*) AS count FROM meta WHERE key LIKE 'mutation:%'").get()
+		).toEqual({ count: 0 });
+		expect(
+			db.prepare("SELECT value FROM meta WHERE key = 'global_revision'").get()
+		).toBeUndefined();
 		expect(db.pragma('foreign_key_check')).toEqual([]);
 		db.close();
 	});

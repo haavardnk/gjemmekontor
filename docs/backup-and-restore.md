@@ -8,6 +8,7 @@ Back up the complete directory. It contains:
 
 - SQLite, including archived GPX files
 - SQLite WAL/SHM files when the app is running
-- Google map cache and PMTiles stored below `map/`
+- Per-trip Google map caches and PMTiles stored below `trips/{tripId}/map/`
 
-Files mounted into `/data/map/offline` from another host path are outside this backup and must be handled separately.
+Files mounted into a trip map directory from another host path are outside this backup and must be
+handled separately.

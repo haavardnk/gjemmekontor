@@ -20,6 +20,7 @@
 	} from '@lucide/svelte';
 
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import {
 		filterGearItems,
 		type GearAvailability,
@@ -350,7 +351,7 @@
 	}
 </script>
 
-<svelte:head><title>Utstyr · Gjemmekontor</title></svelte:head>
+<svelte:head><title>Utstyr · {page.data.tripName} · Gjemmekontor</title></svelte:head>
 
 <section class="mx-auto max-w-4xl px-4 py-5 pb-10 lg:py-7">
 	<header class="mb-4">

@@ -77,7 +77,10 @@ describe('rule book', () => {
 		};
 
 		expect(ruleBookGame(values)?.status).toBe('setup');
-		expect(ruleBookRules(values).map((rule) => rule.text)).toEqual(['Første regel', 'Andre regel']);
-		expect(nextSectionNumber(ruleBookRules(values))).toBe(3);
+		expect(ruleBookRules(values, 19).map((rule) => rule.text)).toEqual([
+			'Første regel',
+			'Andre regel'
+		]);
+		expect(nextSectionNumber(ruleBookRules(values, 19))).toBe(3);
 	});
 });

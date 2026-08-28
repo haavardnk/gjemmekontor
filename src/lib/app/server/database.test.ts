@@ -6,7 +6,11 @@ import { afterEach, describe, expect, test } from 'vitest';
 
 import { createDatabase } from '$lib/server/database';
 
-import { applicationDatabaseMigrations, createApplicationDatabase } from './database';
+import {
+	applicationDatabaseMigrations,
+	createApplicationDatabase,
+	initializeApplicationDatabase
+} from './database';
 
 const temporaryDirectories: string[] = [];
 
@@ -17,6 +21,30 @@ afterEach((): void => {
 });
 
 describe('application database composition', (): void => {
+	test('removes conversion-only tables after initialization', (): void => {
+		const dataDir = mkdtempSync(join(tmpdir(), 'gjemmekontor-app-final-'));
+		temporaryDirectories.push(dataDir);
+		const database = initializeApplicationDatabase(dataDir);
+		const tables = database
+			.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+			.all()
+			.map((row) => (row as { name: string }).name);
+
+		for (const removed of [
+			'gpx_uploads',
+			'poi_enrichment_cache',
+			'poi_provider_mappings',
+			'state_entries'
+		]) {
+			expect(tables).not.toContain(removed);
+		}
+		for (const current of ['trips', 'trip_state_entries', 'trip_gpx_uploads']) {
+			expect(tables).toContain(current);
+		}
+		expect(database.pragma('foreign_key_check')).toEqual([]);
+		database.close();
+	});
+
 	test('includes migrations from bundled modules even when activation is separate', (): void => {
 		const dataDir = mkdtempSync(join(tmpdir(), 'gjemmekontor-app-'));
 		temporaryDirectories.push(dataDir);

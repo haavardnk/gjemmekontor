@@ -30,7 +30,8 @@
 	} from '../domain/logbook';
 	import LocationInput from './LocationInput.svelte';
 
-	let { day, mapEnabled }: { day: TripDay; mapEnabled: boolean } = $props();
+	let { day, mapEnabled, timeZone }: { day: TripDay; mapEnabled: boolean; timeZone: string } =
+		$props();
 	const tripId = $derived(page.data.tripId ?? '');
 
 	let snapshot = $state<MapSnapshot>();
@@ -174,7 +175,7 @@
 
 	function localTime(value: string): string {
 		return new Intl.DateTimeFormat('nb-NO', {
-			timeZone: 'Europe/Zagreb',
+			timeZone,
 			hour: '2-digit',
 			minute: '2-digit',
 			hourCycle: 'h23'
@@ -183,7 +184,7 @@
 
 	function localDate(value: string): string {
 		return new Intl.DateTimeFormat('en-CA', {
-			timeZone: 'Europe/Zagreb',
+			timeZone,
 			year: 'numeric',
 			month: '2-digit',
 			day: '2-digit'

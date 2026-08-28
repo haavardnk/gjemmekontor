@@ -440,7 +440,7 @@
 	});
 </script>
 
-<svelte:head><title>Kart · Gjemmekontor</title></svelte:head>
+<svelte:head><title>Kart · {page.data.tripName} · Gjemmekontor</title></svelte:head>
 
 <section
 	class="relative h-[calc(100dvh-7.5rem)] min-h-96 overflow-hidden lg:h-[calc(100dvh-3.5rem)]"

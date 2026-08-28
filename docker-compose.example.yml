@@ -22,7 +22,7 @@ services:
     volumes:
       - /mnt/user/appdata/gjemmekontor:/data
       # Optional operator-provided PMTiles archives:
-      # - /mnt/user/media/gjemmekontor/offline:/data/map/offline:ro
+      # - /mnt/user/media/gjemmekontor/offline:/data/trips/TRIP_ID/map/offline:ro
     security_opt:
       - no-new-privileges:true
     cap_drop:

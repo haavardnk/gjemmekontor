@@ -1,23 +1,28 @@
 <script lang="ts">
 	import { LoaderCircle, ScrollText, Shuffle, Users } from '@lucide/svelte';
 
+	import { page } from '$app/state';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		nextSectionNumber,
+		parseRuleBookRule,
 		participantForDay,
 		ruleBookGame,
 		type RuleBookMember,
 		ruleBookRuleKey,
 		ruleBookRules,
-		ruleBookRuleSchema,
 		ruleForDay,
 		serializeRuleBookRule
 	} from '$lib/modules/rule-book/domain/rule-book';
 	import { tripDayState } from '$lib/trip/day.svelte';
-	import { dateKeyAt, tripDays } from '$lib/trip/itinerary';
+	import { dateKeyAt, type TripDay } from '$lib/trip/itinerary';
 	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
-	let { members }: { members: RuleBookMember[] } = $props();
+	let {
+		members,
+		days,
+		timeZone
+	}: { members: RuleBookMember[]; days: TripDay[]; timeZone: string } = $props();
 	let localMembers = $derived(members.map((member) => ({ ...member })));
 	let errorMessage = $state('');
 	let saving = $state(false);
@@ -29,7 +34,7 @@
 			.filter((member) => !member.optedOut)
 			.map((member) => ({ id: member.id, name: member.name }))
 	);
-	const rules = $derived(ruleBookRules(sharedState.values));
+	const rules = $derived(ruleBookRules(sharedState.values, days.length));
 	const todayIndex = $derived(tripDayState.todayIndex);
 	let selectedRuleDayIndex = $derived(todayIndex);
 	const selectedRule = $derived(
@@ -46,8 +51,8 @@
 	let ruleText = $derived(selectedRule?.text ?? '');
 	const tripPhase = $derived.by((): 'before' | 'during' | 'after' => {
 		if (todayIndex !== undefined) return 'during';
-		const currentDate = dateKeyAt(new Date());
-		return currentDate < (tripDays[0]?.date ?? '') ? 'before' : 'after';
+		const currentDate = dateKeyAt(new Date(), timeZone);
+		return currentDate < (days[0]?.date ?? '') ? 'before' : 'after';
 	});
 
 	async function setParticipation(member: RuleBookMember, participating: boolean): Promise<void> {
@@ -113,15 +118,18 @@
 		saving = true;
 		try {
 			const timestamp = new Date().toISOString();
-			const rule = ruleBookRuleSchema.parse({
-				version: 1,
-				dayIndex: selectedRuleDayIndex,
-				sectionNumber: selectedRule?.sectionNumber ?? nextSectionNumber(rules),
-				text,
-				createdAt: selectedRule?.createdAt ?? timestamp,
-				createdBy: selectedRule?.createdBy ?? (await sharedState.clientId()),
-				updatedAt: timestamp
-			});
+			const rule = parseRuleBookRule(
+				{
+					version: 1,
+					dayIndex: selectedRuleDayIndex,
+					sectionNumber: selectedRule?.sectionNumber ?? nextSectionNumber(rules),
+					text,
+					createdAt: selectedRule?.createdAt ?? timestamp,
+					createdBy: selectedRule?.createdBy ?? (await sharedState.clientId()),
+					updatedAt: timestamp
+				},
+				days.length
+			);
 			await sharedState.set(ruleBookRuleKey(selectedRuleDayIndex), serializeRuleBookRule(rule));
 			errorMessage = '';
 		} finally {
@@ -130,7 +138,7 @@
 	}
 </script>
 
-<svelte:head><title>Regelbok · Gjemmekontor</title></svelte:head>
+<svelte:head><title>Regelbok · {page.data.tripName} · Gjemmekontor</title></svelte:head>
 
 <section class="mx-auto max-w-3xl px-4 py-5 pb-10 lg:py-7">
 	<header class="mb-5">
@@ -225,15 +233,15 @@
 				<p class="font-display mt-1 text-xl font-bold text-neutral">
 					{participantForDay(activeGame, 0).name} lager den første regelen
 				</p>
-				<p class="mt-1 text-sm text-base-content/65">{tripDays[0]?.dateLabel}</p>
+				<p class="mt-1 text-sm text-base-content/65">{days[0]?.dateLabel}</p>
 			{:else if tripPhase === 'during' && todayParticipant && todayIndex !== undefined}
 				{#if !ruleForDay(rules, todayIndex)}
-					<p class="text-sm font-semibold text-primary">{tripDays[todayIndex]?.dateLabel}</p>
+					<p class="text-sm font-semibold text-primary">{days[todayIndex]?.dateLabel}</p>
 					<p class="font-display mt-1 text-xl font-bold text-neutral">
 						{todayParticipant.name} lager dagens regel
 					</p>
-				{:else if tripDays[todayIndex + 1]}
-					<p class="text-sm font-semibold text-primary">{tripDays[todayIndex + 1]?.dateLabel}</p>
+				{:else if days[todayIndex + 1]}
+					<p class="text-sm font-semibold text-primary">{days[todayIndex + 1]?.dateLabel}</p>
 					<p class="font-display mt-1 text-xl font-bold text-neutral">
 						{participantForDay(activeGame, todayIndex + 1).name} lager den neste regelen
 					</p>
@@ -258,7 +266,7 @@
 					<div>
 						<label class="sr-only" for="rule-book-day">Velg dag</label>
 						<select id="rule-book-day" class="select select-sm" bind:value={selectedRuleDayIndex}>
-							{#each tripDays.slice(0, todayIndex + 1) as day (day.date)}
+							{#each days.slice(0, todayIndex + 1) as day (day.id)}
 								<option value={day.index}>{day.dateLabel}</option>
 							{/each}
 						</select>

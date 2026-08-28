@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import type { JsonValue } from '$lib/client/database';
-import { tripDays } from '$lib/trip/itinerary';
 
 export const ruleBookGameKey = 'rule-book:game';
 const rulePrefix = 'rule-book:rule:';
@@ -36,15 +35,11 @@ export const ruleBookGameSchema = z.discriminatedUnion('status', [
 	activeRuleBookGameSchema
 ]);
 
-export const ruleBookRuleSchema = z
+const ruleBookRuleSchema = z
 	.object({
 		version: z.literal(1),
-		dayIndex: z
-			.number()
-			.int()
-			.min(0)
-			.max(tripDays.length - 1),
-		sectionNumber: z.number().int().positive().max(tripDays.length),
+		dayIndex: z.number().int().min(0),
+		sectionNumber: z.number().int().positive(),
 		text: z.string().trim().min(1).max(500),
 		createdAt: z.iso.datetime(),
 		createdBy: z.string().min(1).max(128),
@@ -68,12 +63,26 @@ export function ruleBookGame(values: Record<string, JsonValue>): RuleBookGame | 
 	return parsed.success ? parsed.data : undefined;
 }
 
-export function ruleBookRules(values: Record<string, JsonValue>): RuleBookRule[] {
+function validRuleDay(rule: RuleBookRule, dayCount: number): boolean {
+	return rule.dayIndex < dayCount && rule.sectionNumber <= dayCount;
+}
+
+export function parseRuleBookRule(value: unknown, dayCount: number): RuleBookRule {
+	const rule = ruleBookRuleSchema.parse(value);
+	if (!validRuleDay(rule, dayCount)) throw new Error('INVALID_RULE_BOOK_DAY');
+	return rule;
+}
+
+export function ruleBookRules(values: Record<string, JsonValue>, dayCount: number): RuleBookRule[] {
 	return Object.entries(values)
 		.filter(([key]) => key.startsWith(rulePrefix))
 		.flatMap(([key, value]) => {
 			const parsed = ruleBookRuleSchema.safeParse(value);
-			return parsed.success && key === ruleBookRuleKey(parsed.data.dayIndex) ? [parsed.data] : [];
+			return parsed.success &&
+				validRuleDay(parsed.data, dayCount) &&
+				key === ruleBookRuleKey(parsed.data.dayIndex)
+				? [parsed.data]
+				: [];
 		})
 		.sort(
 			(left, right) => left.sectionNumber - right.sectionNumber || left.dayIndex - right.dayIndex

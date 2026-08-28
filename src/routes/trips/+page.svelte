@@ -1,13 +1,19 @@
 <script lang="ts">
 	import { CalendarDays, ChevronRight, LockKeyhole, Settings } from '@lucide/svelte';
+	import { onMount } from 'svelte';
 
 	import { resolve } from '$app/paths';
+	import { discardPreTripClientStorage } from '$lib/client/storage-generation';
 	import BrandLogo from '$lib/ui/BrandLogo.svelte';
 	import ThemeToggle from '$lib/ui/ThemeToggle.svelte';
 
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	onMount(() => {
+		void discardPreTripClientStorage();
+	});
 
 	function dates(startsOn?: string, endsOn?: string): string {
 		if (!startsOn && !endsOn) return 'Datoer er ikke satt';

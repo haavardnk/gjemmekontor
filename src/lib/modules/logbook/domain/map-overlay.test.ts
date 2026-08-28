@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 
+import { kroatia2026Days as tripDays } from '$lib/app/server/kroatia-2026-source';
 import type { JsonValue } from '$lib/client/database';
 import type { MapFeature } from '$lib/modules/map/public';
-import { tripDays } from '$lib/trip/itinerary';
 
 import { type LogbookLeg, logbookLegKey, serializeLogbookLeg } from './logbook';
 import {

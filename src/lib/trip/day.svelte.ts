@@ -8,11 +8,13 @@ import {
 } from '$lib/client/database';
 
 import type { TripDay } from './itinerary';
-import { isTripDayIndex, tripDayIndexAt, tripDays, tripTimeZone } from './itinerary';
+import { isTripDayIndex, tripDayIndexAt } from './itinerary';
 
 type TripDayStateOptions = {
 	databaseName?: string;
 	now?: () => Date;
+	days?: readonly TripDay[];
+	timeZone?: string;
 };
 
 export class TripDayState {
@@ -27,8 +29,8 @@ export class TripDayState {
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private started = false;
 	private tripId: string | undefined;
-	private days: readonly TripDay[] = tripDays;
-	private timeZone = tripTimeZone;
+	private days: readonly TripDay[];
+	private timeZone: string;
 	private readonly resumeToday = (): void => {
 		if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
 			return;
@@ -40,6 +42,8 @@ export class TripDayState {
 		this.tripId = options.databaseName ? 'test-trip' : undefined;
 		this.databaseNameOverride = options.databaseName;
 		this.now = options.now ?? (() => new SvelteDate());
+		this.days = options.days ?? [];
+		this.timeZone = options.timeZone ?? 'UTC';
 	}
 
 	private database(): Promise<IDBPDatabase<GjemmekontorDatabase>> {

@@ -17,6 +17,7 @@
 	import { onMount } from 'svelte';
 
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		consumeDishCategory,
@@ -310,7 +311,7 @@
 	});
 </script>
 
-<svelte:head><title>Meny · Gjemmekontor</title></svelte:head>
+<svelte:head><title>Meny · {page.data.tripName} · Gjemmekontor</title></svelte:head>
 
 <section class="mx-auto max-w-7xl px-4 py-5 pb-10 lg:px-6 lg:py-7">
 	<header class="mb-4">

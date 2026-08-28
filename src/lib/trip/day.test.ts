@@ -9,6 +9,18 @@ import { TripDayState } from './day.svelte';
 import { dateKeyAt, tripDayIndexAt } from './itinerary';
 
 const databaseNames: string[] = [];
+const testTimeZone = 'Europe/Zagreb';
+const testDays = Array.from({ length: 19 }, (_, index) => {
+	const date = new Date(Date.UTC(2026, 8, 5 + index)).toISOString().slice(0, 10);
+	return {
+		id: `test-day-${index}`,
+		index,
+		date,
+		dateLabel: `Dag ${index + 1}`,
+		title: `Testdag ${index + 1}`,
+		phase: 'Test'
+	};
+});
 
 afterEach(async (): Promise<void> => {
 	for (const name of databaseNames.splice(0)) {
@@ -22,12 +34,18 @@ function databaseName(): string {
 	return name;
 }
 
+function state(options: ConstructorParameters<typeof TripDayState>[0] = {}): TripDayState {
+	return new TripDayState({ days: testDays, timeZone: testTimeZone, ...options });
+}
+
 describe('trip day selection', (): void => {
 	test('uses the calendar date in Zagreb at UTC boundaries', (): void => {
-		expect(dateKeyAt(new Date('2026-09-04T22:00:00.000Z'))).toBe('2026-09-05');
-		expect(tripDayIndexAt(new Date('2026-09-04T22:00:00.000Z'))).toBe(0);
-		expect(tripDayIndexAt(new Date('2026-09-23T21:59:59.000Z'))).toBe(18);
-		expect(tripDayIndexAt(new Date('2026-09-23T22:00:00.000Z'))).toBeUndefined();
+		expect(dateKeyAt(new Date('2026-09-04T22:00:00.000Z'), testTimeZone)).toBe('2026-09-05');
+		expect(tripDayIndexAt(new Date('2026-09-04T22:00:00.000Z'), testDays, testTimeZone)).toBe(0);
+		expect(tripDayIndexAt(new Date('2026-09-23T21:59:59.000Z'), testDays, testTimeZone)).toBe(18);
+		expect(
+			tripDayIndexAt(new Date('2026-09-23T22:00:00.000Z'), testDays, testTimeZone)
+		).toBeUndefined();
 	});
 
 	test('uses the current trip day instead of a stored preference', async (): Promise<void> => {
@@ -35,15 +53,15 @@ describe('trip day selection', (): void => {
 		const database = await openClientDatabase(name);
 		await database.put('meta', { key: 'selectedDay', value: { dayIndex: 12 } });
 		database.close();
-		const state = new TripDayState({
+		const controller = state({
 			databaseName: name,
 			now: () => new Date('2026-09-08T10:00:00.000Z')
 		});
 
-		await state.initialize();
+		await controller.initialize();
 
-		expect(state.selectedIndex).toBe(3);
-		await state.close();
+		expect(controller.selectedIndex).toBe(3);
+		await controller.close();
 	});
 
 	test('restores a preference outside the trip and falls back to day one', async (): Promise<void> => {
@@ -51,11 +69,11 @@ describe('trip day selection', (): void => {
 		const database = await openClientDatabase(restoredName);
 		await database.put('meta', { key: 'selectedDay', value: { dayIndex: 7 } });
 		database.close();
-		const restored = new TripDayState({
+		const restored = state({
 			databaseName: restoredName,
 			now: () => new Date('2026-08-20T10:00:00.000Z')
 		});
-		const fallback = new TripDayState({
+		const fallback = state({
 			databaseName: databaseName(),
 			now: () => new Date('2026-08-20T10:00:00.000Z')
 		});
@@ -71,14 +89,14 @@ describe('trip day selection', (): void => {
 
 	test('persists manual selection across controllers', async (): Promise<void> => {
 		const name = databaseName();
-		const first = new TripDayState({
+		const first = state({
 			databaseName: name,
 			now: () => new Date('2026-08-20T10:00:00.000Z')
 		});
 		await first.initialize();
 		await first.select(14);
 		await first.close();
-		const second = new TripDayState({
+		const second = state({
 			databaseName: name,
 			now: () => new Date('2026-08-20T10:00:00.000Z')
 		});
@@ -91,36 +109,36 @@ describe('trip day selection', (): void => {
 
 	test('returns to today on app resume only while the trip is active', async (): Promise<void> => {
 		let now = new Date('2026-09-10T10:00:00.000Z');
-		const state = new TripDayState({ databaseName: databaseName(), now: () => now });
-		await state.initialize();
-		await state.select(15);
+		const controller = state({ databaseName: databaseName(), now: () => now });
+		await controller.initialize();
+		await controller.select(15);
 
-		await state.selectToday();
+		await controller.selectToday();
 
-		expect(state.selectedIndex).toBe(5);
+		expect(controller.selectedIndex).toBe(5);
 		now = new Date('2026-10-01T10:00:00.000Z');
-		await state.select(12);
-		await state.selectToday();
-		expect(state.selectedIndex).toBe(12);
-		expect(state.todayIndex).toBeUndefined();
-		await state.close();
+		await controller.select(12);
+		await controller.selectToday();
+		expect(controller.selectedIndex).toBe(12);
+		expect(controller.todayIndex).toBeUndefined();
+		await controller.close();
 	});
 
 	test('offers the new day after midnight without changing selection', async (): Promise<void> => {
 		let now = new Date('2026-09-05T21:59:00.000Z');
-		const state = new TripDayState({ databaseName: databaseName(), now: () => now });
-		await state.initialize();
+		const controller = state({ databaseName: databaseName(), now: () => now });
+		await controller.initialize();
 		now = new Date('2026-09-05T22:01:00.000Z');
 
-		state.refreshToday();
+		controller.refreshToday();
 
-		expect(state.selectedIndex).toBe(0);
-		expect(state.todayIndex).toBe(1);
-		expect(state.showTodayOffer).toBe(true);
-		await state.goToToday();
-		expect(state.selectedIndex).toBe(1);
-		expect(state.showTodayOffer).toBe(false);
-		await state.close();
+		expect(controller.selectedIndex).toBe(0);
+		expect(controller.todayIndex).toBe(1);
+		expect(controller.showTodayOffer).toBe(true);
+		await controller.goToToday();
+		expect(controller.selectedIndex).toBe(1);
+		expect(controller.showTodayOffer).toBe(false);
+		await controller.close();
 	});
 
 	test('uses the selected trip calendar and timezone', async (): Promise<void> => {

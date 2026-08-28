@@ -7,10 +7,8 @@ Gjemmekontor runs as one non-root Node.js container. Mount persistent storage at
 Copy `docker-compose.example.yml` and create a sibling `.env`:
 
 ```env
-APP_PASSWORD=replace-with-a-strong-password
+ADMIN_PASSWORD=replace-with-at-least-12-characters
 SESSION_SECRET=replace-with-32-random-bytes
-ENABLED_MODULES=map,shots,logbook,shopping-list,menu,gear,rule-book
-GOOGLE_MY_MAPS_ID=replace-with-a-public-map-id
 GOOGLE_PLACES_SERVER_API_KEY=
 GOOGLE_PLACES_UI_KIT_API_KEY=
 TRIPADVISOR_TERRA_API_KEY=
@@ -19,7 +17,6 @@ TRIPADVISOR_CACHE_DAYS=30
 AISSTREAM_API_KEY=replace-with-an-aisstream-api-key
 BRING_EMAIL=replace-with-bring-account-email
 BRING_PASSWORD=replace-with-bring-account-password
-BRING_LIST_UUID=replace-with-bring-list-uuid
 ORIGIN=https://app.example.com
 ```
 
@@ -38,13 +35,11 @@ Health endpoint: `GET /api/health`.
 
 | Variable                           | Purpose                                                                 |
 | ---------------------------------- | ----------------------------------------------------------------------- |
-| `APP_PASSWORD`                     | Shared application password, at least 8 characters                      |
+| `ADMIN_PASSWORD`                   | Administrator password, at least 12 characters                          |
 | `APP_VERSION`                      | Image-owned version derived from the GitHub Release tag                 |
 | `SESSION_SECRET`                   | Session signing secret, at least 32 bytes                               |
 | `DATA_DIR`                         | Persistent data directory; use `/data` in Docker                        |
-| `ENABLED_MODULES`                  | Optional comma-separated module IDs; defaults to all                    |
 | `BUNDLED_OFFLINE_MAP_DIR`          | Optional directory containing image-bundled PMTiles                     |
-| `GOOGLE_MY_MAPS_ID`                | Public Google My Maps map ID                                            |
 | `GOOGLE_PLACES_SERVER_API_KEY`     | Optional server-only Places API (New) key for POI identity matching     |
 | `GOOGLE_PLACES_UI_KIT_API_KEY`     | Optional browser Places UI Kit key, restricted to the public origin     |
 | `TRIPADVISOR_TERRA_API_KEY`        | Optional server-only Tripadvisor key for POI enrichment                 |
@@ -53,24 +48,27 @@ Health endpoint: `GET /api/health`.
 | `AISSTREAM_API_KEY`                | Server-side key for the live AISStream vessel layer                     |
 | `BRING_EMAIL`                      | Email for the shared Bring account                                      |
 | `BRING_PASSWORD`                   | Password for the shared Bring account                                   |
-| `BRING_LIST_UUID`                  | UUID of the trip shopping list                                          |
 | `ORIGIN`                           | Exact public HTTP or HTTPS origin without a trailing slash              |
 | `BODY_SIZE_LIMIT`                  | Adapter request limit; keep at `6M` for 5 MB GPX uploads                |
 | `HOST`                             | Listen address; image default is `0.0.0.0`                              |
 | `PORT`                             | Listen port; image default is `3000`                                    |
 
-Available module IDs are `map`, `shots`, `logbook`, `shopping-list`, `menu`, `gear`, and `rule-book`. At least one must be enabled. Unknown or duplicate IDs fail configuration validation. Map configuration is required only when `map` is enabled. Bring configuration remains optional for `shopping-list`; without it, the module shows its provider-unavailable state.
+Available module IDs are `map`, `shots`, `logbook`, `shopping-list`, `menu`, `gear`, and
+`rule-book`. Module activation, order, Google My Maps IDs, and Bring list UUIDs are stored per trip
+and managed through Trip Settings. Shared provider credentials remain in the environment.
 
 ## Maps
 
-`GOOGLE_MY_MAPS_ID` must reference a map shared as **Anyone with the link can view**. `AISSTREAM_API_KEY` remains on the server and subscribes the live vessel feed to this map's initial bounds. The image includes a Protomaps normal basemap for the sailing region at zoom 0–14. The app offers only packages present in the image or data directory.
+Each trip's Google My Maps ID must reference a map shared as **Anyone with the link can view**.
+`AISSTREAM_API_KEY` remains on the server and subscribes the live vessel feed to the active trip
+map's initial bounds. The app offers only offline packages present in the image or data directory.
 
 Licensed operator-provided packages in `/data` override bundled files with the same name:
 
 ```text
-/data/map/offline/normal.pmtiles
-/data/map/offline/nautical.pmtiles
-/data/map/offline/satellite.pmtiles
+/data/trips/{tripId}/map/offline/normal.pmtiles
+/data/trips/{tripId}/map/offline/nautical.pmtiles
+/data/trips/{tripId}/map/offline/satellite.pmtiles
 ```
 
 Only redistribute archives permitted by their data providers. Back up externally mounted archives separately.
@@ -105,13 +103,16 @@ The key must come from the current Tripadvisor Terra dashboard. The server calls
 
 ## Bring
 
-Handleliste uses one server-side Bring account and one list. Find the list UUID before deployment:
+Handleliste uses one server-side Bring account. To inspect the lists available to that account:
 
 ```sh
 npm run bring:lists
 ```
 
-The command reads `BRING_EMAIL` and `BRING_PASSWORD` from the ignored `.env` file. Set the matching UUID as `BRING_LIST_UUID`. Credentials never reach the browser. The app keeps the last successful list snapshot on each device for read-only use without a connection.
+The command reads `BRING_EMAIL` and `BRING_PASSWORD` from the ignored `.env` file. Credentials
+never reach the browser. In Trip Settings, verify an existing list UUID or create a new list named
+after the trip. Each trip stores its own verified connection. The app keeps the last successful list
+snapshot in that trip's device database for read-only use without a connection.
 
 The integration uses the unofficial `bring-shopping` wrapper. Bring does not publish this API, so upstream changes may interrupt Handleliste without affecting the other modules.
 
@@ -124,4 +125,6 @@ docker compose pull
 docker compose up -d
 ```
 
-Database schema updates run at startup and are forward-only.
+Database schema updates run at startup and are forward-only. After the v0.2.0 conversion, sign in
+as administrator, finish the imported trip's password and module setup, then sign in to the trip on
+each device.
