@@ -26,6 +26,7 @@
 	import ThemeToggle from './ThemeToggle.svelte';
 
 	let { children }: { children: Snippet } = $props();
+	let mounted = $state(false);
 	let signingOut = $state(false);
 	let moreOpen = $state(false);
 	let moreDialog: HTMLDialogElement;
@@ -85,6 +86,7 @@
 	}
 
 	onMount(() => {
+		mounted = true;
 		if (!page.data.tripId) {
 			return;
 		}
@@ -170,6 +172,7 @@
 		<button
 			class="flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs font-semibold text-base-content/60 aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary lg:hidden"
 			type="button"
+			disabled={!mounted}
 			onclick={openMore}
 			aria-label="Mer"
 			aria-haspopup="dialog"

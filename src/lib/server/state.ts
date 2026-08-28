@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { moduleForStateKey } from '$lib/app/modules/catalog';
 
-import { apiError, apiSuccess } from './api';
+import { apiError, apiSuccess, readJsonRequest } from './api';
 
 const mutationSchema = z
 	.object({
@@ -147,12 +147,8 @@ export async function handleSyncState(
 	tripId: string,
 	enabledModuleIds: readonly string[]
 ): Promise<Response> {
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		return apiError('INVALID_REQUEST', 400);
-	}
+	const body = await readJsonRequest(request);
+	if (body === undefined) return apiError('INVALID_REQUEST', 400);
 
 	const result = syncSchema.safeParse(body);
 	if (!result.success) {

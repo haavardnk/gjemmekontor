@@ -10,7 +10,7 @@ import {
 	serializeMenuArchive,
 	type TripMenuDish
 } from '$lib/modules/menu/domain/menu';
-import { apiError, apiSuccess } from '$lib/server/api';
+import { apiError, apiSuccess, parseJsonRequest } from '$lib/server/api';
 
 type RecipeRow = {
 	recipe_id: string;
@@ -87,20 +87,12 @@ export function listTripMenu(db: Database.Database, tripId: string): TripMenuDis
 	});
 }
 
-async function requestJson(request: Request): Promise<unknown> {
-	try {
-		return await request.json();
-	} catch {
-		return undefined;
-	}
-}
-
 export async function handleCreateRecipe(
 	request: Request,
 	db: Database.Database,
 	now: () => Date = () => new Date()
 ): Promise<Response> {
-	const parsed = saveRecipeSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, saveRecipeSchema);
 	if (!parsed.success || parsed.data.recipe.tombstone) return apiError('INVALID_RECIPE', 400);
 	const recipe = parsed.data.recipe;
 	if (db.prepare('SELECT 1 FROM recipes WHERE id = ?').get(recipe.id)) {
@@ -128,7 +120,7 @@ export async function handleUpdateRecipe(
 	recipeId: string,
 	now: () => Date = () => new Date()
 ): Promise<Response> {
-	const parsed = saveRecipeSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, saveRecipeSchema);
 	if (!parsed.success || parsed.data.recipe.id !== recipeId || parsed.data.recipe.tombstone) {
 		return apiError('INVALID_RECIPE', 400);
 	}
@@ -182,7 +174,7 @@ export async function handleActivateRecipe(
 	tripId: string,
 	now: () => Date = () => new Date()
 ): Promise<Response> {
-	const parsed = activateSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, activateSchema);
 	if (!parsed.success || parsed.data.active.tombstone) return apiError('INVALID_MENU_ENTRY', 400);
 	const active = parsed.data.active;
 	const latest = db
@@ -230,7 +222,7 @@ export async function handleUpdateMenuEntry(
 	entryId: string,
 	now: () => Date = () => new Date()
 ): Promise<Response> {
-	const parsed = updateEntrySchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, updateEntrySchema);
 	if (!parsed.success) return apiError('INVALID_MENU_ENTRY', 400);
 	const entry = db
 		.prepare('SELECT recipe_id FROM trip_menu_entries WHERE id = ? AND trip_id = ?')

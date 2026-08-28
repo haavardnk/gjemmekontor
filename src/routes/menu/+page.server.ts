@@ -1,13 +1,12 @@
-import { getDatabase } from '$lib/app/server/database';
 import { listRecipeArchive, listTripMenu } from '$lib/modules/menu/server';
+import { requireTrip } from '$lib/server/request';
 
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
-	if (!locals.trip) throw new Error('TRIP_REQUIRED');
-	const db = getDatabase();
+	const trip = requireTrip(locals);
 	return {
-		archives: listRecipeArchive(db),
-		dishes: listTripMenu(db, locals.trip.id)
+		archives: listRecipeArchive(locals.db),
+		dishes: listTripMenu(locals.db, trip.id)
 	};
 };

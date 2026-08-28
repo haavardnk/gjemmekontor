@@ -10,7 +10,7 @@ import {
 	type ShoppingListSnapshot,
 	type ShoppingPlanningSnapshot
 } from '$lib/modules/shopping-list/domain/shopping-list';
-import { apiError, apiSuccess } from '$lib/server/api';
+import { apiError, apiSuccess, parseJsonRequest } from '$lib/server/api';
 
 import { type BringConfig, type BringCredentials, getBringCredentials } from './config';
 
@@ -522,13 +522,7 @@ export async function handleAddShoppingListItem(
 	request: Request,
 	bring: BringService
 ): Promise<Response> {
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		return apiError('INVALID_REQUEST', 400);
-	}
-	const result = addShoppingListItemSchema.safeParse(body);
+	const result = await parseJsonRequest(request, addShoppingListItemSchema);
 	if (!result.success) {
 		return apiError('INVALID_REQUEST', 400);
 	}
@@ -543,13 +537,7 @@ export async function handleCompleteShoppingListItem(
 	request: Request,
 	bring: BringService
 ): Promise<Response> {
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		return apiError('INVALID_REQUEST', 400);
-	}
-	const result = completeShoppingListItemSchema.safeParse(body);
+	const result = await parseJsonRequest(request, completeShoppingListItemSchema);
 	if (!result.success) {
 		return apiError('INVALID_REQUEST', 400);
 	}
@@ -564,13 +552,7 @@ export async function handleEditShoppingListItem(
 	request: Request,
 	bring: BringService
 ): Promise<Response> {
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		return apiError('INVALID_REQUEST', 400);
-	}
-	const result = editShoppingListItemSchema.safeParse(body);
+	const result = await parseJsonRequest(request, editShoppingListItemSchema);
 	if (!result.success) {
 		return apiError('INVALID_REQUEST', 400);
 	}

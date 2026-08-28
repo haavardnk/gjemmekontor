@@ -55,6 +55,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
 	const config = getRuntimeConfig();
 	const db = getDatabase();
+	event.locals.db = db;
 	if (!['GET', 'HEAD', 'OPTIONS'].includes(event.request.method)) {
 		const origin = event.request.headers.get('origin');
 		if (origin !== config.origin) {

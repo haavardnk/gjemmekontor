@@ -4,6 +4,7 @@
 
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
+	import { apiRequest } from '$lib/client/api';
 	import type { CurrentDish } from '$lib/modules/menu/domain/menu';
 	import type {
 		MenuShoppingPreview,
@@ -60,27 +61,15 @@
 		};
 	}
 
-	async function errorCode(response: Response): Promise<string> {
-		try {
-			const body = (await response.json()) as { error?: unknown };
-			return typeof body.error === 'string' ? body.error : 'BRING_UNAVAILABLE';
-		} catch {
-			return 'BRING_UNAVAILABLE';
-		}
-	}
-
 	async function loadPreview(): Promise<void> {
 		loading = true;
 		error = '';
 		try {
-			const response = await fetch('/api/menu/shopping/preview', {
+			preview = await apiRequest<MenuShoppingPreview>('/api/menu/shopping/preview', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(requestBody()),
+				json: requestBody(),
 				signal: AbortSignal.timeout(20_000)
 			});
-			if (!response.ok) throw new Error(await errorCode(response));
-			preview = (await response.json()) as MenuShoppingPreview;
 			replaceDescriptionBySourceRowId = {};
 			rows = preview.rows.map((row) => ({ ...row }));
 		} catch (cause) {
@@ -144,14 +133,11 @@
 			for (const sourceRowId of editedRow.sourceRowIds) {
 				nextOverrides[sourceRowId] = sourceName;
 			}
-			const response = await fetch('/api/menu/shopping/preview', {
+			const refreshed = await apiRequest<MenuShoppingPreview>('/api/menu/shopping/preview', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(requestBody(nextOverrides)),
+				json: requestBody(nextOverrides),
 				signal: AbortSignal.timeout(20_000)
 			});
-			if (!response.ok) throw new Error(await errorCode(response));
-			const refreshed = (await response.json()) as MenuShoppingPreview;
 			const previousInclude = new Map(
 				rows.flatMap((row) => row.sourceRowIds.map((sourceRowId) => [sourceRowId, row.include]))
 			);
@@ -180,10 +166,14 @@
 		applying = true;
 		error = '';
 		try {
-			const response = await fetch('/api/menu/shopping/apply', {
+			const result = await apiRequest<{
+				snapshot: unknown;
+				batchId: string;
+				appliedAt: string;
+				appliedCycles: Array<{ archiveId: string; cycleId: string }>;
+			}>('/api/menu/shopping/apply', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
+				json: {
 					...requestBody(),
 					fingerprint: preview.fingerprint,
 					rows: rows.map((row) => ({
@@ -192,16 +182,9 @@
 						sourceName: row.sourceName,
 						specification: row.proposedSpecification
 					}))
-				}),
+				},
 				signal: AbortSignal.timeout(30_000)
 			});
-			if (!response.ok) throw new Error(await errorCode(response));
-			const result = (await response.json()) as {
-				snapshot: unknown;
-				batchId: string;
-				appliedAt: string;
-				appliedCycles: Array<{ archiveId: string; cycleId: string }>;
-			};
 			const snapshot = shoppingListSnapshotSchema.safeParse(result.snapshot);
 			if (snapshot.success) await storeShoppingListSnapshot(tripId, snapshot.data);
 			await invalidateAll();

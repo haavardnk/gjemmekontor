@@ -1,8 +1,8 @@
 import { handleOpenFreeMapPoiEnrichment } from '$lib/modules/map/server';
+import { requireTrip } from '$lib/server/request';
 
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = ({ request, locals }) => {
-	if (!locals.trip) throw new Error('TRIP_REQUIRED');
-	return handleOpenFreeMapPoiEnrichment(locals.trip.id, request);
+	return handleOpenFreeMapPoiEnrichment(requireTrip(locals).id, request);
 };

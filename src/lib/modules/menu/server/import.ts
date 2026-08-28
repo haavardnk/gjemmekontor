@@ -9,7 +9,7 @@ import type {
 } from '$lib/modules/menu/domain/menu';
 import { parseRational } from '$lib/modules/menu/domain/quantities';
 import { norwegianUnitDefinitions } from '$lib/modules/menu/domain/units';
-import { apiError, apiSuccess } from '$lib/server/api';
+import { apiError, apiSuccess, parseJsonRequest } from '$lib/server/api';
 
 import {
 	extractEmbeddedGroupedRecipe,
@@ -122,13 +122,7 @@ export async function parseRecipeHtml(
 }
 
 export async function handleImportRecipe(request: Request): Promise<Response> {
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		return apiError('INVALID_REQUEST', 400);
-	}
-	const result = importRequestSchema.safeParse(body);
+	const result = await parseJsonRequest(request, importRequestSchema);
 	if (!result.success) return apiError('INVALID_REQUEST', 400);
 	try {
 		return apiSuccess(await importRecipeDraft(result.data.url));

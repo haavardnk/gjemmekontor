@@ -21,6 +21,7 @@
 
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
+	import { apiRequest } from '$lib/client/api';
 	import {
 		filterGearItems,
 		type GearAvailability,
@@ -145,16 +146,7 @@
 	}
 
 	async function apiMutation(url: string, method: string, body?: unknown): Promise<void> {
-		const response = await fetch(url, {
-			method,
-			...(body === undefined
-				? {}
-				: { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-		});
-		if (!response.ok) {
-			const result = (await response.json().catch(() => ({}))) as { error?: string };
-			throw new Error(result.error ?? 'GEAR_MUTATION_FAILED');
-		}
+		await apiRequest(url, { method, json: body });
 		await invalidateAll();
 	}
 

@@ -1,7 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 
 import { defaultModuleIds, isModuleId } from '$lib/app/modules/catalog';
-import { getDatabase } from '$lib/app/server/database';
 import { createTrip, listPeople } from '$lib/app/server/trip-settings';
 import { BringConnectionService, BringServiceError } from '$lib/modules/shopping-list/server/bring';
 import { getBringCredentials } from '$lib/modules/shopping-list/server/config';
@@ -9,10 +8,10 @@ import { listShotCloneSources } from '$lib/modules/shots/server/content';
 
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = () => ({
-	people: listPeople(getDatabase()).filter((person) => !person.archived),
+export const load: PageServerLoad = ({ locals }) => ({
+	people: listPeople(locals.db).filter((person) => !person.archived),
 	modules: defaultModuleIds,
-	shotCloneSources: listShotCloneSources(getDatabase())
+	shotCloneSources: listShotCloneSources(locals.db)
 });
 
 function text(form: FormData, name: string): string {
@@ -26,7 +25,7 @@ function mapMode(form: FormData): 'normal' | 'nautical' | 'satellite' {
 }
 
 export const actions = {
-	default: async ({ request }) => {
+	default: async ({ request, locals }) => {
 		const form = await request.formData();
 		const enabled = form
 			.getAll('enabledModuleId')
@@ -46,7 +45,7 @@ export const actions = {
 						text(form, 'shoppingListUuid')
 					)
 				: undefined;
-			tripId = createTrip(getDatabase(), {
+			tripId = createTrip(locals.db, {
 				name: text(form, 'name'),
 				destination: text(form, 'destination'),
 				startsOn: text(form, 'startsOn'),

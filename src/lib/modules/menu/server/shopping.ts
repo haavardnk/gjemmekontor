@@ -9,7 +9,7 @@ import {
 } from '$lib/modules/menu/domain/shopping';
 import { absoluteShoppingOperationSchema } from '$lib/modules/shopping-list/public';
 import { BringService, BringServiceError } from '$lib/modules/shopping-list/server-public';
-import { apiError, apiSuccess } from '$lib/server/api';
+import { apiError, apiSuccess, parseJsonRequest } from '$lib/server/api';
 
 import { listTripMenu } from './library';
 
@@ -50,14 +50,6 @@ function loadDishes(db: Database.Database, tripId: string, input: ScopeRequest):
 	});
 }
 
-async function parseRequest(request: Request): Promise<unknown> {
-	try {
-		return await request.json();
-	} catch {
-		return undefined;
-	}
-}
-
 function bringError(error: unknown): Response {
 	if (error instanceof BringServiceError) {
 		return apiError(error.code, error.code === 'BRING_NOT_CONFIGURED' ? 503 : 502);
@@ -76,7 +68,7 @@ export async function handleMenuShoppingPreview(
 	shoppingListEnabled = true
 ): Promise<Response> {
 	if (!shoppingListEnabled) return apiError('SHOPPING_LIST_DISABLED', 503);
-	const parsed = previewRequestSchema.safeParse(await parseRequest(request));
+	const parsed = await parseJsonRequest(request, previewRequestSchema);
 	if (!parsed.success) return apiError('INVALID_REQUEST', 400);
 	try {
 		const dishes = loadDishes(db, tripId, parsed.data);
@@ -104,7 +96,7 @@ export async function handleMenuShoppingApply(
 	shoppingListEnabled = true
 ): Promise<Response> {
 	if (!shoppingListEnabled) return apiError('SHOPPING_LIST_DISABLED', 503);
-	const parsed = applyRequestSchema.safeParse(await parseRequest(request));
+	const parsed = await parseJsonRequest(request, applyRequestSchema);
 	if (!parsed.success) return apiError('INVALID_REQUEST', 400);
 	try {
 		const dishes = loadDishes(db, tripId, parsed.data);

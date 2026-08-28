@@ -1,6 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 
-import { getDatabase } from '$lib/app/server/database';
 import { firstTripModulePath, getTripBySlug } from '$lib/app/server/trips';
 import { authenticateTrip, rememberTrip } from '$lib/server/auth';
 import { getRuntimeConfig } from '$lib/server/env';
@@ -8,7 +7,7 @@ import { getRuntimeConfig } from '$lib/server/env';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ params, locals }) => {
-	const trip = getTripBySlug(getDatabase(), params.tripSlug);
+	const trip = getTripBySlug(locals.db, params.tripSlug);
 	if (!trip) error(404, 'TRIP_NOT_FOUND');
 	if (locals.tripAuthenticated && locals.trip?.id === trip.id) {
 		const path = firstTripModulePath(trip);
@@ -18,9 +17,8 @@ export const load: PageServerLoad = ({ params, locals }) => {
 };
 
 export const actions = {
-	default: async ({ request, params, cookies, getClientAddress }) => {
-		const db = getDatabase();
-		const trip = getTripBySlug(db, params.tripSlug);
+	default: async ({ request, params, cookies, getClientAddress, locals }) => {
+		const trip = getTripBySlug(locals.db, params.tripSlug);
 		if (!trip) error(404, 'TRIP_NOT_FOUND');
 		if (trip.setupRequired) return fail(409, { errorMessage: 'Reisen må settes opp først.' });
 
@@ -30,7 +28,7 @@ export const actions = {
 		}
 		const config = getRuntimeConfig();
 		const result = authenticateTrip(trip.id, password, getClientAddress(), cookies, {
-			db,
+			db: locals.db,
 			config
 		});
 		if (result === 'rate_limited') {

@@ -1,7 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 
 import { isModuleId } from '$lib/app/modules/catalog';
-import { getDatabase } from '$lib/app/server/database';
 import {
 	activateTrip,
 	addPersonToTrip,
@@ -29,8 +28,8 @@ import {
 
 import type { Actions, PageServerLoad } from './$types';
 
-function settings(tripId: string) {
-	const value = getTripSettings(getDatabase(), tripId);
+function settings(locals: App.Locals, tripId: string) {
+	const value = getTripSettings(locals.db, tripId);
 	if (!value) error(404, 'TRIP_NOT_FOUND');
 	return value;
 }
@@ -49,9 +48,9 @@ function actionError(cause: unknown, fallback: string) {
 	return fail(400, { errorMessage: cause instanceof Error ? fallback : fallback });
 }
 
-export const load: PageServerLoad = ({ params }) => {
-	const trip = settings(params.tripId);
-	const db = getDatabase();
+export const load: PageServerLoad = ({ params, locals }) => {
+	const trip = settings(locals, params.tripId);
+	const db = locals.db;
 	const mapRuntime = getMapRuntimeConfig();
 	const mapModule = trip.modules.find((module) => module.id === 'map');
 	const shoppingModule = trip.modules.find((module) => module.id === 'shopping-list');
@@ -108,10 +107,10 @@ export const load: PageServerLoad = ({ params }) => {
 };
 
 export const actions = {
-	general: async ({ request, params }) => {
+	general: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
-			updateTripGeneral(getDatabase(), params.tripId, {
+			updateTripGeneral(locals.db, params.tripId, {
 				name: text(form, 'name'),
 				destination: text(form, 'destination'),
 				startsOn: text(form, 'startsOn'),
@@ -124,19 +123,19 @@ export const actions = {
 			return actionError(cause, 'Kontroller grunninnstillingene og prøv igjen.');
 		}
 	},
-	password: async ({ request, params }) => {
+	password: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
-			setTripPassword(getDatabase(), params.tripId, text(form, 'password'));
+			setTripPassword(locals.db, params.tripId, text(form, 'password'));
 			return { successMessage: 'Reisepassordet er erstattet. Gamle innlogginger er utløpt.' };
 		} catch (cause) {
 			return actionError(cause, 'Passordet må ha minst åtte tegn.');
 		}
 	},
-	modules: async ({ request, params }) => {
+	modules: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
-			const currentModules = settings(params.tripId).modules;
+			const currentModules = settings(locals, params.tripId).modules;
 			const currentMap = currentModules.find((module) => module.id === 'map')?.config ?? {};
 			const currentShopping =
 				currentModules.find((module) => module.id === 'shopping-list')?.config ?? {};
@@ -144,7 +143,7 @@ export const actions = {
 			if (!Array.isArray(parsedOrder) || !parsedOrder.every((id) => typeof id === 'string')) {
 				throw new Error('INVALID_MODULE_ORDER');
 			}
-			setTripModules(getDatabase(), params.tripId, {
+			setTripModules(locals.db, params.tripId, {
 				order: parsedOrder.filter(isModuleId),
 				enabled: form
 					.getAll('enabledModuleId')
@@ -180,10 +179,10 @@ export const actions = {
 			return actionError(cause, 'Kunne ikke lagre modulinnstillingene.');
 		}
 	},
-	map: async ({ request, params }) => {
+	map: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
-			setTripMapConfiguration(getDatabase(), params.tripId, {
+			setTripMapConfiguration(locals.db, params.tripId, {
 				mapGoogleMyMapsId: text(form, 'mapGoogleMyMapsId'),
 				mapDefaultMode: mapMode(form),
 				mapEnabledOverlays: form
@@ -204,13 +203,13 @@ export const actions = {
 			return actionError(cause, 'Kunne ikke lagre kartinnstillingene.');
 		}
 	},
-	connectBring: async ({ request, params }) => {
+	connectBring: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
 			const connection = await new BringConnectionService(getBringCredentials()).verify(
 				text(form, 'listUuid')
 			);
-			setTripShoppingListConnection(getDatabase(), params.tripId, connection);
+			setTripShoppingListConnection(locals.db, params.tripId, connection);
 			return { successMessage: `Bring-listen «${connection.listName}» er koblet til reisen.` };
 		} catch (cause) {
 			if (cause instanceof BringServiceError) {
@@ -228,11 +227,11 @@ export const actions = {
 			return fail(400, { errorMessage: 'Bring-listen kunne ikke kobles til.' });
 		}
 	},
-	createBring: async ({ params }) => {
+	createBring: async ({ params, locals }) => {
 		try {
-			const trip = settings(params.tripId);
+			const trip = settings(locals, params.tripId);
 			const connection = await new BringConnectionService(getBringCredentials()).create(trip.name);
-			setTripShoppingListConnection(getDatabase(), params.tripId, connection);
+			setTripShoppingListConnection(locals.db, params.tripId, connection);
 			return {
 				successMessage: `Bring-listen «${connection.listName}» er opprettet og koblet til.`
 			};
@@ -254,18 +253,18 @@ export const actions = {
 			return fail(400, { errorMessage: 'Bring-listen kunne ikke opprettes.' });
 		}
 	},
-	shotsBlank: ({ params }) => {
-		replaceTripShotContent(getDatabase(), params.tripId, { mode: 'blank' });
+	shotsBlank: ({ params, locals }) => {
+		replaceTripShotContent(locals.db, params.tripId, { mode: 'blank' });
 		return { successMessage: 'En ny tom opptaksplan er lagret. Tidligere versjoner er bevart.' };
 	},
-	shotsStandard: ({ params }) => {
-		replaceTripShotContent(getDatabase(), params.tripId, { mode: 'standard' });
+	shotsStandard: ({ params, locals }) => {
+		replaceTripShotContent(locals.db, params.tripId, { mode: 'standard' });
 		return { successMessage: 'Standardmalen er lagret som en ny opptaksplan.' };
 	},
-	shotsClone: async ({ request, params }) => {
+	shotsClone: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
-			replaceTripShotContent(getDatabase(), params.tripId, {
+			replaceTripShotContent(locals.db, params.tripId, {
 				mode: 'clone',
 				sourceTripId: text(form, 'sourceTripId')
 			});
@@ -276,10 +275,10 @@ export const actions = {
 			return fail(400, { errorMessage: 'Opptaksplanen kunne ikke kopieres.' });
 		}
 	},
-	shotsCustom: async ({ request, params }) => {
+	shotsCustom: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
-			replaceTripShotContent(getDatabase(), params.tripId, {
+			replaceTripShotContent(locals.db, params.tripId, {
 				mode: 'custom',
 				content: JSON.parse(text(form, 'contentJson')) as unknown
 			});
@@ -299,55 +298,55 @@ export const actions = {
 		}
 		return { successMessage: 'Kartforbindelsen virker, og kartet er oppdatert.' };
 	},
-	addExistingMember: async ({ request, params }) => {
+	addExistingMember: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
-			addPersonToTrip(getDatabase(), params.tripId, { personId: text(form, 'personId') });
+			addPersonToTrip(locals.db, params.tripId, { personId: text(form, 'personId') });
 			return { successMessage: 'Personen er lagt til på reisen.' };
 		} catch (cause) {
 			return actionError(cause, 'Kunne ikke legge til personen.');
 		}
 	},
-	addNewMember: async ({ request, params }) => {
+	addNewMember: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
-			addPersonToTrip(getDatabase(), params.tripId, { displayName: text(form, 'displayName') });
+			addPersonToTrip(locals.db, params.tripId, { displayName: text(form, 'displayName') });
 			return { successMessage: 'Personen er opprettet og lagt til.' };
 		} catch (cause) {
 			return actionError(cause, 'Skriv inn et gyldig navn.');
 		}
 	},
-	removeMember: async ({ request, params }) => {
+	removeMember: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		try {
-			removePersonFromTrip(getDatabase(), params.tripId, text(form, 'personId'));
+			removePersonFromTrip(locals.db, params.tripId, text(form, 'personId'));
 			return { successMessage: 'Personen er fjernet fra reisen, men finnes fortsatt i databasen.' };
 		} catch (cause) {
 			return actionError(cause, 'Kunne ikke fjerne personen.');
 		}
 	},
-	visibility: async ({ request, params }) => {
+	visibility: async ({ request, params, locals }) => {
 		const form = await request.formData();
 		const visibility = text(form, 'visibility');
 		if (visibility !== 'listed' && visibility !== 'unlisted') {
 			return fail(400, { errorMessage: 'Ugyldig synlighet.' });
 		}
-		setTripVisibility(getDatabase(), params.tripId, visibility);
+		setTripVisibility(locals.db, params.tripId, visibility);
 		return { successMessage: 'Synligheten er lagret.' };
 	},
-	activate: ({ params }) => {
-		const readiness = activateTrip(getDatabase(), params.tripId);
+	activate: ({ params, locals }) => {
+		const readiness = activateTrip(locals.db, params.tripId);
 		if (!readiness.ready) {
 			return fail(409, { errorMessage: readiness.issues.join(' ') });
 		}
 		return { successMessage: 'Reisen er aktiv og klar for innlogging.' };
 	},
-	archive: ({ params }) => {
-		archiveTrip(getDatabase(), params.tripId);
+	archive: ({ params, locals }) => {
+		archiveTrip(locals.db, params.tripId);
 		redirect(303, '/admin/trips');
 	},
-	unarchive: ({ params }) => {
-		unarchiveTrip(getDatabase(), params.tripId);
+	unarchive: ({ params, locals }) => {
+		unarchiveTrip(locals.db, params.tripId);
 		return { successMessage: 'Reisen er hentet tilbake fra arkivet.' };
 	}
 } satisfies Actions;

@@ -9,20 +9,25 @@ test('loads the authenticated app shell without a network connection', async ({
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
 	await page.waitForFunction(async (): Promise<boolean> => {
-		if (!navigator.serviceWorker.controller) {
-			return false;
-		}
+		if (!navigator.serviceWorker.controller) return false;
 		const keys = await caches.keys();
-		const pageCache = keys.find((key) => key.startsWith('gjemmekontor-pages-'));
-		if (!pageCache) {
-			return false;
+		for (const key of keys.filter((key) => key.startsWith('gjemmekontor-pages-'))) {
+			const cache = await caches.open(key);
+			const activeTrip = (await (await cache.match('/__active_trip__'))?.text())?.trim();
+			if (
+				activeTrip &&
+				(
+					await Promise.all(
+						['/shots', '/shopping-list', '/menu'].map((path) =>
+							cache.match(`${path}?__trip_cache=${activeTrip}`)
+						)
+					)
+				).every(Boolean)
+			) {
+				return true;
+			}
 		}
-		const cache = await caches.open(pageCache);
-		return Boolean(
-			(await cache.match('/shots')) &&
-			(await cache.match('/shopping-list')) &&
-			(await cache.match('/menu'))
-		);
+		return false;
 	});
 
 	await page.goto('/shots?mode=record');

@@ -9,6 +9,30 @@ async function login(page: Page): Promise<void> {
 	await expect(page).toHaveURL(/\/map$/);
 }
 
+async function waitForOfflineShell(page: Page): Promise<void> {
+	await page.waitForFunction(async (): Promise<boolean> => {
+		if (!navigator.serviceWorker.controller) return false;
+		const keys = await caches.keys();
+		for (const key of keys.filter((key) => key.startsWith('gjemmekontor-pages-'))) {
+			const cache = await caches.open(key);
+			const activeTrip = (await (await cache.match('/__active_trip__'))?.text())?.trim();
+			if (
+				activeTrip &&
+				(
+					await Promise.all(
+						['/map', '/shots', '/menu', '/shopping-list'].map((path) =>
+							cache.match(`${path}?__trip_cache=${activeTrip}`)
+						)
+					)
+				).every(Boolean)
+			) {
+				return true;
+			}
+		}
+		return false;
+	});
+}
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 test('adds, completes, and restores Bring items with responsive module navigation', async ({
@@ -284,18 +308,11 @@ test('shows the cached list read-only without network access', async ({ context,
 	await login(page);
 	await page.goto('/shopping-list');
 	await expect(page.getByText('Solkrem')).toBeVisible();
-	await page.waitForFunction(async (): Promise<boolean> => {
-		const keys = await caches.keys();
-		const pageCache = keys.find((key) => key.startsWith('gjemmekontor-pages-'));
-		if (!pageCache) {
-			return false;
-		}
-		return Boolean(await (await caches.open(pageCache)).match('/shopping-list'));
-	});
+	await waitForOfflineShell(page);
 
 	apiAvailable = false;
 	await context.setOffline(true);
-	await page.reload();
+	await page.goto('/shopping-list');
 
 	await expect(page.getByText('Solkrem')).toBeVisible();
 	await expect(page.getByText('Faktor 50')).toBeVisible();
@@ -311,6 +328,7 @@ test('explains when no shopping list has been cached offline', async ({ context,
 	await login(page);
 	await page.goto('/shopping-list');
 	await expect(page.getByRole('alert')).toContainText('Bring er ikke tilgjengelig akkurat nå.');
+	await waitForOfflineShell(page);
 
 	await context.setOffline(true);
 	await page.reload();

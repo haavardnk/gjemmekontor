@@ -10,7 +10,7 @@ import {
 	openFreeMapRestaurantSchema,
 	openFreeMapRestaurantSourceStyle
 } from '$lib/modules/map/domain/openfreemap';
-import { apiError } from '$lib/server/api';
+import { apiError, parseJsonRequest } from '$lib/server/api';
 
 import { getMapRuntimeConfig, type MapRuntimeConfig } from './config';
 import { createPoiEnrichmentService, type PoiEnrichmentService } from './enrichment';
@@ -102,13 +102,7 @@ async function requestedOpenFreeMapRestaurant(request: Request): Promise<{
 	feature: ReturnType<typeof openFreeMapRestaurantFeature>;
 	sourceStyles: [typeof openFreeMapRestaurantSourceStyle];
 }> {
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		throw new Error('INVALID_REQUEST');
-	}
-	const result = openFreeMapRestaurantSchema.safeParse(body);
+	const result = await parseJsonRequest(request, openFreeMapRestaurantSchema);
 	if (!result.success) throw new Error('INVALID_REQUEST');
 	return {
 		feature: openFreeMapRestaurantFeature(result.data, openFreeMapRestaurantFeatureId(result.data)),

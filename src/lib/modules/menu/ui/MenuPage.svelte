@@ -18,6 +18,7 @@
 
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
+	import { apiRequest } from '$lib/client/api';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		consumeDishCategory,
@@ -107,13 +108,7 @@
 	}
 
 	async function apiMutation(url: string, method: string, body?: unknown): Promise<void> {
-		const response = await fetch(url, {
-			method,
-			...(body === undefined
-				? {}
-				: { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-		});
-		if (!response.ok) throw new Error('MENU_MUTATION_FAILED');
+		await apiRequest(url, { method, json: body });
 		await invalidateAll();
 	}
 
@@ -177,14 +172,11 @@
 
 	async function importRecipe(url: string): Promise<Partial<MenuEditorValue> | undefined> {
 		if (!online) throw new Error('OFFLINE');
-		const response = await fetch('/api/menu/import', {
+		return apiRequest<Partial<MenuEditorValue>>('/api/menu/import', {
 			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ url }),
+			json: { url },
 			signal: AbortSignal.timeout(20_000)
 		});
-		if (!response.ok) throw new Error('IMPORT_FAILED');
-		return (await response.json()) as Partial<MenuEditorValue>;
 	}
 
 	function openActivation(archive: RecipeArchiveView): void {

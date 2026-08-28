@@ -8,7 +8,7 @@ import {
 	type GearPageData,
 	type GearPersonView
 } from '$lib/modules/gear/domain/gear';
-import { apiError, apiSuccess } from '$lib/server/api';
+import { apiError, apiSuccess, parseJsonRequest } from '$lib/server/api';
 
 type ItemRow = {
 	id: string;
@@ -49,14 +49,6 @@ const itemInputSchema = z
 const selectedSchema = z.object({ selected: z.boolean() }).strict();
 const packedSchema = z.object({ packed: z.boolean() }).strict();
 const orderSchema = z.object({ categoryIds: z.array(z.uuid()).max(200) }).strict();
-
-async function requestJson(request: Request): Promise<unknown> {
-	try {
-		return await request.json();
-	} catch {
-		return undefined;
-	}
-}
 
 function ownersByItem(db: Database.Database, tripId: string, itemIds: readonly string[]) {
 	const result = new Map<string, GearPersonView[]>();
@@ -208,7 +200,7 @@ export async function handleSaveGearCategory(
 	db: Database.Database,
 	now: () => Date = () => new Date()
 ): Promise<Response> {
-	const parsed = categoryInputSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, categoryInputSchema);
 	if (!parsed.success) return apiError('INVALID_GEAR_CATEGORY', 400);
 	const timestamp = now().toISOString();
 	const existing = db
@@ -234,7 +226,7 @@ export async function handleOrderGearCategories(
 	db: Database.Database,
 	now: () => Date = () => new Date()
 ): Promise<Response> {
-	const parsed = orderSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, orderSchema);
 	if (!parsed.success || new Set(parsed.data.categoryIds).size !== parsed.data.categoryIds.length) {
 		return apiError('INVALID_CATEGORY_ORDER', 400);
 	}
@@ -283,7 +275,7 @@ export async function handleSaveGearItem(
 	expectedItemId?: string,
 	now: () => Date = () => new Date()
 ): Promise<Response> {
-	const parsed = itemInputSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, itemInputSchema);
 	if (!parsed.success) return apiError('INVALID_GEAR_ITEM', 400);
 	const input = parsed.data;
 	if (expectedItemId && input.id !== expectedItemId) return apiError('GEAR_ITEM_ID_MISMATCH', 400);
@@ -418,7 +410,7 @@ export async function handleGearSelection(
 	tripId: string,
 	itemId: string
 ): Promise<Response> {
-	const parsed = selectedSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, selectedSchema);
 	if (!parsed.success) return apiError('INVALID_GEAR_SELECTION', 400);
 	const item = db
 		.prepare('SELECT default_quantity, default_notes FROM gear_items WHERE id = ?')
@@ -462,7 +454,7 @@ export async function handleGearPacking(
 	tripId: string,
 	itemId: string
 ): Promise<Response> {
-	const parsed = packedSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, packedSchema);
 	if (!parsed.success) return apiError('INVALID_GEAR_PACKING', 400);
 	const item = db
 		.prepare(

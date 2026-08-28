@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 
 	import { page } from '$app/state';
+	import { apiRequest } from '$lib/client/api';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		type MapApiResponse,
@@ -337,11 +338,7 @@
 					return;
 				}
 				try {
-					const response = await fetch('/api/map');
-					if (!response.ok) {
-						return;
-					}
-					const map = (await response.json()) as MapApiResponse;
+					const map = await apiRequest<MapApiResponse>('/api/map');
 					snapshot = map.snapshot;
 					await storeMapSnapshot(tripId, map.snapshot);
 				} catch {

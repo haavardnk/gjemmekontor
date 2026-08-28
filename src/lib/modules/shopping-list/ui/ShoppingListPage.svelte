@@ -16,6 +16,7 @@
 	import { onMount, tick } from 'svelte';
 
 	import { page } from '$app/state';
+	import { ApiError, apiRequest, type ApiRequestOptions } from '$lib/client/api';
 	import {
 		storedShoppingListSnapshot,
 		storeShoppingListSnapshot
@@ -70,17 +71,8 @@
 			: ''
 	);
 
-	async function errorCode(response: Response): Promise<string | undefined> {
-		try {
-			const body = (await response.json()) as { error?: unknown };
-			return typeof body.error === 'string' ? body.error : undefined;
-		} catch {
-			return undefined;
-		}
-	}
-
-	function request(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-		return fetch(input, { ...init, signal: AbortSignal.timeout(15_000) });
+	function request(input: RequestInfo | URL, options?: ApiRequestOptions): Promise<unknown> {
+		return apiRequest(input, { ...options, signal: AbortSignal.timeout(15_000) });
 	}
 
 	function safeInputValue(input: HTMLInputElement): string {
@@ -89,14 +81,8 @@
 		return value;
 	}
 
-	async function acceptResponse(response: Response): Promise<boolean> {
-		if (!response.ok) {
-			const code = await errorCode(response);
-			serviceAvailable = code === 'INVALID_REQUEST';
-			errorMessage = shoppingListErrorMessage(code);
-			return false;
-		}
-		const result = shoppingListSnapshotSchema.safeParse(await response.json());
+	async function acceptResponse(body: unknown): Promise<boolean> {
+		const result = shoppingListSnapshotSchema.safeParse(body);
 		if (!result.success) {
 			errorMessage = shoppingListErrorMessage(undefined);
 			return false;
@@ -106,6 +92,12 @@
 		await storeShoppingListSnapshot(tripId, result.data);
 		errorMessage = '';
 		return true;
+	}
+
+	function rejectRequest(error: unknown): void {
+		const code = error instanceof ApiError ? error.code : 'BRING_UNAVAILABLE';
+		serviceAvailable = code === 'INVALID_REQUEST';
+		errorMessage = shoppingListErrorMessage(code);
 	}
 
 	async function refresh(showProgress = true): Promise<void> {
@@ -120,10 +112,9 @@
 			if (revision === mutationRevision) {
 				await acceptResponse(response);
 			}
-		} catch {
+		} catch (error) {
 			if (revision === mutationRevision) {
-				serviceAvailable = false;
-				errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
+				rejectRequest(error);
 			}
 		} finally {
 			refreshInFlight = false;
@@ -144,8 +135,7 @@
 			const accepted = await acceptResponse(
 				await request('/api/shopping-list/items', {
 					method: 'POST',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ name: itemName, specification: specification.trim() })
+					json: { name: itemName, specification: specification.trim() }
 				})
 			);
 			if (accepted) {
@@ -154,9 +144,8 @@
 				await tick();
 				nameInput?.focus();
 			}
-		} catch {
-			serviceAvailable = false;
-			errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
+		} catch (error) {
+			rejectRequest(error);
 		} finally {
 			adding = false;
 		}
@@ -172,13 +161,11 @@
 			await acceptResponse(
 				await request('/api/shopping-list/items', {
 					method: 'PATCH',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ sourceName: item.sourceName })
+					json: { sourceName: item.sourceName }
 				})
 			);
-		} catch {
-			serviceAvailable = false;
-			errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
+		} catch (error) {
+			rejectRequest(error);
 		} finally {
 			busyItem = '';
 		}
@@ -194,13 +181,11 @@
 			await acceptResponse(
 				await request('/api/shopping-list/items', {
 					method: 'POST',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ name: item.name, specification: item.specification })
+					json: { name: item.name, specification: item.specification }
 				})
 			);
-		} catch {
-			serviceAvailable = false;
-			errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
+		} catch (error) {
+			rejectRequest(error);
 		} finally {
 			busyItem = '';
 		}
@@ -236,20 +221,18 @@
 			const accepted = await acceptResponse(
 				await request('/api/shopping-list/items', {
 					method: 'PUT',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({
+					json: {
 						sourceName: item.sourceName,
 						specification: editSpecification.trim()
-					})
+					}
 				})
 			);
 			if (accepted) {
 				editDialog.close();
 				editingItem = undefined;
 			}
-		} catch {
-			serviceAvailable = false;
-			errorMessage = shoppingListErrorMessage('BRING_UNAVAILABLE');
+		} catch (error) {
+			rejectRequest(error);
 		} finally {
 			editing = false;
 			busyItem = '';

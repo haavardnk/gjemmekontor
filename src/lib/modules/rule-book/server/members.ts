@@ -8,7 +8,7 @@ import {
 	serializeRuleBookGame,
 	shuffledParticipants
 } from '$lib/modules/rule-book/domain/rule-book';
-import { apiError, apiSuccess } from '$lib/server/api';
+import { apiError, apiSuccess, parseJsonRequest } from '$lib/server/api';
 import { syncState } from '$lib/server/state';
 
 type MemberRow = {
@@ -38,14 +38,6 @@ export function listRuleBookMembers(db: Database.Database, tripId: string): Rule
 	return rows.map((row) => ({ id: row.id, name: row.name, optedOut: row.opted_out === 1 }));
 }
 
-async function requestJson(request: Request): Promise<unknown> {
-	try {
-		return await request.json();
-	} catch {
-		return undefined;
-	}
-}
-
 function audit(
 	db: Database.Database,
 	tripId: string,
@@ -66,7 +58,7 @@ export async function handleRuleBookPreference(
 	tripId: string,
 	now: () => Date = () => new Date()
 ): Promise<Response> {
-	const parsed = preferenceSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, preferenceSchema);
 	if (!parsed.success) return apiError('INVALID_REQUEST', 400);
 	const member = db
 		.prepare('SELECT active FROM trip_members WHERE trip_id = ? AND person_id = ?')
@@ -106,7 +98,7 @@ export async function handleStartRuleBookGame(
 	now: () => Date = () => new Date(),
 	random: () => number = Math.random
 ): Promise<Response> {
-	const parsed = startSchema.safeParse(await requestJson(request));
+	const parsed = await parseJsonRequest(request, startSchema);
 	if (!parsed.success) return apiError('INVALID_REQUEST', 400);
 	const existing = db
 		.prepare('SELECT value FROM trip_state_entries WHERE trip_id = ? AND key = ?')

@@ -19,7 +19,7 @@
 		<button
 			class="btn btn-square shrink-0 btn-ghost btn-sm"
 			type="button"
-			disabled={tripDayState.selectedIndex === 0}
+			disabled={!tripDayState.initialized || tripDayState.selectedIndex === 0}
 			onclick={() => tripDayState.select(tripDayState.selectedIndex - 1)}
 			aria-label="Forrige dag"
 			title="Forrige dag"
@@ -30,6 +30,7 @@
 		<select
 			id="trip-day"
 			class="select min-w-0 flex-1 bg-base-100 font-semibold select-sm"
+			disabled={!tripDayState.initialized}
 			value={tripDayState.selectedIndex}
 			onchange={changeDay}
 		>
@@ -40,7 +41,7 @@
 		<button
 			class="btn btn-square shrink-0 btn-ghost btn-sm"
 			type="button"
-			disabled={tripDayState.selectedIndex === days.length - 1}
+			disabled={!tripDayState.initialized || tripDayState.selectedIndex === days.length - 1}
 			onclick={() => tripDayState.select(tripDayState.selectedIndex + 1)}
 			aria-label="Neste dag"
 			title="Neste dag"

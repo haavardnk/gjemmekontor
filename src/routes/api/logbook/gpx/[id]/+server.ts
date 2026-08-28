@@ -1,14 +1,12 @@
-import { getDatabase } from '$lib/app/server/database';
 import { handleGetGpx, handlePutGpx } from '$lib/modules/logbook/server';
+import { requireTrip } from '$lib/server/request';
 
 import type { RequestHandler } from './$types';
 
 export const PUT: RequestHandler = ({ params, request, locals }) => {
-	if (!locals.trip) throw new Error('TRIP_REQUIRED');
-	return handlePutGpx(request, params.id, getDatabase(), locals.trip.id);
+	return handlePutGpx(request, params.id, locals.db, requireTrip(locals).id);
 };
 
 export const GET: RequestHandler = ({ params, locals }) => {
-	if (!locals.trip) throw new Error('TRIP_REQUIRED');
-	return handleGetGpx(params.id, getDatabase(), locals.trip.id);
+	return handleGetGpx(params.id, locals.db, requireTrip(locals).id);
 };

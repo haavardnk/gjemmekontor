@@ -18,6 +18,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 
 	import { page } from '$app/state';
+	import { ApiError, apiRequest } from '$lib/client/api';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		actualRouteFeatures,
@@ -188,15 +189,6 @@
 	);
 	const currentTripDay = $derived(tripDays[currentMapDayIndex]);
 
-	async function errorCode(response: Response): Promise<string | undefined> {
-		try {
-			const body = (await response.json()) as { error?: unknown };
-			return typeof body.error === 'string' ? body.error : undefined;
-		} catch {
-			return undefined;
-		}
-	}
-
 	async function applyResponse(response: MapApiResponse): Promise<void> {
 		const previousSelection = selectedId;
 		snapshot = response.snapshot;
@@ -222,14 +214,16 @@
 		refreshing = method === 'POST';
 		errorMessage = '';
 		try {
-			const response = await fetch(method === 'GET' ? '/api/map' : '/api/map/refresh', { method });
-			if (!response.ok) {
-				errorMessage = mapErrorMessage(await errorCode(response));
-				return;
-			}
-			await applyResponse((await response.json()) as MapApiResponse);
-		} catch {
-			errorMessage = 'Får ikke kontakt med serveren. Viser sist lagrede kart hvis det finnes.';
+			await applyResponse(
+				await apiRequest<MapApiResponse>(method === 'GET' ? '/api/map' : '/api/map/refresh', {
+					method
+				})
+			);
+		} catch (error) {
+			errorMessage =
+				error instanceof ApiError
+					? mapErrorMessage(error.code)
+					: 'Får ikke kontakt med serveren. Viser sist lagrede kart hvis det finnes.';
 		} finally {
 			refreshing = false;
 		}
@@ -321,10 +315,7 @@
 			return;
 		}
 		try {
-			const response = await fetch('/api/map/offline');
-			if (response.ok) {
-				offlinePackages = ((await response.json()) as OfflineMapManifest).packages;
-			}
+			offlinePackages = (await apiRequest<OfflineMapManifest>('/api/map/offline')).packages;
 		} catch {
 			offlineMessage = 'Kunne ikke hente kartpakkene akkurat nå.';
 		}
@@ -376,14 +367,10 @@
 			loading = true;
 			controller = new AbortController();
 			try {
-				const response = await fetch('/api/map/ais', {
+				const next = await apiRequest<Partial<AisApiResponse>>('/api/map/ais', {
 					signal: controller.signal,
 					cache: 'no-store'
 				});
-				if (!response.ok) {
-					throw new Error('AIS_UNAVAILABLE');
-				}
-				const next = (await response.json()) as Partial<AisApiResponse>;
 				if (
 					next.type !== 'FeatureCollection' ||
 					!Array.isArray(next.features) ||

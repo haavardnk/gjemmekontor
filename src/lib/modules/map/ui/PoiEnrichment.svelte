@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
+	import { apiRequest } from '$lib/client/api';
+
 	import {
 		type PoiEnrichmentResponse,
 		poiEnrichmentResponseSchema,
@@ -28,17 +30,16 @@
 	let controller: AbortController | undefined;
 	let photosController: AbortController | undefined;
 
-	function request(path: '' | '/photos', signal: AbortSignal): Promise<Response> {
+	function request(path: '' | '/photos', signal: AbortSignal): Promise<unknown> {
 		if (!openFreeMapRestaurant) {
-			return fetch(`/api/map/poi/${encodeURIComponent(featureId)}/enrichment${path}`, {
+			return apiRequest(`/api/map/poi/${encodeURIComponent(featureId)}/enrichment${path}`, {
 				signal,
 				cache: 'no-store'
 			});
 		}
-		return fetch(`/api/map/poi/openfreemap/enrichment${path}`, {
+		return apiRequest(`/api/map/poi/openfreemap/enrichment${path}`, {
 			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(openFreeMapRestaurant),
+			json: openFreeMapRestaurant,
 			signal,
 			cache: 'no-store'
 		});
@@ -48,9 +49,8 @@
 		onGoogleMatchState?.('loading');
 		controller = new AbortController();
 		void request('', controller.signal)
-			.then(async (response) => {
-				if (!response.ok) throw new Error('POI_ENRICHMENT_UNAVAILABLE');
-				enrichment = poiEnrichmentResponseSchema.parse(await response.json());
+			.then((response) => {
+				enrichment = poiEnrichmentResponseSchema.parse(response);
 				onGoogleMatchState?.(enrichment.google.status === 'available' ? 'matched' : 'unmatched');
 				loadingState = 'ready';
 				if (enrichment.tripadvisor.status === 'available' && !enrichment.tripadvisor.photosLoaded) {
@@ -74,9 +74,9 @@
 		photosLoading = true;
 		photosController = new AbortController();
 		try {
-			const response = await request('/photos', photosController.signal);
-			if (!response.ok) throw new Error('TRIPADVISOR_PHOTOS_UNAVAILABLE');
-			const result = tripadvisorPhotosResponseSchema.parse(await response.json());
+			const result = tripadvisorPhotosResponseSchema.parse(
+				await request('/photos', photosController.signal)
+			);
 			enrichment = { ...enrichment, tripadvisor: result.tripadvisor };
 		} catch {
 			photosFailed = true;

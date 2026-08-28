@@ -2,6 +2,7 @@
 	import { LoaderCircle, ScrollText, Shuffle, Users } from '@lucide/svelte';
 
 	import { page } from '$app/state';
+	import { apiRequest } from '$lib/client/api';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		nextSectionNumber,
@@ -60,12 +61,10 @@
 		member.optedOut = !participating;
 		errorMessage = '';
 		try {
-			const response = await fetch('/api/rule-book/preferences', {
+			await apiRequest('/api/rule-book/preferences', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ personId: member.id, optedOut: !participating })
+				json: { personId: member.id, optedOut: !participating }
 			});
-			if (!response.ok) throw new Error('PREFERENCE_FAILED');
 		} catch {
 			member.optedOut = previous;
 			errorMessage = 'Kunne ikke lagre deltakervalget. Prøv igjen.';
@@ -76,12 +75,10 @@
 		if (activeGame || participants.length < 2 || saving) return;
 		saving = true;
 		try {
-			const response = await fetch('/api/rule-book/game', {
+			await apiRequest('/api/rule-book/game', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ clientId: await sharedState.clientId() })
+				json: { clientId: await sharedState.clientId() }
 			});
-			if (!response.ok) throw new Error('START_FAILED');
 			await sharedState.sync();
 			errorMessage = '';
 		} catch {
@@ -96,12 +93,10 @@
 		if (!window.confirm('Vil du endre deltakerne? Det trekkes en ny rekkefølge.')) return;
 		saving = true;
 		try {
-			const response = await fetch('/api/rule-book/game', {
+			await apiRequest('/api/rule-book/game', {
 				method: 'DELETE',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ clientId: await sharedState.clientId() })
+				json: { clientId: await sharedState.clientId() }
 			});
-			if (!response.ok) throw new Error('RESET_FAILED');
 			await sharedState.sync();
 			errorMessage = '';
 		} catch {

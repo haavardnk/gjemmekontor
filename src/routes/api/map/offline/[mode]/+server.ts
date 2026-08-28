@@ -1,8 +1,8 @@
 import { handleOfflineMapFile } from '$lib/modules/map/server';
+import { requireTrip } from '$lib/server/request';
 
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = ({ params, request, locals }) => {
-	if (!locals.trip) throw new Error('TRIP_REQUIRED');
-	return handleOfflineMapFile(locals.trip.id, params.mode, request);
+	return handleOfflineMapFile(requireTrip(locals).id, params.mode, request);
 };

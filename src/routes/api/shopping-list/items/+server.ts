@@ -1,16 +1,15 @@
-import { getDatabase } from '$lib/app/server/database';
 import {
 	getBringService,
 	handleAddShoppingListItem,
 	handleCompleteShoppingListItem,
 	handleEditShoppingListItem
 } from '$lib/modules/shopping-list/server';
+import { requireTrip } from '$lib/server/request';
 
 import type { RequestHandler } from './$types';
 
 function service(locals: App.Locals) {
-	if (!locals.trip) throw new Error('TRIP_REQUIRED');
-	return getBringService(getDatabase(), locals.trip.id);
+	return getBringService(locals.db, requireTrip(locals).id);
 }
 
 export const POST: RequestHandler = ({ request, locals }) =>
