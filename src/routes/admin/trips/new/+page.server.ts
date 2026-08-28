@@ -1,8 +1,9 @@
 import { fail, redirect } from '@sveltejs/kit';
 
 import { defaultModuleIds, isModuleId } from '$lib/app/modules/catalog';
+import { bringErrorMessage, formMapMode, formText } from '$lib/app/server/admin-form';
 import { createTrip, listPeople } from '$lib/app/server/trip-settings';
-import { BringConnectionService, BringServiceError } from '$lib/modules/shopping-list/server/bring';
+import { BringConnectionService } from '$lib/modules/shopping-list/server/bring';
 import { getBringCredentials } from '$lib/modules/shopping-list/server/config';
 import { listShotCloneSources } from '$lib/modules/shots/server/content';
 
@@ -14,16 +15,6 @@ export const load: PageServerLoad = ({ locals }) => ({
 	shotCloneSources: listShotCloneSources(locals.db)
 });
 
-function text(form: FormData, name: string): string {
-	const value = form.get(name);
-	return typeof value === 'string' ? value : '';
-}
-
-function mapMode(form: FormData): 'normal' | 'nautical' | 'satellite' {
-	const value = text(form, 'mapDefaultMode');
-	return value === 'nautical' || value === 'satellite' ? value : 'normal';
-}
-
 export const actions = {
 	default: async ({ request, locals }) => {
 		const form = await request.formData();
@@ -33,26 +24,26 @@ export const actions = {
 			.filter(isModuleId);
 		let tripId: string;
 		try {
-			const shotMode = text(form, 'shotContentMode');
+			const shotMode = formText(form, 'shotContentMode');
 			const shots =
 				shotMode === 'standard'
 					? ({ mode: 'standard' } as const)
 					: shotMode === 'clone'
-						? ({ mode: 'clone', sourceTripId: text(form, 'shotSourceTripId') } as const)
+						? ({ mode: 'clone', sourceTripId: formText(form, 'shotSourceTripId') } as const)
 						: ({ mode: 'blank' } as const);
 			const shoppingConnection = enabled.includes('shopping-list')
 				? await new BringConnectionService(getBringCredentials()).verify(
-						text(form, 'shoppingListUuid')
+						formText(form, 'shoppingListUuid')
 					)
 				: undefined;
 			tripId = createTrip(locals.db, {
-				name: text(form, 'name'),
-				destination: text(form, 'destination'),
-				startsOn: text(form, 'startsOn'),
-				endsOn: text(form, 'endsOn'),
-				timezone: text(form, 'timezone'),
-				welcomeText: text(form, 'welcomeText'),
-				password: text(form, 'password'),
+				name: formText(form, 'name'),
+				destination: formText(form, 'destination'),
+				startsOn: formText(form, 'startsOn'),
+				endsOn: formText(form, 'endsOn'),
+				timezone: formText(form, 'timezone'),
+				welcomeText: formText(form, 'welcomeText'),
+				password: formText(form, 'password'),
 				memberIds: form
 					.getAll('memberId')
 					.filter((value): value is string => typeof value === 'string'),
@@ -60,8 +51,8 @@ export const actions = {
 				modules: {
 					order: [...defaultModuleIds],
 					enabled,
-					mapGoogleMyMapsId: text(form, 'mapGoogleMyMapsId'),
-					mapDefaultMode: mapMode(form),
+					mapGoogleMyMapsId: formText(form, 'mapGoogleMyMapsId'),
+					mapDefaultMode: formMapMode(form),
 					mapEnabledOverlays: form
 						.getAll('mapEnabledOverlay')
 						.filter(
@@ -80,18 +71,8 @@ export const actions = {
 				}
 			});
 		} catch (error) {
-			if (error instanceof BringServiceError) {
-				const messages = {
-					BRING_NOT_CONFIGURED: 'Bring-legitimasjon mangler på serveren.',
-					BRING_AUTH_FAILED: 'Bring-legitimasjonen ble avvist.',
-					BRING_LIST_NOT_FOUND: 'Bring-listen finnes ikke eller kontoen har ikke tilgang.',
-					BRING_LIST_NAME_CONFLICT: 'Det finnes allerede en Bring-liste med dette navnet.',
-					BRING_LIST_CREATE_FAILED: 'Bring klarte ikke å opprette listen.',
-					BRING_UNAVAILABLE: 'Bring er ikke tilgjengelig akkurat nå.',
-					BRING_MUTATION_FAILED: 'Bring lagret ikke endringen.'
-				};
-				return fail(400, { errorMessage: messages[error.code] });
-			}
+			const bringMessage = bringErrorMessage(error);
+			if (bringMessage) return fail(400, { errorMessage: bringMessage });
 			return fail(400, {
 				errorMessage:
 					error instanceof Error && error.message.startsWith('TRIP_NOT_READY:')

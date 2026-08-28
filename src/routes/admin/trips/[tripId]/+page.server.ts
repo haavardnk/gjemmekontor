@@ -2,6 +2,11 @@ import { error, fail, redirect } from '@sveltejs/kit';
 
 import { isModuleId } from '$lib/app/modules/catalog';
 import {
+	bringErrorMessage,
+	formMapMode as mapMode,
+	formText as text
+} from '$lib/app/server/admin-form';
+import {
 	activateTrip,
 	addPersonToTrip,
 	archiveTrip,
@@ -18,7 +23,7 @@ import {
 } from '$lib/app/server/trip-settings';
 import { handleRefreshMap } from '$lib/modules/map/server';
 import { getMapRuntimeConfig } from '$lib/modules/map/server/config';
-import { BringConnectionService, BringServiceError } from '$lib/modules/shopping-list/server/bring';
+import { BringConnectionService } from '$lib/modules/shopping-list/server/bring';
 import { getBringCredentials } from '$lib/modules/shopping-list/server/config';
 import {
 	listShotCloneSources,
@@ -34,18 +39,8 @@ function settings(locals: App.Locals, tripId: string) {
 	return value;
 }
 
-function text(form: FormData, name: string): string {
-	const value = form.get(name);
-	return typeof value === 'string' ? value : '';
-}
-
-function mapMode(form: FormData): 'normal' | 'nautical' | 'satellite' {
-	const value = text(form, 'mapDefaultMode');
-	return value === 'nautical' || value === 'satellite' ? value : 'normal';
-}
-
-function actionError(cause: unknown, fallback: string) {
-	return fail(400, { errorMessage: cause instanceof Error ? fallback : fallback });
+function actionError(errorMessage: string) {
+	return fail(400, { errorMessage });
 }
 
 export const load: PageServerLoad = ({ params, locals }) => {
@@ -119,8 +114,8 @@ export const actions = {
 				welcomeText: text(form, 'welcomeText')
 			});
 			return { successMessage: 'Grunninnstillingene er lagret.' };
-		} catch (cause) {
-			return actionError(cause, 'Kontroller grunninnstillingene og prøv igjen.');
+		} catch {
+			return actionError('Kontroller grunninnstillingene og prøv igjen.');
 		}
 	},
 	password: async ({ request, params, locals }) => {
@@ -128,8 +123,8 @@ export const actions = {
 		try {
 			setTripPassword(locals.db, params.tripId, text(form, 'password'));
 			return { successMessage: 'Reisepassordet er erstattet. Gamle innlogginger er utløpt.' };
-		} catch (cause) {
-			return actionError(cause, 'Passordet må ha minst åtte tegn.');
+		} catch {
+			return actionError('Passordet må ha minst åtte tegn.');
 		}
 	},
 	modules: async ({ request, params, locals }) => {
@@ -175,8 +170,8 @@ export const actions = {
 					typeof currentShopping.verifiedAt === 'string' ? currentShopping.verifiedAt : ''
 			});
 			return { successMessage: 'Modulvalg og rekkefølge er lagret.' };
-		} catch (cause) {
-			return actionError(cause, 'Kunne ikke lagre modulinnstillingene.');
+		} catch {
+			return actionError('Kunne ikke lagre modulinnstillingene.');
 		}
 	},
 	map: async ({ request, params, locals }) => {
@@ -199,8 +194,8 @@ export const actions = {
 					)
 			});
 			return { successMessage: 'Kartinnstillingene er lagret.' };
-		} catch (cause) {
-			return actionError(cause, 'Kunne ikke lagre kartinnstillingene.');
+		} catch {
+			return actionError('Kunne ikke lagre kartinnstillingene.');
 		}
 	},
 	connectBring: async ({ request, params, locals }) => {
@@ -212,19 +207,7 @@ export const actions = {
 			setTripShoppingListConnection(locals.db, params.tripId, connection);
 			return { successMessage: `Bring-listen «${connection.listName}» er koblet til reisen.` };
 		} catch (cause) {
-			if (cause instanceof BringServiceError) {
-				const messages = {
-					BRING_NOT_CONFIGURED: 'Bring-legitimasjon mangler på serveren.',
-					BRING_AUTH_FAILED: 'Bring-legitimasjonen ble avvist.',
-					BRING_LIST_NOT_FOUND: 'Bring-listen finnes ikke eller kontoen har ikke tilgang.',
-					BRING_LIST_NAME_CONFLICT: 'Det finnes allerede en Bring-liste med dette navnet.',
-					BRING_LIST_CREATE_FAILED: 'Bring klarte ikke å opprette listen.',
-					BRING_UNAVAILABLE: 'Bring er ikke tilgjengelig akkurat nå.',
-					BRING_MUTATION_FAILED: 'Bring lagret ikke endringen.'
-				};
-				return fail(400, { errorMessage: messages[cause.code] });
-			}
-			return fail(400, { errorMessage: 'Bring-listen kunne ikke kobles til.' });
+			return actionError(bringErrorMessage(cause) ?? 'Bring-listen kunne ikke kobles til.');
 		}
 	},
 	createBring: async ({ params, locals }) => {
@@ -236,21 +219,15 @@ export const actions = {
 				successMessage: `Bring-listen «${connection.listName}» er opprettet og koblet til.`
 			};
 		} catch (cause) {
-			if (cause instanceof BringServiceError) {
-				const messages = {
-					BRING_NOT_CONFIGURED: 'Bring-legitimasjon mangler på serveren.',
-					BRING_AUTH_FAILED: 'Bring-legitimasjonen ble avvist.',
+			return actionError(
+				bringErrorMessage(cause, {
 					BRING_LIST_NOT_FOUND: 'Bring-listen finnes ikke.',
 					BRING_LIST_NAME_CONFLICT:
 						'Det finnes allerede en Bring-liste med reisenavnet. Koble den til med ID i stedet.',
 					BRING_LIST_CREATE_FAILED:
-						'Bring klarte ikke å opprette listen. Den eksisterende koblingen er uendret.',
-					BRING_UNAVAILABLE: 'Bring er ikke tilgjengelig akkurat nå.',
-					BRING_MUTATION_FAILED: 'Bring lagret ikke endringen.'
-				};
-				return fail(400, { errorMessage: messages[cause.code] });
-			}
-			return fail(400, { errorMessage: 'Bring-listen kunne ikke opprettes.' });
+						'Bring klarte ikke å opprette listen. Den eksisterende koblingen er uendret.'
+				}) ?? 'Bring-listen kunne ikke opprettes.'
+			);
 		}
 	},
 	shotsBlank: ({ params, locals }) => {
@@ -303,8 +280,8 @@ export const actions = {
 		try {
 			addPersonToTrip(locals.db, params.tripId, { personId: text(form, 'personId') });
 			return { successMessage: 'Personen er lagt til på reisen.' };
-		} catch (cause) {
-			return actionError(cause, 'Kunne ikke legge til personen.');
+		} catch {
+			return actionError('Kunne ikke legge til personen.');
 		}
 	},
 	addNewMember: async ({ request, params, locals }) => {
@@ -312,8 +289,8 @@ export const actions = {
 		try {
 			addPersonToTrip(locals.db, params.tripId, { displayName: text(form, 'displayName') });
 			return { successMessage: 'Personen er opprettet og lagt til.' };
-		} catch (cause) {
-			return actionError(cause, 'Skriv inn et gyldig navn.');
+		} catch {
+			return actionError('Skriv inn et gyldig navn.');
 		}
 	},
 	removeMember: async ({ request, params, locals }) => {
@@ -321,8 +298,8 @@ export const actions = {
 		try {
 			removePersonFromTrip(locals.db, params.tripId, text(form, 'personId'));
 			return { successMessage: 'Personen er fjernet fra reisen, men finnes fortsatt i databasen.' };
-		} catch (cause) {
-			return actionError(cause, 'Kunne ikke fjerne personen.');
+		} catch {
+			return actionError('Kunne ikke fjerne personen.');
 		}
 	},
 	visibility: async ({ request, params, locals }) => {
