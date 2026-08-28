@@ -266,8 +266,8 @@ export const actions = {
 			});
 		}
 	},
-	refreshMap: async ({ params }) => {
-		const response = await handleRefreshMap(params.tripId);
+	refreshMap: async ({ params, locals }) => {
+		const response = await handleRefreshMap(params.tripId, locals.db);
 		if (!response.ok) {
 			return fail(response.status, {
 				errorMessage: 'Kartet kunne ikke hentes. Kontroller Google My Maps-ID-en og delingen.'

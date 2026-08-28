@@ -5,7 +5,6 @@ import { Readable } from 'node:stream';
 
 import type Database from 'better-sqlite3';
 
-import { getDatabase } from '$lib/app/server/database';
 import type { MapMode, OfflineMapManifest, OfflineMapPackage } from '$lib/modules/map/domain/types';
 import { apiError, apiSuccess } from '$lib/server/api';
 
@@ -69,7 +68,7 @@ async function availablePackage(
 
 export async function offlineMapManifest(
 	tripId: string,
-	db: Database.Database = getDatabase(),
+	db: Database.Database,
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<OfflineMapManifest> {
 	const allowed = new Set(loadTripMapConfig(db, tripId).offlinePackages);
@@ -96,8 +95,8 @@ export async function offlineMapManifest(
 
 export async function handleOfflineMapManifest(
 	tripId: string,
-	db?: Database.Database,
-	config?: MapRuntimeConfig
+	db: Database.Database,
+	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	return apiSuccess(await offlineMapManifest(tripId, db, config));
 }
@@ -106,7 +105,7 @@ export async function handleOfflineMapFile(
 	tripId: string,
 	mode: string,
 	request: Request,
-	db: Database.Database = getDatabase(),
+	db: Database.Database,
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	if (!isMapMode(mode)) {

@@ -190,9 +190,16 @@ describe('Google map cache', (): void => {
 
 	test('serves stale cache immediately while one refresh runs', async (): Promise<void> => {
 		let now = Date.parse('2026-08-20T00:00:00.000Z');
+		let resolveRefresh: ((response: Response) => void) | undefined;
 		const fetchImplementation = vi
 			.fn<typeof fetch>()
-			.mockImplementation(async (): Promise<Response> => new Response(fixture));
+			.mockResolvedValueOnce(new Response(fixture))
+			.mockImplementationOnce(
+				() =>
+					new Promise<Response>((resolveResponse) => {
+						resolveRefresh = resolveResponse;
+					})
+			);
 		const service = createMapService({
 			mapId: 'map-id',
 			paths: mapCachePaths(temporaryDirectory(), 'trip-a'),
@@ -208,5 +215,8 @@ describe('Google map cache', (): void => {
 		});
 
 		expect(cached).toMatchObject({ stale: true, refreshing: true });
+		resolveRefresh?.(new Response(fixture));
+		await service.refresh();
+		expect(fetchImplementation).toHaveBeenCalledTimes(2);
 	});
 });

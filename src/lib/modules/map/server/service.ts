@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-import { getDatabase } from '$lib/app/server/database';
 import type { MapSnapshot } from '$lib/modules/map/domain/types';
 import { apiError, apiSuccess } from '$lib/server/api';
 
@@ -48,7 +47,7 @@ function getConfiguredService(
 async function response(
 	tripId: string,
 	operation: (service: MapService) => ReturnType<MapService['get']>,
-	db: Database.Database = getDatabase(),
+	db: Database.Database,
 	runtime: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	try {
@@ -70,23 +69,23 @@ async function response(
 
 export function handleGetMap(
 	tripId: string,
-	db?: Database.Database,
-	runtime?: MapRuntimeConfig
+	db: Database.Database,
+	runtime: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	return response(tripId, (service) => service.get(), db, runtime);
 }
 
 export function handleRefreshMap(
 	tripId: string,
-	db?: Database.Database,
-	runtime?: MapRuntimeConfig
+	db: Database.Database,
+	runtime: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	return response(tripId, (service) => service.refresh(), db, runtime);
 }
 
 export async function getCurrentMapSnapshot(
 	tripId: string,
-	db: Database.Database = getDatabase(),
+	db: Database.Database,
 	runtime: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<MapSnapshot> {
 	return (

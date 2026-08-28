@@ -4,5 +4,5 @@ import { requireTrip } from '$lib/server/request';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = ({ params, locals }) => {
-	return handleGetPoiEnrichmentPhotos(requireTrip(locals).id, params.featureId);
+	return handleGetPoiEnrichmentPhotos(requireTrip(locals).id, params.featureId, locals.db);
 };

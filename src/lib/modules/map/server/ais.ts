@@ -5,7 +5,6 @@ import { dirname, join } from 'node:path';
 import type Database from 'better-sqlite3';
 import WebSocket, { type RawData } from 'ws';
 
-import { getDatabase } from '$lib/app/server/database';
 import type {
 	AisApiResponse,
 	AisConnectionStatus,
@@ -642,7 +641,7 @@ function getConfiguredAisService(
 
 export function handleGetAis(
 	tripId: string,
-	db: Database.Database = getDatabase(),
+	db: Database.Database,
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Response {
 	try {

@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 
 import type Database from 'better-sqlite3';
 
-import { getDatabase } from '$lib/app/server/database';
 import { isPoiEnrichmentEligible } from '$lib/modules/map/domain/enrichment';
 import {
 	type OpenFreeMapRestaurant,
@@ -113,7 +112,7 @@ async function requestedOpenFreeMapRestaurant(request: Request): Promise<{
 export async function handleGetPoiEnrichment(
 	tripId: string,
 	featureId: string,
-	db: Database.Database = getDatabase(),
+	db: Database.Database,
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	try {
@@ -129,7 +128,7 @@ export async function handleGetPoiEnrichment(
 export async function handleGetPoiEnrichmentPhotos(
 	tripId: string,
 	featureId: string,
-	db: Database.Database = getDatabase(),
+	db: Database.Database,
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	try {
@@ -149,7 +148,7 @@ export async function handleGetPoiEnrichmentPhotos(
 export async function handleOpenFreeMapPoiEnrichment(
 	tripId: string,
 	request: Request,
-	db: Database.Database = getDatabase(),
+	db: Database.Database,
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	try {
@@ -165,7 +164,7 @@ export async function handleOpenFreeMapPoiEnrichment(
 export async function handleOpenFreeMapPoiEnrichmentPhotos(
 	tripId: string,
 	request: Request,
-	db: Database.Database = getDatabase(),
+	db: Database.Database,
 	config: MapRuntimeConfig = getMapRuntimeConfig()
 ): Promise<Response> {
 	try {

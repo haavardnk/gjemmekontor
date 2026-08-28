@@ -4,5 +4,5 @@ import { requireTrip } from '$lib/server/request';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = ({ request, locals }) => {
-	return handleOpenFreeMapPoiEnrichment(requireTrip(locals).id, request);
+	return handleOpenFreeMapPoiEnrichment(requireTrip(locals).id, request, locals.db);
 };

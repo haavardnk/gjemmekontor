@@ -4,5 +4,5 @@ import { requireTrip } from '$lib/server/request';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = ({ locals }) => {
-	return handleRefreshMap(requireTrip(locals).id);
+	return handleRefreshMap(requireTrip(locals).id, locals.db);
 };
