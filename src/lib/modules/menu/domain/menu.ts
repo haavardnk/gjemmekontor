@@ -102,16 +102,14 @@ export type MenuInstruction = z.infer<typeof menuInstructionSchema>;
 export type MenuArchive = z.infer<typeof menuArchiveSchema>;
 export type MenuActive = z.infer<typeof menuActiveSchema>;
 export type MenuShoppingStatus = z.infer<typeof menuShoppingStatusSchema>;
-export type KeyedMenuArchive = MenuArchive & { key: string };
-export type KeyedMenuActive = MenuActive & { key: string };
-export type CurrentDish = { archive: KeyedMenuArchive; active: KeyedMenuActive };
-export type RecipeArchiveView = KeyedMenuArchive & {
+export type CurrentDish = { archive: MenuArchive; active: MenuActive };
+export type RecipeArchiveView = MenuArchive & {
 	recipeVersionId: string;
 	recipeVersion: number;
 };
 export type TripMenuDish = {
 	archive: RecipeArchiveView;
-	active: KeyedMenuActive;
+	active: MenuActive;
 	entryId: string;
 	latestRecipeVersion: number;
 };
@@ -128,55 +126,7 @@ export type MenuEditorValue = {
 	instructions: MenuInstruction[];
 };
 
-const archivePrefix = 'menu:archive:';
-const activePrefix = 'menu:active:';
 const norwegianCollator = new Intl.Collator('nb-NO', { sensitivity: 'base' });
-
-export function menuArchiveKey(id: string): string {
-	return `${archivePrefix}${id}`;
-}
-
-export function menuActiveKey(archiveId: string): string {
-	return `${activePrefix}${archiveId}`;
-}
-
-export function menuArchives(values: Record<string, JsonValue>): KeyedMenuArchive[] {
-	return Object.entries(values)
-		.filter(([key]) => key.startsWith(archivePrefix))
-		.flatMap(([key, value]) => {
-			const parsed = menuArchiveSchema.safeParse(value);
-			return parsed.success && !parsed.data.tombstone && key === menuArchiveKey(parsed.data.id)
-				? [{ key, ...parsed.data }]
-				: [];
-		})
-		.sort(
-			(left, right) =>
-				norwegianCollator.compare(left.name, right.name) || left.key.localeCompare(right.key)
-		);
-}
-
-export function menuActiveRows(values: Record<string, JsonValue>): KeyedMenuActive[] {
-	return Object.entries(values)
-		.filter(([key]) => key.startsWith(activePrefix))
-		.flatMap(([key, value]) => {
-			const parsed = menuActiveSchema.safeParse(value);
-			return parsed.success &&
-				!parsed.data.tombstone &&
-				key === menuActiveKey(parsed.data.archiveId)
-				? [{ key, ...parsed.data }]
-				: [];
-		});
-}
-
-export function currentDishes(values: Record<string, JsonValue>): CurrentDish[] {
-	const activeByArchiveId = new Map(
-		menuActiveRows(values).map((active) => [active.archiveId, active])
-	);
-	return menuArchives(values).flatMap((archive) => {
-		const active = activeByArchiveId.get(archive.id);
-		return active ? [{ archive, active }] : [];
-	});
-}
 
 export function dishInCategory(dish: CurrentDish, category: MealCategory): boolean {
 	return dish.active.categories.includes(category);
@@ -279,13 +229,9 @@ export function matchingArchives(
 }
 
 export function serializeMenuArchive(archive: MenuArchive): JsonValue {
-	const value = { ...archive } as MenuArchive & { key?: string };
-	delete value.key;
-	return menuArchiveSchema.parse(value) as JsonValue;
+	return menuArchiveSchema.parse(archive) as JsonValue;
 }
 
 export function serializeMenuActive(active: MenuActive): JsonValue {
-	const value = { ...active } as MenuActive & { key?: string };
-	delete value.key;
-	return menuActiveSchema.parse(value) as JsonValue;
+	return menuActiveSchema.parse(active) as JsonValue;
 }

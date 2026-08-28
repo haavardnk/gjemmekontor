@@ -3,12 +3,10 @@ import { z } from 'zod';
 
 import {
 	gearAvailabilityValues,
-	gearCategoryKey,
-	gearItemKey,
+	type GearCategory,
 	type GearItemView,
 	type GearPageData,
-	type GearPersonView,
-	type KeyedGearCategory
+	type GearPersonView
 } from '$lib/modules/gear/domain/gear';
 import { apiError, apiSuccess } from '$lib/server/api';
 
@@ -22,8 +20,6 @@ type ItemRow = {
 	selected: number;
 	packed: number;
 	owner_resolution: 'current' | 'retained';
-	lifecycle_status: 'available' | 'retired';
-	created_at: string;
 };
 
 type OwnerRow = { gear_item_id: string; person_id: string; name: string; active_member: number };
@@ -90,20 +86,15 @@ function ownersByItem(db: Database.Database, tripId: string, itemIds: readonly s
 export function loadGearPageData(db: Database.Database, tripId: string): GearPageData {
 	const categoryRows = db
 		.prepare(
-			`SELECT id, name, sort_order, created_at
-			 FROM gear_categories WHERE archived_at IS NULL
-			 ORDER BY sort_order, name COLLATE NOCASE, id`
+			`SELECT id, name, sort_order
+				 FROM gear_categories WHERE archived_at IS NULL
+				 ORDER BY sort_order, name COLLATE NOCASE, id`
 		)
-		.all() as Array<{ id: string; name: string; sort_order: number; created_at: string }>;
-	const categories: KeyedGearCategory[] = categoryRows.map((row) => ({
-		key: gearCategoryKey(row.id),
-		version: 1,
+		.all() as Array<{ id: string; name: string; sort_order: number }>;
+	const categories: GearCategory[] = categoryRows.map((row) => ({
 		id: row.id,
 		name: row.name,
-		position: row.sort_order,
-		createdAt: row.created_at,
-		createdBy: 'server',
-		tombstone: false
+		position: row.sort_order
 	}));
 	const rows = db
 		.prepare(
@@ -113,8 +104,7 @@ export function loadGearPageData(db: Database.Database, tripId: string): GearPag
 			        COALESCE(trip_item.availability, 'available') AS availability,
 			        COALESCE(trip_item.active, 0) AS selected,
 			        COALESCE(packing.packed, 0) AS packed,
-			        COALESCE(trip_item.owner_resolution, 'current') AS owner_resolution,
-			        item.lifecycle_status, item.created_at
+				        COALESCE(trip_item.owner_resolution, 'current') AS owner_resolution
 			 FROM gear_items item
 			 LEFT JOIN trip_gear_items trip_item
 			   ON trip_item.trip_id = ? AND trip_item.gear_item_id = item.id
@@ -144,19 +134,13 @@ export function loadGearPageData(db: Database.Database, tripId: string): GearPag
 			row.selected === 1 && owners.length > 0 && activeOwners.length === 0;
 		return [
 			{
-				key: gearItemKey(row.id),
-				version: 1,
 				id: row.id,
 				categoryId: row.category_id,
 				name: row.name,
 				quantity: row.quantity,
-				...(owners[0] ? { ownerId: owners[0].id } : {}),
 				ownerIds: owners.map((owner) => owner.id),
 				availability: row.availability,
 				notes: row.notes,
-				createdAt: row.created_at,
-				createdBy: 'server',
-				tombstone: row.lifecycle_status === 'retired',
 				selected: row.selected === 1,
 				packed: row.packed === 1,
 				needsOwnerResolution,

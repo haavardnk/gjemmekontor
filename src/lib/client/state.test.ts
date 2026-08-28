@@ -181,8 +181,8 @@ describe('client state', (): void => {
 		});
 
 		await state.setMany([
-			{ key: 'menu:archive:a', value: { name: 'Taco' } },
-			{ key: 'menu:active:a', value: { categories: ['dinner'] } }
+			{ key: 'shots:d0:scenario:a', value: true },
+			{ key: 'digest:d0:media:a', value: { description: 'Havn' } }
 		]);
 		const db = await openClientDatabase(name);
 		const mutations = await db.getAll('mutations');
@@ -192,8 +192,8 @@ describe('client state', (): void => {
 
 		expect(mutations.map((mutation) => mutation.sequence).sort()).toEqual([1, 2]);
 		expect(sequence?.value).toBe(2);
-		expect(state.values['menu:archive:a']).toEqual({ name: 'Taco' });
-		expect(state.values['menu:active:a']).toEqual({ categories: ['dinner'] });
+		expect(state.values['shots:d0:scenario:a']).toBe(true);
+		expect(state.values['digest:d0:media:a']).toEqual({ description: 'Havn' });
 	});
 
 	test('rejects duplicate keys before opening a transaction', async (): Promise<void> => {

@@ -4,15 +4,6 @@ export const logbookManifest = {
 	id: 'logbook',
 	label: 'Loggbok',
 	icon: 'book-open',
-	order: 30,
-	mobileNavigation: 'more',
 	primaryPath: '/logbook',
-	pagePrefixes: ['/logbook'],
-	apiPrefixes: ['/api/logbook'],
-	cacheableApiPrefixes: [],
-	appShellPaths: ['/logbook'],
-	statePrefixes: ['logbook:'],
-	requires: [],
-	provides: ['logbook.route-overlay'],
-	consumes: ['map.location-catalog']
+	statePrefixes: ['logbook:']
 } as const satisfies AppModuleManifest<'logbook'>;

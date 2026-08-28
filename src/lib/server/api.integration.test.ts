@@ -198,7 +198,7 @@ describe('API integration', (): void => {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
-					mutations: [mutation('disabled', 'gear:item:test', 'changed')]
+					mutations: [mutation('disabled', 'rule-book:rule:0', 'changed')]
 				})
 			}),
 			db,

@@ -17,15 +17,6 @@ export function resolveEnabledModuleIds(configured?: readonly string[]): ModuleI
 		unique.add(id);
 	}
 
-	for (const module of moduleCatalog) {
-		if (!unique.has(module.id)) continue;
-		for (const required of module.requires ?? []) {
-			if (!unique.has(required)) {
-				throw new Error(`Enabled module ${module.id} requires ${required}`);
-			}
-		}
-	}
-
 	return requested.map((id) => {
 		if (!isModuleId(id)) throw new Error(`Unknown enabled module: ${id}`);
 		return id;

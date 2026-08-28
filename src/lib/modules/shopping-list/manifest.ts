@@ -4,14 +4,5 @@ export const shoppingListManifest = {
 	id: 'shopping-list',
 	label: 'Handleliste',
 	icon: 'shopping-basket',
-	order: 40,
-	mobileNavigation: 'quick',
-	primaryPath: '/shopping-list',
-	pagePrefixes: ['/shopping-list'],
-	apiPrefixes: ['/api/shopping-list'],
-	cacheableApiPrefixes: [],
-	appShellPaths: ['/shopping-list'],
-	statePrefixes: [],
-	requires: [],
-	provides: ['shopping-list.items']
+	primaryPath: '/shopping-list'
 } as const satisfies AppModuleManifest<'shopping-list'>;

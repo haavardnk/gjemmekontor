@@ -21,9 +21,9 @@
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		consumeDishCategory,
-		type KeyedMenuActive,
 		mealCategories,
 		type MealCategory,
+		type MenuActive,
 		menuActiveSchema,
 		type MenuArchive,
 		menuArchiveSchema,
@@ -35,7 +35,6 @@
 		serializeMenuActive,
 		type TripMenuDish
 	} from '$lib/modules/menu/domain/menu';
-	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
 	import DishForm from './DishForm.svelte';
 	import RecipeView from './RecipeView.svelte';
@@ -43,7 +42,7 @@
 
 	type EditingContext = {
 		archive?: RecipeArchiveView;
-		active?: KeyedMenuActive;
+		active?: MenuActive;
 		entryId?: string;
 		activateOnSave: boolean;
 		initial: MenuEditorValue;
@@ -92,7 +91,7 @@
 		};
 	}
 
-	function editorFor(archive: RecipeArchiveView, active?: KeyedMenuActive): MenuEditorValue {
+	function editorFor(archive: RecipeArchiveView, active?: MenuActive): MenuEditorValue {
 		return {
 			name: archive.name,
 			...(archive.sourceUrl ? { sourceUrl: archive.sourceUrl } : {}),
@@ -314,11 +313,10 @@
 
 <section class="mx-auto max-w-7xl px-4 py-5 pb-10 lg:px-6 lg:py-7">
 	<header class="mb-4">
-		<div class="flex h-7 items-center justify-between gap-3">
+		<div class="flex h-7 items-center gap-3">
 			<p class="flex items-center gap-1.5 text-sm font-semibold text-primary">
 				<Utensils size={15} /> Mat om bord
 			</p>
-			<SyncStatus />
 		</div>
 		<div class="mt-1 flex items-end justify-between gap-3">
 			<h1 class="font-display text-3xl font-bold text-neutral">Meny</h1>

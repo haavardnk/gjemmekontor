@@ -1,6 +1,6 @@
 import { moduleCatalog } from '$lib/app/modules/catalog';
 
-export const knownAppShellPaths = moduleCatalog.flatMap((module) => module.appShellPaths);
+export const knownAppShellPaths = moduleCatalog.map((module) => module.primaryPath);
 
 export function relativeAppPath(pathname: string, base: string): string | undefined {
 	if (!base) {

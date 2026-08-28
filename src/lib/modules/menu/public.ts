@@ -11,15 +11,10 @@ export type {
 } from './domain/menu';
 export {
 	consumeDishCategory,
-	currentDishes,
 	dishInCategory,
 	matchingArchives,
 	mealCategories,
-	menuActiveKey,
-	menuActiveRows,
 	menuActiveSchema,
-	menuArchiveKey,
-	menuArchives,
 	menuArchiveSchema,
 	moveDishCategory,
 	orderedDishesInCategory,

@@ -95,7 +95,7 @@
 			page.data.tripTimezone ?? 'Europe/Oslo'
 		);
 		void warmAppShell(
-			enabledModules.flatMap((module) => module.appShellPaths),
+			enabledModules.map((module) => module.primaryPath),
 			page.data.tripId
 		);
 		return (): void => {

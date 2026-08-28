@@ -33,7 +33,6 @@ function dish(
 ): CurrentDish {
 	return {
 		archive: {
-			key: `menu:archive:${id}`,
 			version: 1,
 			id,
 			name,
@@ -46,7 +45,6 @@ function dish(
 			tombstone: false
 		},
 		active: {
-			key: `menu:active:${id}`,
 			version: 1,
 			archiveId: id,
 			cycleId: id.replace(/^1/, '2'),

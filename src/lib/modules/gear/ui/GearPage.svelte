@@ -24,11 +24,11 @@
 	import {
 		filterGearItems,
 		type GearAvailability,
+		type GearCategory,
 		type GearItemSort,
 		type GearItemView,
 		type GearPersonView,
 		gearProgress,
-		type KeyedGearCategory,
 		repositionGearCategory,
 		sortGearItems
 	} from '$lib/modules/gear/domain/gear';
@@ -37,8 +37,7 @@
 		people,
 		categories,
 		items
-	}: { people: GearPersonView[]; categories: KeyedGearCategory[]; items: GearItemView[] } =
-		$props();
+	}: { people: GearPersonView[]; categories: GearCategory[]; items: GearItemView[] } = $props();
 
 	let mode = $state<'plan' | 'pack' | 'archive'>('plan');
 	let query = $state('');
@@ -57,7 +56,7 @@
 	let dragTargetCategoryId = $state<string>();
 
 	let categoryDialog: HTMLDialogElement;
-	let editingCategory = $state<KeyedGearCategory>();
+	let editingCategory = $state<GearCategory>();
 	let categoryName = $state('');
 
 	let itemDialog: HTMLDialogElement;
@@ -97,7 +96,7 @@
 					ownerNames
 				})
 	);
-	const progress = $derived(gearProgress(plannedItems, {}));
+	const progress = $derived(gearProgress(plannedItems));
 	const activeFilterCount = $derived(
 		mode === 'archive'
 			? Number(Boolean(archiveOwnerFilter)) +
@@ -133,14 +132,13 @@
 			: categories
 	);
 	const sortedArchiveItems = $derived(
-		sortGearItems(activeItems, archiveSort, {}, ownerNames, categoryNames)
+		sortGearItems(activeItems, archiveSort, ownerNames, categoryNames)
 	);
 
 	function itemsForCategory(categoryId: string): GearItemView[] {
 		return sortGearItems(
 			activeItems.filter((item) => item.categoryId === categoryId),
 			sort,
-			{},
 			ownerNames,
 			categoryNames
 		);
@@ -160,7 +158,7 @@
 		await invalidateAll();
 	}
 
-	function openCategory(category?: KeyedGearCategory): void {
+	function openCategory(category?: GearCategory): void {
 		editingCategory = category;
 		categoryName = category?.name ?? '';
 		errorMessage = '';
@@ -258,7 +256,7 @@
 		await setPlanned(item, false);
 	}
 
-	async function deleteCategory(category: KeyedGearCategory): Promise<void> {
+	async function deleteCategory(category: GearCategory): Promise<void> {
 		const categoryItems = items.filter((item) => item.categoryId === category.id);
 		if (categoryItems.length) {
 			window.alert(
@@ -319,7 +317,7 @@
 		});
 	}
 
-	async function moveCategory(category: KeyedGearCategory, offset: -1 | 1): Promise<void> {
+	async function moveCategory(category: GearCategory, offset: -1 | 1): Promise<void> {
 		const currentIndex = categories.findIndex((candidate) => candidate.id === category.id);
 		const targetIndex = currentIndex + offset;
 		if (targetIndex < 0 || targetIndex >= categories.length) return;
@@ -684,8 +682,7 @@
 					(candidate) => candidate.id === category.id
 				)}
 				{@const categoryProgress = gearProgress(
-					plannedItems.filter((item) => item.categoryId === category.id),
-					{}
+					plannedItems.filter((item) => item.categoryId === category.id)
 				)}
 				<section
 					class="overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-sm"

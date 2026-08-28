@@ -2,10 +2,8 @@ import type Database from 'better-sqlite3';
 import { z } from 'zod';
 
 import {
-	type KeyedMenuActive,
-	menuActiveKey,
+	type MenuActive,
 	menuActiveSchema,
-	menuArchiveKey,
 	menuArchiveSchema,
 	type RecipeArchiveView,
 	serializeMenuActive,
@@ -38,7 +36,6 @@ function recipeView(row: RecipeRow): RecipeArchiveView {
 	const parsed = menuArchiveSchema.parse(JSON.parse(row.value));
 	if (parsed.id !== row.recipe_id) throw new Error('RECIPE_ID_MISMATCH');
 	return {
-		key: menuArchiveKey(parsed.id),
 		...parsed,
 		recipeVersionId: row.version_id,
 		recipeVersion: row.version
@@ -80,7 +77,7 @@ export function listTripMenu(db: Database.Database, tripId: string): TripMenuDis
 		if (parsed.archiveId !== row.recipe_id || parsed.tombstone) {
 			throw new Error('TRIP_MENU_ENTRY_MISMATCH');
 		}
-		const active: KeyedMenuActive = { key: menuActiveKey(parsed.archiveId), ...parsed };
+		const active: MenuActive = parsed;
 		return {
 			entryId: row.entry_id,
 			archive,

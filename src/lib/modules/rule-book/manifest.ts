@@ -4,13 +4,6 @@ export const ruleBookManifest = {
 	id: 'rule-book',
 	label: 'Regelbok',
 	icon: 'scroll-text',
-	order: 70,
-	mobileNavigation: 'more',
 	primaryPath: '/rule-book',
-	pagePrefixes: ['/rule-book'],
-	apiPrefixes: ['/api/rule-book'],
-	cacheableApiPrefixes: [],
-	appShellPaths: ['/rule-book'],
-	statePrefixes: ['rule-book:'],
-	requires: []
+	statePrefixes: ['rule-book:']
 } as const satisfies AppModuleManifest<'rule-book'>;

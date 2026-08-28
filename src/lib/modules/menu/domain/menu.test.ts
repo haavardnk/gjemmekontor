@@ -1,21 +1,14 @@
 import { describe, expect, test } from 'vitest';
 
-import type { JsonValue } from '$lib/client/database';
-
 import {
 	consumeDishCategory,
-	currentDishes,
+	type CurrentDish,
 	matchingArchives,
 	type MenuActive,
-	menuActiveKey,
 	type MenuArchive,
-	menuArchiveKey,
-	menuArchives,
 	moveDishCategory,
 	orderedDishesInCategory,
-	reactivateDish,
-	serializeMenuActive,
-	serializeMenuArchive
+	reactivateDish
 } from './menu';
 
 const archiveId = '10000000-0000-4000-8000-000000000001';
@@ -51,30 +44,14 @@ function active(overrides: Partial<MenuActive> = {}): MenuActive {
 	};
 }
 
+function dish(id: string, name: string, menuActive: MenuActive): CurrentDish {
+	return {
+		archive: archive({ id, name }),
+		active: menuActive
+	};
+}
+
 describe('Menu domain', (): void => {
-	test('joins only valid linked archive and active rows', (): void => {
-		const values: Record<string, JsonValue> = {
-			[menuArchiveKey(archiveId)]: serializeMenuArchive(archive()),
-			[menuActiveKey(archiveId)]: serializeMenuActive(active()),
-			'menu:archive:bad': { name: 'invalid' }
-		};
-
-		expect(currentDishes(values)).toHaveLength(1);
-		expect(currentDishes(values)[0]?.archive.name).toBe('Åpen lasagne');
-		expect(() => serializeMenuArchive(currentDishes(values)[0]!.archive)).not.toThrow();
-		expect(() => serializeMenuActive(currentDishes(values)[0]!.active)).not.toThrow();
-	});
-
-	test('sorts archives using Norwegian ordering with stable fallback', (): void => {
-		const secondId = '10000000-0000-4000-8000-000000000002';
-		const values = {
-			[menuArchiveKey(archiveId)]: serializeMenuArchive(archive()),
-			[menuArchiveKey(secondId)]: serializeMenuArchive(archive({ id: secondId, name: 'Eplekake' }))
-		};
-
-		expect(menuArchives(values).map((entry) => entry.name)).toEqual(['Eplekake', 'Åpen lasagne']);
-	});
-
 	test('moves and consumes one category without duplicating a dish', (): void => {
 		const moved = moveDishCategory(active(), 'lunch', 'breakfast');
 		const remaining = consumeDishCategory(moved, 'breakfast');
@@ -87,25 +64,20 @@ describe('Menu domain', (): void => {
 
 	test('orders dishes independently within each meal category', (): void => {
 		const secondId = '10000000-0000-4000-8000-000000000002';
-		const values: Record<string, JsonValue> = {
-			[menuArchiveKey(archiveId)]: serializeMenuArchive(archive({ name: 'First dish' })),
-			[menuActiveKey(archiveId)]: serializeMenuActive(
-				active({ categoryOrder: { lunch: 0, dinner: 1 } })
-			),
-			[menuArchiveKey(secondId)]: serializeMenuArchive(
-				archive({ id: secondId, name: 'Second dish' })
-			),
-			[menuActiveKey(secondId)]: serializeMenuActive(
+		const dishes = [
+			dish(archiveId, 'First dish', active({ categoryOrder: { lunch: 0, dinner: 1 } })),
+			dish(
+				secondId,
+				'Second dish',
 				active({ archiveId: secondId, categoryOrder: { lunch: 1, dinner: 0 } })
 			)
-		};
-		const dishes = currentDishes(values);
+		];
 
-		expect(orderedDishesInCategory(dishes, 'lunch').map((dish) => dish.archive.name)).toEqual([
+		expect(orderedDishesInCategory(dishes, 'lunch').map(({ archive }) => archive.name)).toEqual([
 			'First dish',
 			'Second dish'
 		]);
-		expect(orderedDishesInCategory(dishes, 'dinner').map((dish) => dish.archive.name)).toEqual([
+		expect(orderedDishesInCategory(dishes, 'dinner').map(({ archive }) => archive.name)).toEqual([
 			'Second dish',
 			'First dish'
 		]);

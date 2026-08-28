@@ -4,13 +4,7 @@ export const shotsManifest = {
 	id: 'shots',
 	label: 'Opptak',
 	icon: 'video',
-	order: 20,
-	mobileNavigation: 'quick',
 	primaryPath: '/shots',
-	pagePrefixes: ['/shots'],
-	apiPrefixes: [],
-	cacheableApiPrefixes: [],
-	appShellPaths: ['/shots'],
-	statePrefixes: ['shots:', 'digest:'],
-	requires: []
+	api: false,
+	statePrefixes: ['shots:', 'digest:']
 } as const satisfies AppModuleManifest<'shots'>;

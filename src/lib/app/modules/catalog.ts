@@ -30,28 +30,39 @@ export function pathMatchesPrefix(pathname: string, prefix: string): boolean {
 	return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
+function hasApi(module: AppModuleManifest): boolean {
+	return module.api !== false;
+}
+
+function statePrefixes(module: AppModuleManifest): readonly string[] {
+	return module.statePrefixes ?? [];
+}
+
+function cacheableApiPrefixes(module: AppModuleManifest): readonly string[] {
+	return module.cacheableApiPrefixes ?? [];
+}
+
 export function moduleForPagePath(pathname: string): (typeof moduleCatalog)[number] | undefined {
-	return moduleCatalog.find((module) =>
-		module.pagePrefixes.some((prefix) => pathMatchesPrefix(pathname, prefix))
-	);
+	return moduleCatalog.find((module) => pathMatchesPrefix(pathname, module.primaryPath));
 }
 
 export function moduleForApiPath(pathname: string): (typeof moduleCatalog)[number] | undefined {
-	return moduleCatalog.find((module) =>
-		module.apiPrefixes.some((prefix) => pathMatchesPrefix(pathname, prefix))
+	return moduleCatalog.find(
+		(module) => hasApi(module) && pathMatchesPrefix(pathname, `/api/${module.id}`)
 	);
 }
 
 export function moduleForStateKey(key: string): (typeof moduleCatalog)[number] | undefined {
 	return moduleCatalog.find((module) =>
-		module.statePrefixes.some((prefix) => key.startsWith(prefix))
+		statePrefixes(module).some((prefix) => key.startsWith(prefix))
 	);
 }
 
 export function isCacheableModuleApi(pathname: string): boolean {
 	const module = moduleForApiPath(pathname);
 	return Boolean(
-		module?.cacheableApiPrefixes?.some((prefix) =>
+		module &&
+		cacheableApiPrefixes(module).some((prefix) =>
 			prefix.endsWith('/') ? pathname.startsWith(prefix) : pathMatchesPrefix(pathname, prefix)
 		)
 	);
@@ -69,35 +80,13 @@ export function validateModuleCatalog(catalog: readonly AppModuleManifest[] = mo
 		catalog.map((module) => module.id)
 	);
 	uniqueValues(
-		'navigation order',
-		catalog.map((module) => String(module.order))
-	);
-	uniqueValues(
 		'primary path',
 		catalog.map((module) => module.primaryPath)
 	);
 	uniqueValues(
-		'page prefix',
-		catalog.flatMap((module) => module.pagePrefixes)
-	);
-	uniqueValues(
-		'API prefix',
-		catalog.flatMap((module) => module.apiPrefixes)
-	);
-	uniqueValues(
-		'app shell path',
-		catalog.flatMap((module) => module.appShellPaths)
-	);
-	uniqueValues(
 		'state prefix',
-		catalog.flatMap((module) => module.statePrefixes)
+		catalog.flatMap((module) => module.statePrefixes ?? [])
 	);
-
-	for (const module of catalog) {
-		if (!module.pagePrefixes.includes(module.primaryPath)) {
-			throw new Error(`Module ${module.id} does not own its primary path`);
-		}
-	}
 }
 
 validateModuleCatalog();

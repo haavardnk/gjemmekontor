@@ -25,7 +25,7 @@ describe('module activation', (): void => {
 	});
 
 	test('returns only enabled manifests and shell paths', (): void => {
-		expect(enabledModuleManifests(['logbook']).flatMap((module) => module.appShellPaths)).toEqual([
+		expect(enabledModuleManifests(['logbook']).map((module) => module.primaryPath)).toEqual([
 			'/logbook'
 		]);
 	});
