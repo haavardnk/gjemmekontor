@@ -45,6 +45,7 @@
 	let ownerFilter = $state('');
 	let availabilityFilter = $state<'' | GearAvailability>('');
 	let sort = $state<GearItemSort>('name');
+	let grouping = $state<'category' | 'person'>('category');
 	let archiveQuery = $state('');
 	let archiveOwnerFilter = $state('');
 	let archiveAvailabilityFilter = $state<'' | GearAvailability>('');
@@ -105,7 +106,10 @@
 					Number(Boolean(archiveCategoryFilter)) +
 					Number(Boolean(archivePlanFilter)) +
 					Number(archiveSort !== 'name')
-			: Number(Boolean(ownerFilter)) + Number(Boolean(availabilityFilter)) + Number(sort !== 'name')
+			: Number(Boolean(ownerFilter)) +
+					Number(Boolean(availabilityFilter)) +
+					Number(sort !== 'name') +
+					Number(grouping !== 'category')
 	);
 	const selectedOwnerName = $derived(
 		mode === 'archive'
@@ -132,17 +136,52 @@
 			? categories.filter((category) => activeItems.some((item) => item.categoryId === category.id))
 			: categories
 	);
+	const itemGroups = $derived.by(() => {
+		if (grouping === 'category') {
+			return visibleCategories.map((category) => ({
+				id: `category:${category.id}`,
+				kind: 'category' as const,
+				name: category.name,
+				category,
+				items: sortedItems(activeItems.filter((item) => item.categoryId === category.id)),
+				allItems: plannedItems.filter((item) => item.categoryId === category.id)
+			}));
+		}
+
+		const groups = owners
+			.filter((owner) => activeItems.some((item) => item.ownerIds.includes(owner.id)))
+			.map((owner) => ({
+				id: `person:${owner.id}`,
+				kind: 'person' as const,
+				name: owner.name,
+				ownerId: owner.id,
+				items: sortedItems(activeItems.filter((item) => item.ownerIds.includes(owner.id))),
+				allItems: plannedItems.filter((item) => item.ownerIds.includes(owner.id))
+			}));
+		const currentOwnerIds = new Set(owners.map((owner) => owner.id));
+		const unassignedItems = activeItems.filter(
+			(item) => !item.ownerIds.some((ownerId) => currentOwnerIds.has(ownerId))
+		);
+		if (unassignedItems.length) {
+			groups.push({
+				id: 'person:unassigned',
+				kind: 'person',
+				name: 'Uten person',
+				ownerId: '',
+				items: sortedItems(unassignedItems),
+				allItems: plannedItems.filter(
+					(item) => !item.ownerIds.some((ownerId) => currentOwnerIds.has(ownerId))
+				)
+			});
+		}
+		return groups;
+	});
 	const sortedArchiveItems = $derived(
 		sortGearItems(activeItems, archiveSort, ownerNames, categoryNames)
 	);
 
-	function itemsForCategory(categoryId: string): GearItemView[] {
-		return sortGearItems(
-			activeItems.filter((item) => item.categoryId === categoryId),
-			sort,
-			ownerNames,
-			categoryNames
-		);
+	function sortedItems(entries: readonly GearItemView[]): GearItemView[] {
+		return sortGearItems(entries, sort, ownerNames, categoryNames);
 	}
 
 	async function apiMutation(url: string, method: string, body?: unknown): Promise<void> {
@@ -187,12 +226,14 @@
 		}
 	}
 
-	function openItem(categoryId: string, item?: GearItemView): void {
+	function openItem(categoryId: string, item?: GearItemView, ownerId?: string): void {
 		editingItem = item;
 		itemCategoryId = item?.categoryId ?? categoryId;
 		itemName = item?.name ?? '';
 		itemQuantity = item?.quantity ?? 1;
-		itemOwnerIds = item?.ownerIds.filter((id) => owners.some((owner) => owner.id === id)) ?? [];
+		itemOwnerIds =
+			item?.ownerIds.filter((id) => owners.some((owner) => owner.id === id)) ??
+			(ownerId ? [ownerId] : []);
 		itemAvailability = item?.availability ?? 'available';
 		itemNotes = item?.notes ?? '';
 		itemPlanned = item?.selected ?? mode !== 'archive';
@@ -508,6 +549,12 @@
 						<X size={13} /></button
 					>{/if}
 			{:else}
+				{#if grouping !== 'category'}<button
+						class="badge h-7 gap-1 badge-outline"
+						type="button"
+						onclick={() => (grouping = 'category')}
+						aria-label="Grupper etter kategori">Gruppert: person <X size={13} /></button
+					>{/if}
 				{#if availabilityFilter}<button
 						class="badge h-7 gap-1 badge-outline"
 						type="button"
@@ -660,7 +707,7 @@
 				</ul>
 			</div>
 		{/if}
-	{:else if visibleCategories.length === 0}
+	{:else if itemGroups.length === 0}
 		<div
 			class="grid min-h-48 place-items-center border-y border-dashed border-base-300 text-center"
 		>
@@ -668,28 +715,28 @@
 		</div>
 	{:else}
 		<div class="space-y-4">
-			{#each visibleCategories as category (category.id)}
-				{@const categoryItems = itemsForCategory(category.id)}
-				{@const fullCategoryIndex = categories.findIndex(
-					(candidate) => candidate.id === category.id
-				)}
-				{@const categoryProgress = gearProgress(
-					plannedItems.filter((item) => item.categoryId === category.id)
-				)}
+			{#each itemGroups as group (group.id)}
+				{@const category = group.kind === 'category' ? group.category : undefined}
+				{@const fullCategoryIndex = category
+					? categories.findIndex((candidate) => candidate.id === category.id)
+					: -1}
+				{@const groupProgress = gearProgress(group.allItems)}
 				<section
 					class="overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-sm"
 					role="group"
-					aria-label={category.name}
-					class:ring-2={dragTargetCategoryId === category.id}
-					class:ring-primary={dragTargetCategoryId === category.id}
+					aria-label={group.name}
+					class:ring-2={category && dragTargetCategoryId === category.id}
+					class:ring-primary={category && dragTargetCategoryId === category.id}
 					ondragover={(event) => {
+						if (!category) return;
 						event.preventDefault();
 						dragTargetCategoryId = category.id;
 					}}
 					ondragleave={() => {
-						if (dragTargetCategoryId === category.id) dragTargetCategoryId = undefined;
+						if (category && dragTargetCategoryId === category.id) dragTargetCategoryId = undefined;
 					}}
 					ondrop={(event) => {
+						if (!category) return;
 						event.preventDefault();
 						void dropCategory(category.id);
 					}}
@@ -697,7 +744,7 @@
 					<header
 						class="flex min-h-14 items-center gap-1 border-b border-base-300 bg-base-200/55 px-2 sm:px-3"
 					>
-						{#if mode === 'plan'}
+						{#if mode === 'plan' && category}
 							<button
 								class="btn hidden btn-square cursor-grab btn-ghost btn-sm sm:inline-flex"
 								type="button"
@@ -715,18 +762,18 @@
 							>
 						{/if}
 						<div class="min-w-0 flex-1 px-1">
-							<h2 class="truncate font-bold">{category.name}</h2>
+							<h2 class="truncate font-bold">{group.name}</h2>
 							<p class="text-xs text-base-content/55">
 								{#if mode === 'pack'}
-									{categoryProgress.packed}/{categoryProgress.total} pakket
+									{groupProgress.packed}/{groupProgress.total} pakket
 								{:else}
-									{plannedItems.filter((item) => item.categoryId === category.id).length} ting
+									{group.allItems.length} ting
 								{/if}
-								{#if categoryProgress.needToBuy}
-									· {categoryProgress.needToBuy} må kjøpes{/if}
+								{#if groupProgress.needToBuy}
+									· {groupProgress.needToBuy} må kjøpes{/if}
 							</p>
 						</div>
-						{#if mode === 'plan'}
+						{#if mode === 'plan' && category}
 							<button
 								class="btn btn-square btn-ghost btn-sm"
 								type="button"
@@ -756,9 +803,9 @@
 						{/if}
 					</header>
 
-					{#if categoryItems.length}
-						<ul class="divide-y divide-base-300" aria-label={`Utstyr i ${category.name}`}>
-							{#each categoryItems as item (item.id)}
+					{#if group.items.length}
+						<ul class="divide-y divide-base-300" aria-label={`Utstyr for ${group.name}`}>
+							{#each group.items as item (item.id)}
 								<li class="flex min-h-16 items-start gap-3 px-3 py-2.5 sm:px-4">
 									{#if mode === 'pack' && item.availability === 'available'}
 										<input
@@ -783,6 +830,9 @@
 											</p>
 											{#if item.quantity > 1}<span class="badge badge-ghost badge-sm"
 													>{item.quantity} stk.</span
+												>{/if}
+											{#if group.kind === 'person'}<span class="badge badge-ghost badge-sm"
+													>{categoryNames.get(item.categoryId)}</span
 												>{/if}
 											{#if item.availability === 'need-to-buy'}<span
 													class="badge badge-sm badge-warning">Må kjøpes</span
@@ -810,7 +860,7 @@
 												<button
 													class="btn btn-ghost btn-xs"
 													type="button"
-													onclick={() => openItem(category.id, item)}>Bytt eier</button
+													onclick={() => openItem(item.categoryId, item)}>Bytt eier</button
 												>
 												<button
 													class="btn btn-ghost btn-xs"
@@ -824,7 +874,7 @@
 										<button
 											class="btn btn-square btn-ghost btn-sm"
 											type="button"
-											onclick={() => openItem(category.id, item)}
+											onclick={() => openItem(item.categoryId, item)}
 											aria-label={`Endre ${item.name}`}><Pencil size={16} /></button
 										>
 										<button
@@ -847,14 +897,21 @@
 						</ul>
 					{:else if !hasFilters}
 						<p class="px-4 py-5 text-center text-sm text-base-content/50">
-							Ingen utstyr i kategorien ennå.
+							Ingen utstyr i gruppen ennå.
 						</p>
 					{/if}
-					{#if mode === 'plan'}
+					{#if mode === 'plan' && category}
 						<button
 							class="btn m-2 min-h-11 w-[calc(100%-1rem)] border-dashed border-base-300 btn-ghost btn-sm"
 							type="button"
 							onclick={() => openItem(category.id)}><Plus size={16} /> Legg til utstyr</button
+						>
+					{:else if mode === 'plan' && group.kind === 'person' && group.ownerId}
+						<button
+							class="btn m-2 min-h-11 w-[calc(100%-1rem)] border-dashed border-base-300 btn-ghost btn-sm"
+							type="button"
+							onclick={() => openItem(categories[0]?.id ?? '', undefined, group.ownerId)}
+							><Plus size={16} /> Legg til utstyr</button
 						>
 					{/if}
 				</section>
@@ -933,6 +990,13 @@
 				</label>
 			{:else}
 				<label class="form-control block">
+					<span class="mb-2 block text-sm font-semibold">Grupper etter</span>
+					<select class="select w-full" bind:value={grouping} aria-label="Grupper utstyr">
+						<option value="category">Kategori</option>
+						<option value="person">Person</option>
+					</select>
+				</label>
+				<label class="form-control block">
 					<span class="mb-2 block text-sm font-semibold">Person</span>
 					<select class="select w-full" bind:value={ownerFilter} aria-label="Filtrer på person">
 						<option value="">Alle personer</option>
@@ -980,6 +1044,7 @@
 						ownerFilter = '';
 						availabilityFilter = '';
 						sort = 'name';
+						grouping = 'category';
 					}
 				}}
 				disabled={activeFilterCount === 0}>Nullstill</button

@@ -116,6 +116,19 @@ test('plans, filters, reorders, purchases, and packs shared gear', async ({ page
 	await filtersDialog.getByRole('button', { name: 'Nullstill' }).click();
 	await filtersDialog.getByRole('button', { name: 'Ferdig' }).click();
 
+	await page.getByRole('button', { name: 'Filter og sortering', exact: true }).click();
+	filtersDialog = page.getByRole('dialog');
+	await filtersDialog.getByRole('combobox', { name: 'Grupper utstyr' }).selectOption('person');
+	await filtersDialog.getByRole('button', { name: 'Ferdig' }).click();
+	const firstOwnerGroup = page.getByRole('group', { name: ownerName, exact: true });
+	await expect(firstOwnerGroup).toContainText(purchaseItemName);
+	await expect(firstOwnerGroup).toContainText(firstCategoryName);
+	const secondOwnerGroup = page.getByRole('group', { name: secondOwnerName, exact: true });
+	await expect(secondOwnerGroup).toContainText(availableItemName);
+	await expect(secondOwnerGroup).toContainText(secondCategoryName);
+	await expect(page.getByRole('group', { name: 'Tomine', exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Grupper etter kategori' }).click();
+
 	await page.setViewportSize({ width: 768, height: 900 });
 	await firstCategory
 		.getByRole('button', { name: `Dra kategorien ${firstCategoryName}` })
