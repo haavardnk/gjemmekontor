@@ -4,6 +4,7 @@ import { hashSync } from '@node-rs/argon2';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 
+import { env } from '$env/dynamic/private';
 import { isModuleId, moduleCatalog, type ModuleId } from '$lib/app/modules/catalog';
 import type { MapMode } from '$lib/modules/map/domain/types';
 import {
@@ -311,7 +312,7 @@ export function tripReadiness(db: Database.Database, tripId: string): TripReadin
 			module.module_id === 'map' &&
 			Array.isArray(config.enabledOverlays) &&
 			config.enabledOverlays.includes('ais') &&
-			!parseMapRuntimeConfig(process.env, '.').aisStreamApiKey
+			!parseMapRuntimeConfig(env, '.').aisStreamApiKey
 		) {
 			issues.push('AIS-overlegget trenger AISSTREAM_API_KEY.');
 		}

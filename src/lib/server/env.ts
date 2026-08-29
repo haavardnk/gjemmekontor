@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { env } from '$env/dynamic/private';
+
 const runtimeEnvironmentSchema = z.object({
 	ADMIN_PASSWORD: z.string().min(12).max(1024),
 	APP_VERSION: z
@@ -43,7 +45,7 @@ let runtimeConfig: RuntimeConfig | undefined;
 
 export function getRuntimeConfig(): RuntimeConfig {
 	if (!runtimeConfig) {
-		runtimeConfig = parseRuntimeConfig(process.env);
+		runtimeConfig = parseRuntimeConfig(env);
 	}
 
 	return runtimeConfig;

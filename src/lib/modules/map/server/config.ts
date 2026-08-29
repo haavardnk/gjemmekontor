@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 
+import { env } from '$env/dynamic/private';
 import type { MapMode } from '$lib/modules/map/domain/types';
 import { getRuntimeConfig } from '$lib/server/env';
 
@@ -96,5 +97,5 @@ export function loadTripMapConfig(db: Database.Database, tripId: string): TripMa
 }
 
 export function getMapRuntimeConfig(): MapRuntimeConfig {
-	return parseMapRuntimeConfig(process.env, getRuntimeConfig().dataDir);
+	return parseMapRuntimeConfig(env, getRuntimeConfig().dataDir);
 }

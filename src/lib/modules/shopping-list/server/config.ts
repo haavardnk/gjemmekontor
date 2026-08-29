@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { env } from '$env/dynamic/private';
+
 const bringEnvironmentSchema = z
 	.object({
 		BRING_EMAIL: z.email().optional(),
@@ -36,5 +38,5 @@ export function parseBringCredentials(
 }
 
 export function getBringCredentials(): BringCredentials | undefined {
-	return parseBringCredentials(process.env);
+	return parseBringCredentials(env);
 }
