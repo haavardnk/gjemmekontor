@@ -1,4 +1,5 @@
 import { gearManifest } from '$lib/modules/gear/manifest';
+import { itineraryManifest } from '$lib/modules/itinerary/manifest';
 import { logbookManifest } from '$lib/modules/logbook/manifest';
 import { mapManifest } from '$lib/modules/map/manifest';
 import { menuManifest } from '$lib/modules/menu/manifest';
@@ -13,6 +14,7 @@ export const moduleCatalog = [
 	shotsManifest,
 	logbookManifest,
 	shoppingListManifest,
+	itineraryManifest,
 	menuManifest,
 	gearManifest,
 	ruleBookManifest

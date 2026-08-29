@@ -15,6 +15,7 @@ TRIPADVISOR_TERRA_API_KEY=
 TRIPADVISOR_TERRA_PHOTOS_ENABLED=false
 TRIPADVISOR_CACHE_DAYS=30
 AISSTREAM_API_KEY=replace-with-an-aisstream-api-key
+FLIGHTAWARE_AEROAPI_KEY=
 BRING_EMAIL=replace-with-bring-account-email
 BRING_PASSWORD=replace-with-bring-account-password
 ORIGIN=https://app.example.com
@@ -46,6 +47,7 @@ Health endpoint: `GET /api/health`.
 | `TRIPADVISOR_TERRA_PHOTOS_ENABLED` | Enable on-demand Tripadvisor photos when the subscription supports them |
 | `TRIPADVISOR_CACHE_DAYS`           | Shared Tripadvisor cache lifetime; defaults to `30` days                |
 | `AISSTREAM_API_KEY`                | Server-side key for the live AISStream vessel layer                     |
+| `FLIGHTAWARE_AEROAPI_KEY`          | Optional server-side AeroAPI key for flight lookup in Reiseplan         |
 | `BRING_EMAIL`                      | Email for the shared Bring account                                      |
 | `BRING_PASSWORD`                   | Password for the shared Bring account                                   |
 | `ORIGIN`                           | Exact public HTTP or HTTPS origin without a trailing slash              |
@@ -53,8 +55,8 @@ Health endpoint: `GET /api/health`.
 | `HOST`                             | Listen address; image default is `0.0.0.0`                              |
 | `PORT`                             | Listen port; image default is `3000`                                    |
 
-Available module IDs are `map`, `shots`, `logbook`, `shopping-list`, `menu`, `gear`, and
-`rule-book`. Module activation, order, Google My Maps IDs, and Bring list UUIDs are stored per trip
+Available module IDs are `map`, `itinerary`, `shots`, `logbook`, `shopping-list`, `menu`, `gear`,
+and `rule-book`. Module activation, order, Google My Maps IDs, and Bring list UUIDs are stored per trip
 and managed through Trip Settings. Shared provider credentials remain in the environment.
 
 ## Maps
@@ -75,7 +77,7 @@ Only redistribute archives permitted by their data providers. Back up externally
 
 ### Google POI enrichment credentials
 
-POI enrichment uses two Google keys so browser and server traffic can have different application restrictions. Create or select a Google Cloud project with billing enabled, then enable **Places API (New)** and **Maps JavaScript API**.
+POI enrichment uses two Google keys so browser and server traffic can have different application restrictions. Create or select a Google Cloud project with billing enabled, then enable **Places API**, **Places API (New)**, and **Maps JavaScript API**.
 
 Create `gjemmekontor-places-server`:
 
@@ -88,7 +90,7 @@ Create `gjemmekontor-places-ui`:
 
 1. Create a second API key and select the **Websites** application restriction.
 2. Add the exact `ORIGIN`, both bare and with a path wildcard; for example `https://app.example.com` and `https://app.example.com/*`.
-3. Restrict the key to **Maps JavaScript API** and **Places API (New)**. The custom Google card calls `Places.GetPlace`; a key restricted to Places UI Kit returns `PERMISSION_DENIED`.
+3. Restrict the key to **Maps JavaScript API**, **Places API**, and **Places API (New)**. The custom Google card and itinerary autocomplete use the new Place APIs.
 4. Set it as `GOOGLE_PLACES_UI_KIT_API_KEY`. This key is visible to authenticated browsers, so both restrictions are required.
 
 Use a separate development browser key for `http://localhost:5173/*` and `http://127.0.0.1:4173/*`; do not allow localhost on the production key. Start with low quotas suitable for four users, such as 10 server searches per minute and 100 UI Kit queries per day where those controls are available. Add project billing alerts at 50%, 90%, and 100%; billing alerts are notifications, while API quotas are the request guardrail.
@@ -115,6 +117,16 @@ after the trip. Each trip stores its own verified connection. The app keeps the 
 snapshot in that trip's device database for read-only use without a connection.
 
 The integration uses the unofficial `bring-shopping` wrapper. Bring does not publish this API, so upstream changes may interrupt Handleliste without affecting the other modules.
+
+## Reiseplan flight lookup
+
+Set `FLIGHTAWARE_AEROAPI_KEY` to enable the optional **Hent flydata** action for flight legs. The
+key stays on the server. Reiseplan remains fully usable with manual flight details when the key is
+missing or AeroAPI is unavailable. Lookups are user-initiated and limited to one result page so
+provider usage remains predictable.
+
+Existing trips receive newly bundled modules in the disabled state during startup. Enable Reiseplan
+and place it in the desired navigation position through Trip Settings.
 
 ## Upgrade
 

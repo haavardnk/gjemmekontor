@@ -827,7 +827,8 @@ test('restores map position and zoom after app navigation', async ({ page }) => 
 		const value = sessionStorage.getItem(key);
 		return value ? (JSON.parse(value) as { zoom: number }).zoom : 0;
 	}, mapCameraStorageKey);
-	await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.wheel(0, -500);
 	await expect
 		.poll(() =>
 			page.evaluate((key) => {

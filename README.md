@@ -7,6 +7,7 @@ A shared, offline-first app for planning and using multiple trips.
 ## Features
 
 - Read-only trip map sourced from Google My Maps
+- Shared vertical travel timeline with multi-leg journeys, transfers, stays, rentals, and bookings
 - Normal, nautical, and satellite map views
 - Downloadable PMTiles packages for offline maps
 - Daily video shot list and media digest
@@ -15,6 +16,7 @@ A shared, offline-first app for planning and using multiple trips.
 - Shared meal planning with recipe import, cooking mode, and Bring shopping list integration
 - Shared gear archive, planning, and packing with categories, owners, purchasing status, and progress
 - Shared trip rule book with a randomized daily participant rotation
+- Optional server-side FlightAware lookup for flight times, airports, terminals, gates, and status
 - Offline editing and synchronization between devices
 - Installable progressive web app
 

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { createApplicationDatabase } from '$lib/app/server/database';
+import { createApplicationDatabase } from '$lib/app/server/application-database';
 import { createTrip } from '$lib/app/server/trip-settings';
 import {
 	activityModuleIds,
@@ -45,8 +45,26 @@ export default function globalSetup(): void {
 				memberIds,
 				shots: { mode: 'blank' },
 				modules: {
-					order: ['map', 'shots', 'logbook', 'shopping-list', 'menu', 'gear', 'rule-book'],
-					enabled: ['map', 'shots', 'logbook', 'shopping-list', 'menu', 'gear', 'rule-book'],
+					order: [
+						'map',
+						'shots',
+						'logbook',
+						'shopping-list',
+						'itinerary',
+						'menu',
+						'gear',
+						'rule-book'
+					],
+					enabled: [
+						'map',
+						'itinerary',
+						'shots',
+						'logbook',
+						'shopping-list',
+						'menu',
+						'gear',
+						'rule-book'
+					],
 					mapGoogleMyMapsId: 'test-map',
 					mapDefaultMode: 'normal',
 					mapEnabledOverlays: ['ais', 'depth-contours'],

@@ -169,6 +169,11 @@ export const actions = {
 				shoppingListVerifiedAt:
 					typeof currentShopping.verifiedAt === 'string' ? currentShopping.verifiedAt : ''
 			});
+			if (locals.trip?.id === params.tripId) {
+				locals.trip.enabledModuleIds = settings(locals, params.tripId)
+					.modules.filter((module) => module.enabled)
+					.map((module) => module.id);
+			}
 			return { successMessage: 'Modulvalg og rekkefølge er lagret.' };
 		} catch {
 			return actionError('Kunne ikke lagre modulinnstillingene.');

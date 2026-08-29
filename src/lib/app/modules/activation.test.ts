@@ -13,6 +13,7 @@ describe('module activation', (): void => {
 			'shots',
 			'logbook',
 			'shopping-list',
+			'itinerary',
 			'menu',
 			'gear',
 			'rule-book'
