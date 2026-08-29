@@ -49,6 +49,29 @@ async function swipe(
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+test('shows an edited dish title in the active menu immediately', async ({ page }) => {
+	const suffix = crypto.randomUUID().slice(0, 8);
+	const originalName = `Fiskegryte ${suffix}`;
+	const updatedName = `Kremet fiskegryte ${suffix}`;
+
+	await login(page);
+	await openMenu(page);
+	await page.getByRole('button', { name: 'Ny rett' }).click();
+	let form = dishEditor(page);
+	await form.getByRole('textbox', { name: 'Navn' }).fill(originalName);
+	await form.getByRole('button', { name: 'Lagre' }).click();
+	await page.getByRole('tab', { name: 'Middag', exact: true }).click();
+
+	const originalCard = page.locator('article:visible', { hasText: originalName }).first();
+	await originalCard.getByRole('button', { name: `Rediger ${originalName}` }).click();
+	form = dishEditor(page);
+	await form.getByRole('textbox', { name: 'Navn' }).fill(updatedName);
+	await form.getByRole('button', { name: 'Lagre' }).click();
+
+	await expect(page.locator('article:visible', { hasText: updatedName }).first()).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Ny versjon' })).toHaveCount(0);
+});
+
 test('creates and reads an offline recipe with compact responsive controls', async ({
 	context,
 	page

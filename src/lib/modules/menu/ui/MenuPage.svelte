@@ -165,6 +165,7 @@
 			await apiMutation('/api/menu/entries', 'POST', { active });
 		} else if (context.active && context.entryId) {
 			await apiMutation(`/api/menu/entries/${context.entryId}`, 'PATCH', { active });
+			await apiMutation(`/api/menu/entries/${context.entryId}`, 'PATCH', { useLatest: true });
 		}
 		editing = undefined;
 		if (context.activateOnSave) view = 'menu';
