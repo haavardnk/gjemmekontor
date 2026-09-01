@@ -1,22 +1,28 @@
 <script lang="ts">
 	import { CloudCheck, CloudOff, LoaderCircle, TriangleAlert } from '@lucide/svelte';
 
+	import { offlineApi } from '$lib/client/offline-api.svelte';
 	import { sharedState } from '$lib/client/state.svelte';
 
+	let { moduleId }: { moduleId?: string } = $props();
+	const status = $derived(moduleId ? offlineApi.status(moduleId) : sharedState.status);
+
 	const label = $derived(
-		sharedState.status.phase === 'synced'
+		status.phase === 'synced'
 			? 'Synkronisert'
-			: sharedState.status.phase === 'saving'
-				? sharedState.status.pending > 0
-					? `Lagrer ${sharedState.status.pending} endringer …`
+			: status.phase === 'saving'
+				? status.pending > 0
+					? `Lagrer ${status.pending} endringer …`
 					: 'Lagrer …'
-				: sharedState.status.phase === 'offline'
-					? sharedState.status.pending > 0
-						? `Uten nett · ${sharedState.status.pending} venter`
+				: status.phase === 'offline'
+					? status.pending > 0
+						? `Uten nett · ${status.pending} venter`
 						: 'Uten nett'
-					: sharedState.status.phase === 'error'
-						? 'Kunne ikke synkronisere'
-						: 'Kobler til …'
+					: status.phase === 'conflict'
+						? 'Endring krever gjennomgang'
+						: status.phase === 'error'
+							? 'Kunne ikke synkronisere'
+							: 'Kobler til …'
 	);
 </script>
 
@@ -24,11 +30,11 @@
 	class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/60"
 	role="status"
 >
-	{#if sharedState.status.phase === 'synced'}
+	{#if status.phase === 'synced'}
 		<CloudCheck size={15} />
-	{:else if sharedState.status.phase === 'offline'}
+	{:else if status.phase === 'offline'}
 		<CloudOff size={15} />
-	{:else if sharedState.status.phase === 'error'}
+	{:else if status.phase === 'error' || status.phase === 'conflict'}
 		<TriangleAlert size={15} />
 	{:else}
 		<LoaderCircle class="animate-spin" size={15} />

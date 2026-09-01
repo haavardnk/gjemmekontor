@@ -51,6 +51,31 @@ function denied(pathname: string, location: string): Response {
 		: new Response(null, { status: 303, headers: { location } });
 }
 
+function apiCommandReceipt(
+	db: ReturnType<typeof getDatabase>,
+	tripId: string,
+	mutationId: string
+): boolean {
+	return Boolean(
+		db
+			.prepare('SELECT 1 FROM trip_mutation_receipts WHERE trip_id = ? AND mutation_id = ?')
+			.get(tripId, mutationId)
+	);
+}
+
+function rememberApiCommand(
+	db: ReturnType<typeof getDatabase>,
+	tripId: string,
+	mutationId: string
+): void {
+	const row = db.prepare('SELECT revision FROM trip_revisions WHERE trip_id = ?').get(tripId) as
+		{ revision: number } | undefined;
+	db.prepare(
+		`INSERT OR IGNORE INTO trip_mutation_receipts (trip_id, mutation_id, revision)
+		 VALUES (?, ?, ?)`
+	).run(tripId, mutationId, Math.max(1, row?.revision ?? 0));
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
 	const config = getRuntimeConfig();
@@ -126,7 +151,27 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return response;
 	}
 
+	const idempotencyKey = event.request.headers.get('x-idempotency-key')?.trim() ?? '';
+	const idempotentModuleCommand =
+		!['GET', 'HEAD', 'OPTIONS'].includes(event.request.method) &&
+		Boolean(moduleForApiPath(pathname)) &&
+		Boolean(event.locals.trip) &&
+		idempotencyKey.length > 0 &&
+		idempotencyKey.length <= 128;
+	if (
+		idempotentModuleCommand &&
+		event.locals.trip &&
+		apiCommandReceipt(db, event.locals.trip.id, idempotencyKey)
+	) {
+		const response = new Response(null, { status: 204 });
+		applySecurityHeaders(response, pathname);
+		return response;
+	}
+
 	const response = await resolve(event);
+	if (idempotentModuleCommand && event.locals.trip && response.ok) {
+		rememberApiCommand(db, event.locals.trip.id, idempotencyKey);
+	}
 	applySecurityHeaders(response, pathname);
 	return response;
 };

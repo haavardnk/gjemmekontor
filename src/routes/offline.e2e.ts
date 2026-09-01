@@ -38,7 +38,7 @@ test('loads the authenticated app shell without a network connection', async ({
 	await expect(page.getByRole('heading', { name: 'Dagens scener' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Kart' })).toBeVisible();
 	await expect(page.getByRole('status')).toHaveText(
-		/Frakoblet|Synkronisert|Kunne ikke synkronisere/
+		/Frakoblet|Uten nett|Synkronisert|Kunne ikke synkronisere/
 	);
 	const firstScene = page.locator('main details').first();
 	await firstScene.locator('summary').click();
@@ -46,4 +46,9 @@ test('loads the authenticated app shell without a network connection', async ({
 	await expect(firstShot).toBeEnabled();
 	await firstShot.click();
 	await expect(firstShot).toHaveAttribute('aria-pressed', 'true');
+
+	await page.getByRole('link', { name: 'Loggbok' }).click();
+	await expect(page.getByRole('heading', { name: 'Loggbok' })).toBeVisible();
+	await page.getByRole('link', { name: 'Utstyr' }).click();
+	await expect(page.getByRole('heading', { name: 'Utstyr', exact: true })).toBeVisible();
 });

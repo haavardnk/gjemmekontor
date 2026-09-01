@@ -62,10 +62,12 @@ describe('client state', (): void => {
 		const db = await openClientDatabase(databaseName());
 
 		expect(Array.from(db.objectStoreNames)).toEqual([
+			'apiCommandConflicts',
 			'meta',
 			'moduleBlobs',
 			'moduleData',
 			'mutations',
+			'pendingApiCommands',
 			'pendingUploads',
 			'state'
 		]);

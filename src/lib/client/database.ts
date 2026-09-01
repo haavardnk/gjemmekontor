@@ -52,12 +52,30 @@ export type PendingUpload = {
 	expectedResponse: JsonValue;
 };
 
+export type PendingApiCommand = {
+	id: string;
+	moduleId: string;
+	path: string;
+	method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+	body?: JsonValue;
+	createdAt: number;
+	sequence: number;
+};
+
+export type ApiCommandConflict = PendingApiCommand & {
+	status: number;
+	code: string;
+	failedAt: number;
+};
+
 export interface GjemmekontorDatabase extends DBSchema {
 	state: { key: string; value: ClientStateEntry };
 	mutations: { key: string; value: PendingMutation };
 	moduleData: { key: string; value: ModuleDataRecord };
 	moduleBlobs: { key: string; value: ModuleBlobRecord };
 	pendingUploads: { key: string; value: PendingUpload };
+	pendingApiCommands: { key: string; value: PendingApiCommand };
+	apiCommandConflicts: { key: string; value: ApiCommandConflict };
 	meta: { key: string; value: MetaRecord };
 }
 
@@ -69,14 +87,20 @@ export function tripClientDatabaseName(tripId: string): string {
 }
 
 export function openClientDatabase(name: string): Promise<IDBPDatabase<GjemmekontorDatabase>> {
-	return openDB<GjemmekontorDatabase>(name, 1, {
-		upgrade(db): void {
-			db.createObjectStore('state', { keyPath: 'key' });
-			db.createObjectStore('mutations', { keyPath: 'mutationId' });
-			db.createObjectStore('moduleData', { keyPath: 'key' });
-			db.createObjectStore('moduleBlobs', { keyPath: 'key' });
-			db.createObjectStore('pendingUploads', { keyPath: 'id' });
-			db.createObjectStore('meta', { keyPath: 'key' });
+	return openDB<GjemmekontorDatabase>(name, 2, {
+		upgrade(db, oldVersion): void {
+			if (oldVersion < 1) {
+				db.createObjectStore('state', { keyPath: 'key' });
+				db.createObjectStore('mutations', { keyPath: 'mutationId' });
+				db.createObjectStore('moduleData', { keyPath: 'key' });
+				db.createObjectStore('moduleBlobs', { keyPath: 'key' });
+				db.createObjectStore('pendingUploads', { keyPath: 'id' });
+				db.createObjectStore('meta', { keyPath: 'key' });
+			}
+			if (oldVersion < 2) {
+				db.createObjectStore('pendingApiCommands', { keyPath: 'id' });
+				db.createObjectStore('apiCommandConflicts', { keyPath: 'id' });
+			}
 		}
 	});
 }

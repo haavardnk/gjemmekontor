@@ -78,13 +78,30 @@ async function warmPages(paths: readonly string[], tripId: string): Promise<void
 	);
 	await Promise.all(
 		enabledAppShellPaths.map(async (path): Promise<void> => {
-			const request = new Request(`${base}${path}`, {
-				headers: { accept: 'text/html' },
-				credentials: 'same-origin'
-			});
-			const response = await fetch(request);
-			await cachePage(request, response, tripId);
+			try {
+				const request = new Request(`${base}${path}`, {
+					headers: { accept: 'text/html' },
+					credentials: 'same-origin'
+				});
+				const response = await fetch(request);
+				await cachePage(request, response, tripId);
+			} catch {
+				// Preserve an existing cached page when refreshing while connectivity is unavailable.
+			}
 		})
+	);
+}
+
+async function appShellReady(paths: readonly string[], tripId: string): Promise<boolean> {
+	const cache = await caches.open(pageCacheName);
+	const enabled = paths.filter((path) => knownAppShellPaths.includes(path));
+	return (
+		enabled.length > 0 &&
+		(
+			await Promise.all(
+				enabled.map((path) => cache.match(tripPageRequest(`${base}${path}`, tripId)))
+			)
+		).every(Boolean)
 	);
 }
 
@@ -121,7 +138,16 @@ worker.addEventListener('message', (event): void => {
 			? event.data.paths.filter((path: unknown): path is string => typeof path === 'string')
 			: [];
 		const tripId = typeof event.data.tripId === 'string' ? event.data.tripId.trim() : '';
-		if (tripId) event.waitUntil(warmPages(paths, tripId));
+		const port = event.ports[0];
+		if (tripId) {
+			event.waitUntil(
+				warmPages(paths, tripId)
+					.then(() => appShellReady(paths, tripId))
+					.then((ready) => port?.postMessage({ ready }))
+			);
+		} else {
+			port?.postMessage({ ready: false });
+		}
 	}
 });
 

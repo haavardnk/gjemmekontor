@@ -4,6 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+	build: {
+		// MapLibre is an intentionally lazy map-route chunk; keep warnings for anything above its known size.
+		chunkSizeWarningLimit: 1000
+	},
 	optimizeDeps: {
 		exclude: ['maplibre-gl']
 	},

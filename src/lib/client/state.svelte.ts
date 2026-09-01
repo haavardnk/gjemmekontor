@@ -13,6 +13,7 @@ import {
 	type PendingUpload,
 	tripClientDatabaseName
 } from './database';
+import { startSyncTriggers } from './sync-triggers';
 
 const syncResponseSchema = z.object({
 	revision: z.number().int().nonnegative(),
@@ -67,7 +68,7 @@ export class SharedState {
 	private initializePromise: Promise<void> | undefined;
 	private syncPromise: Promise<void> | undefined;
 	private syncRequested = false;
-	private timer: ReturnType<typeof setInterval> | undefined;
+	private stopSyncTriggers: (() => void) | undefined;
 	private started = false;
 	private closing = false;
 	private enabledModuleIds: Set<string> | undefined;
@@ -375,11 +376,14 @@ export class SharedState {
 				phase: remaining.length > 0 ? 'saving' : 'synced',
 				pending: remaining.length
 			};
-		} catch {
+		} catch (error) {
 			if (this.closing) {
 				return;
 			}
-			this.status = { phase: 'error', pending: await db.count('mutations') };
+			this.status = {
+				phase: !this.isOnline() || error instanceof TypeError ? 'offline' : 'error',
+				pending: await db.count('mutations')
+			};
 		}
 	}
 
@@ -396,14 +400,7 @@ export class SharedState {
 		this.enabledModuleIds = enabledModuleIds ? new SvelteSet(enabledModuleIds) : undefined;
 		this.started = true;
 		await this.initialize();
-		if (typeof window !== 'undefined') {
-			window.addEventListener('online', this.requestSync);
-			window.addEventListener('focus', this.requestSync);
-		}
-		if (typeof document !== 'undefined') {
-			document.addEventListener('visibilitychange', this.requestSync);
-		}
-		this.timer = setInterval(this.requestSync, 15_000);
+		this.stopSyncTriggers = startSyncTriggers(this.requestSync);
 		await this.sync();
 	}
 
@@ -434,17 +431,8 @@ export class SharedState {
 			return;
 		}
 		this.started = false;
-		if (typeof window !== 'undefined') {
-			window.removeEventListener('online', this.requestSync);
-			window.removeEventListener('focus', this.requestSync);
-		}
-		if (typeof document !== 'undefined') {
-			document.removeEventListener('visibilitychange', this.requestSync);
-		}
-		if (this.timer) {
-			clearInterval(this.timer);
-			this.timer = undefined;
-		}
+		this.stopSyncTriggers?.();
+		this.stopSyncTriggers = undefined;
 	}
 
 	async close(): Promise<void> {

@@ -10,7 +10,7 @@ Copy `docker-compose.example.yml` and create a sibling `.env`:
 ADMIN_PASSWORD=replace-with-at-least-12-characters
 SESSION_SECRET=replace-with-32-random-bytes
 GOOGLE_PLACES_SERVER_API_KEY=
-GOOGLE_PLACES_UI_KIT_API_KEY=
+GOOGLE_PLACES_BROWSER_API_KEY=
 TRIPADVISOR_TERRA_API_KEY=
 TRIPADVISOR_TERRA_PHOTOS_ENABLED=false
 TRIPADVISOR_CACHE_DAYS=30
@@ -42,7 +42,7 @@ Health endpoint: `GET /api/health`.
 | `DATA_DIR`                         | Persistent data directory; use `/data` in Docker                        |
 | `BUNDLED_OFFLINE_MAP_DIR`          | Optional directory containing image-bundled PMTiles                     |
 | `GOOGLE_PLACES_SERVER_API_KEY`     | Optional server-only Places API (New) key for POI identity matching     |
-| `GOOGLE_PLACES_UI_KIT_API_KEY`     | Optional browser Places UI Kit key, restricted to the public origin     |
+| `GOOGLE_PLACES_BROWSER_API_KEY`    | Optional Maps JavaScript API key, restricted to the public origin       |
 | `TRIPADVISOR_TERRA_API_KEY`        | Optional server-only Tripadvisor key for POI enrichment                 |
 | `TRIPADVISOR_TERRA_PHOTOS_ENABLED` | Enable on-demand Tripadvisor photos when the subscription supports them |
 | `TRIPADVISOR_CACHE_DAYS`           | Shared Tripadvisor cache lifetime; defaults to `30` days                |
@@ -86,14 +86,14 @@ Create `gjemmekontor-places-server`:
 3. Restrict the key to **Places API (New)** only.
 4. Set it as `GOOGLE_PLACES_SERVER_API_KEY`. Never expose this key to the browser.
 
-Create `gjemmekontor-places-ui`:
+Create `gjemmekontor-places-browser`:
 
 1. Create a second API key and select the **Websites** application restriction.
 2. Add the exact `ORIGIN`, both bare and with a path wildcard; for example `https://app.example.com` and `https://app.example.com/*`.
 3. Restrict the key to **Maps JavaScript API**, **Places API**, and **Places API (New)**. The custom Google card and itinerary autocomplete use the new Place APIs.
-4. Set it as `GOOGLE_PLACES_UI_KIT_API_KEY`. This key is visible to authenticated browsers, so both restrictions are required.
+4. Set it as `GOOGLE_PLACES_BROWSER_API_KEY`. This key is visible to authenticated browsers, so both restrictions are required.
 
-Use a separate development browser key for `http://localhost:5173/*` and `http://127.0.0.1:4173/*`; do not allow localhost on the production key. Start with low quotas suitable for four users, such as 10 server searches per minute and 100 UI Kit queries per day where those controls are available. Add project billing alerts at 50%, 90%, and 100%; billing alerts are notifications, while API quotas are the request guardrail.
+Use a separate development browser key for `http://localhost:5173/*` and `http://127.0.0.1:4173/*`; do not allow localhost on the production key. Start with low quotas suitable for four users, such as 10 server searches per minute and 100 Places API queries per day where those controls are available. Add project billing alerts at 50%, 90%, and 100%; billing alerts are notifications, while API quotas are the request guardrail.
 
 After deployment, open one eligible restaurant or marina and verify in Google Cloud metrics that the server key records a Places Text Search request and the browser key records a Places details request. Reopening the same POI should reuse the loaded Maps JavaScript API, while the stored Place ID prevents another server search.
 
