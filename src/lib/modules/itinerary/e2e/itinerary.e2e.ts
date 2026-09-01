@@ -235,8 +235,12 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 	await expect(editor.getByRole('group', { name: 'Til' })).toBeVisible();
 	await editor.getByRole('combobox', { name: 'Transportmiddel' }).selectOption('taxi');
 	await editor.getByRole('textbox', { name: 'Taxiselskap (valgfritt)' }).fill('Testtaxi');
-	await editor.getByRole('combobox', { name: 'Hentested' }).fill('Testflyplass');
-	await editor.getByRole('combobox', { name: 'Destinasjon' }).fill('Hotel Test');
+	await editor
+		.getByRole('combobox', { name: 'Hentested' })
+		.fill('Lang testadresse 123, 5000 Testbyen, Norge');
+	await editor
+		.getByRole('combobox', { name: 'Destinasjon' })
+		.fill('Testbyen sentralstasjon, Plattformveien 456, 5001 Testbyen, Norge');
 	await editor.locator('input[type="datetime-local"]').fill('2027-06-02T07:30');
 	await editor.getByRole('button', { name: 'Lagre', exact: true }).click();
 	await expect(editor).not.toBeVisible();
@@ -267,7 +271,16 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 		.locator('article', { hasText: 'Hotel Test' })
 		.filter({ has: page.locator('.lucide-bed-double') });
 	await expect(stayCards).toHaveCount(2);
-	await expect(page.locator('article', { hasText: 'Testtaxi' })).toContainText('Testflyplass');
+	const taxiCard = page.locator('article', { hasText: 'Testtaxi' });
+	const taxiRoute = taxiCard.locator('[data-transport-route]');
+	await expect(taxiRoute.locator('[data-transport-stop="from"]')).toContainText('Fra');
+	await expect(taxiRoute.locator('[data-transport-stop="from"]')).toContainText(
+		'Lang testadresse 123, 5000 Testbyen, Norge'
+	);
+	await expect(taxiRoute.locator('[data-transport-stop="to"]')).toContainText('Til');
+	await expect(taxiRoute.locator('[data-transport-stop="to"]')).toContainText(
+		'Testbyen sentralstasjon, Plattformveien 456, 5001 Testbyen, Norge'
+	);
 	const boatCards = page.locator('article', { hasText: 'Testutleie' });
 	await expect(boatCards).toHaveCount(2);
 	await expect(boatCards.first().locator('.lucide-sailboat').first()).toBeVisible();

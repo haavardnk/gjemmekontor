@@ -48,6 +48,7 @@
 	} from '../domain/itinerary';
 	import type { ItineraryEditorControls, ItineraryEntryType } from './itinerary-editor';
 	import ItineraryEditor from './ItineraryEditor.svelte';
+	import TransportJourneyCard from './TransportJourneyCard.svelte';
 
 	type EntryFilter = 'all' | 'flight' | 'transport' | 'stay' | 'rental' | 'booking' | 'note';
 
@@ -358,27 +359,12 @@
 											>
 										</div>{/if}
 								</div>
-								{#if event.type === 'journey-leg' && event.endEndpoint && (event.mode === 'taxi' || event.mode === 'transfer')}
-									<div class="mt-4">
-										<div class="flex items-baseline gap-2">
-											<p class="text-xl font-bold tabular-nums">{timeLabel(event.endpoint)}</p>
-											<p class="text-[10px] font-semibold text-base-content/45">
-												{utcOffsetLabel(event.endpoint)}
-											</p>
-										</div>
-										<div
-											class="mt-3 grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-center gap-2"
-										>
-											<p class="min-w-0 font-bold break-words">{event.endpoint.locationName}</p>
-											<span
-												class="grid size-8 place-items-center rounded-full bg-primary/10 text-primary"
-												><ArrowRight size={17} /></span
-											>
-											<p class="min-w-0 text-right font-bold break-words">
-												{event.endEndpoint.locationName}
-											</p>
-										</div>
-									</div>
+								{#if event.type === 'journey-leg' && event.endEndpoint && event.mode && event.mode !== 'flight'}
+									<TransportJourneyCard
+										from={event.endpoint}
+										to={event.endEndpoint}
+										mode={event.mode}
+									/>
 								{:else if event.type === 'journey-leg' && event.endEndpoint}
 									<div
 										class="mt-4 grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-center gap-2"
@@ -437,7 +423,7 @@
 										</div>
 									</div>
 								{/if}
-								{#if endpointDetails(event.endpoint).length}<p
+								{#if endpointDetails(event.endpoint).length && !(event.type === 'journey-leg' && event.mode !== 'flight')}<p
 										class="mt-2 text-xs text-base-content/55"
 									>
 										{endpointDetails(event.endpoint).join(' · ')}
