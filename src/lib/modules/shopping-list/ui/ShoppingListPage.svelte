@@ -1,33 +1,34 @@
 <script lang="ts">
 	import {
-		Check,
 		CircleAlert,
-		Ellipsis,
-		ListChecks,
 		LoaderCircle,
 		Plus,
 		RefreshCw,
-		Search,
 		ShoppingBasket,
-		Undo2,
-		WifiOff,
-		X
+		WifiOff
 	} from '@lucide/svelte';
 	import { onMount, tick } from 'svelte';
 
 	import { page } from '$app/state';
-	import { ApiError, apiRequest, type ApiRequestOptions } from '$lib/client/api';
+	import { ApiError, apiRequest } from '$lib/client/api';
+	import { offlineApi } from '$lib/client/offline-api.svelte';
 	import {
-		storedShoppingListSnapshot,
-		storeShoppingListSnapshot
-	} from '$lib/modules/shopping-list/client/cache';
+		createOfflineResource,
+		InvalidOfflineResourceSnapshotError,
+		type OfflineResourceRequest
+	} from '$lib/client/offline-resource';
+	import { watchOnlineStatus } from '$lib/client/online';
+	import { shoppingListSnapshotKey } from '$lib/modules/shopping-list/client/cache';
 	import {
 		sanitizeShoppingListText,
 		type ShoppingListItem,
 		type ShoppingListSnapshot,
 		shoppingListSnapshotSchema
 	} from '$lib/modules/shopping-list/domain/shopping-list';
+	import ShoppingListItems from '$lib/modules/shopping-list/ui/ShoppingListItems.svelte';
 	import { shoppingListErrorMessage } from '$lib/ui/copy';
+	import ModalDialog from '$lib/ui/ModalDialog.svelte';
+	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
 	let snapshot = $state<ShoppingListSnapshot>();
 	let loading = $state(true);
@@ -41,14 +42,32 @@
 	let adding = $state(false);
 	let nameInput: HTMLInputElement | undefined;
 	let busyItem = $state('');
-	let editDialog: HTMLDialogElement;
+	let editDialog = $state<HTMLDialogElement>(undefined!);
 	let editingItem = $state<ShoppingListItem>();
 	let editSpecification = $state('');
 	let editing = $state(false);
 	const refreshIntervalMs = 5_000;
-	let refreshInFlight = false;
-	let mutationRevision = 0;
-	const tripId = $derived(page.data.tripId ?? '');
+	let resourceReady = false;
+	const resource = createOfflineResource({
+		moduleId: 'shopping-list',
+		snapshotKey: shoppingListSnapshotKey,
+		load: () => apiRequest('/api/shopping-list', { signal: AbortSignal.timeout(15_000) }),
+		schema: shoppingListSnapshotSchema,
+		read: () => snapshot,
+		write: (value) => (snapshot = value),
+		canRefresh: () => online && !adding && !busyItem && !editing && !editingItem,
+		onReady: () => {
+			loading = false;
+			resourceReady = true;
+			if (online) void refresh();
+		},
+		onRefreshSuccess: () => {
+			serviceAvailable = true;
+			errorMessage = '';
+		},
+		onRefreshError: (error) => rejectRequest(error),
+		autoRefresh: false
+	});
 
 	const itemCount = $derived(snapshot?.items.length ?? 0);
 	const recentItems = $derived(snapshot ? [...snapshot.recentItems].reverse() : []);
@@ -58,7 +77,7 @@
 			`${item.name} ${item.specification}`.toLocaleLowerCase('nb-NO').includes(normalizedQuery)
 		) ?? []
 	);
-	const writeAvailable = $derived(online && serviceAvailable);
+	const writeAvailable = $derived(Boolean(snapshot));
 	const canMutate = $derived(writeAvailable && !adding && !busyItem && !refreshing);
 	const updatedLabel = $derived(
 		snapshot
@@ -71,56 +90,36 @@
 			: ''
 	);
 
-	function request(input: RequestInfo | URL, options?: ApiRequestOptions): Promise<unknown> {
-		return apiRequest(input, { ...options, signal: AbortSignal.timeout(15_000) });
-	}
-
 	function safeInputValue(input: HTMLInputElement): string {
 		const value = sanitizeShoppingListText(input.value);
 		input.value = value;
 		return value;
 	}
 
-	async function acceptResponse(body: unknown): Promise<boolean> {
-		const result = shoppingListSnapshotSchema.safeParse(body);
-		if (!result.success) {
-			errorMessage = shoppingListErrorMessage(undefined);
-			return false;
-		}
-		snapshot = result.data;
-		serviceAvailable = true;
-		await storeShoppingListSnapshot(tripId, result.data);
-		errorMessage = '';
-		return true;
-	}
-
 	function rejectRequest(error: unknown): void {
-		const code = error instanceof ApiError ? error.code : 'BRING_UNAVAILABLE';
+		const code =
+			error instanceof ApiError
+				? error.code
+				: error instanceof InvalidOfflineResourceSnapshotError
+					? undefined
+					: 'BRING_UNAVAILABLE';
 		serviceAvailable = code === 'INVALID_REQUEST';
 		errorMessage = shoppingListErrorMessage(code);
 	}
 
 	async function refresh(showProgress = true): Promise<void> {
-		if (!online || refreshInFlight || adding || busyItem || editing || editingItem) {
-			return;
-		}
-		const revision = mutationRevision;
-		refreshInFlight = true;
-		refreshing = showProgress;
-		try {
-			const response = await request('/api/shopping-list');
-			if (revision === mutationRevision) {
-				await acceptResponse(response);
-			}
-		} catch (error) {
-			if (revision === mutationRevision) {
-				rejectRequest(error);
-			}
-		} finally {
-			refreshInFlight = false;
-			refreshing = false;
-			loading = false;
-		}
+		if (showProgress) refreshing = true;
+		await resource.refresh();
+		refreshing = false;
+		loading = false;
+	}
+
+	async function commitSnapshot(
+		next: ShoppingListSnapshot,
+		request: OfflineResourceRequest
+	): Promise<void> {
+		await resource.commit(next, [request]);
+		errorMessage = '';
 	}
 
 	async function addItem(event: SubmitEvent): Promise<void> {
@@ -129,21 +128,31 @@
 		if (!itemName || !canMutate) {
 			return;
 		}
-		mutationRevision += 1;
 		adding = true;
 		try {
-			const accepted = await acceptResponse(
-				await request('/api/shopping-list/items', {
+			if (!snapshot) return;
+			const item = { sourceName: itemName, name: itemName, specification: specification.trim() };
+			await commitSnapshot(
+				{
+					...snapshot,
+					items: [
+						...snapshot.items.filter((candidate) => candidate.sourceName !== item.sourceName),
+						item
+					],
+					recentItems: snapshot.recentItems.filter(
+						(candidate) => candidate.sourceName !== item.sourceName
+					)
+				},
+				{
+					path: '/api/shopping-list/items',
 					method: 'POST',
-					json: { name: itemName, specification: specification.trim() }
-				})
+					body: { name: itemName, specification: specification.trim() }
+				}
 			);
-			if (accepted) {
-				name = '';
-				specification = '';
-				await tick();
-				nameInput?.focus();
-			}
+			name = '';
+			specification = '';
+			await tick();
+			nameInput?.focus();
 		} catch (error) {
 			rejectRequest(error);
 		} finally {
@@ -155,14 +164,23 @@
 		if (!canMutate) {
 			return;
 		}
-		mutationRevision += 1;
 		busyItem = item.sourceName;
 		try {
-			await acceptResponse(
-				await request('/api/shopping-list/items', {
+			if (!snapshot) return;
+			await commitSnapshot(
+				{
+					...snapshot,
+					items: snapshot.items.filter((candidate) => candidate.sourceName !== item.sourceName),
+					recentItems: [
+						...snapshot.recentItems.filter((candidate) => candidate.sourceName !== item.sourceName),
+						item
+					]
+				},
+				{
+					path: '/api/shopping-list/items',
 					method: 'PATCH',
-					json: { sourceName: item.sourceName }
-				})
+					body: { sourceName: item.sourceName }
+				}
 			);
 		} catch (error) {
 			rejectRequest(error);
@@ -175,14 +193,25 @@
 		if (!canMutate) {
 			return;
 		}
-		mutationRevision += 1;
 		busyItem = item.sourceName;
 		try {
-			await acceptResponse(
-				await request('/api/shopping-list/items', {
+			if (!snapshot) return;
+			await commitSnapshot(
+				{
+					...snapshot,
+					items: [
+						...snapshot.items.filter((candidate) => candidate.sourceName !== item.sourceName),
+						item
+					],
+					recentItems: snapshot.recentItems.filter(
+						(candidate) => candidate.sourceName !== item.sourceName
+					)
+				},
+				{
+					path: '/api/shopping-list/items',
 					method: 'POST',
-					json: { name: item.name, specification: item.specification }
-				})
+					body: { name: item.name, specification: item.specification }
+				}
 			);
 		} catch (error) {
 			rejectRequest(error);
@@ -214,23 +243,29 @@
 			return;
 		}
 		const item = editingItem;
-		mutationRevision += 1;
 		editing = true;
 		busyItem = item.sourceName;
 		try {
-			const accepted = await acceptResponse(
-				await request('/api/shopping-list/items', {
+			if (!snapshot) return;
+			const specification = editSpecification.trim();
+			await commitSnapshot(
+				{
+					...snapshot,
+					items: snapshot.items.map((candidate) =>
+						candidate.sourceName === item.sourceName ? { ...candidate, specification } : candidate
+					)
+				},
+				{
+					path: '/api/shopping-list/items',
 					method: 'PUT',
-					json: {
+					body: {
 						sourceName: item.sourceName,
-						specification: editSpecification.trim()
+						specification
 					}
-				})
+				}
 			);
-			if (accepted) {
-				editDialog.close();
-				editingItem = undefined;
-			}
+			editDialog.close();
+			editingItem = undefined;
 		} catch (error) {
 			rejectRequest(error);
 		} finally {
@@ -240,44 +275,31 @@
 	}
 
 	onMount(() => {
-		let disposed = false;
-		let ready = false;
-		online = navigator.onLine;
-		serviceAvailable = online;
-		const updateOnline = (): void => {
-			online = navigator.onLine;
-			if (online && ready) {
+		let initialized = false;
+		const stopOnline = watchOnlineStatus((value) => {
+			online = value;
+			if (!initialized) {
+				serviceAvailable = online;
+			} else if (online && resourceReady) {
 				void refresh();
 			} else {
 				serviceAvailable = false;
 			}
-		};
+			initialized = true;
+		});
 		const refreshWhenActive = (): void => {
-			if (ready && document.visibilityState === 'visible') {
+			if (resourceReady && document.visibilityState === 'visible') {
 				void refresh(false);
 			}
 		};
-		window.addEventListener('online', updateOnline);
-		window.addEventListener('offline', updateOnline);
 		window.addEventListener('focus', refreshWhenActive);
 		document.addEventListener('visibilitychange', refreshWhenActive);
 		const refreshInterval = window.setInterval(refreshWhenActive, refreshIntervalMs);
-		void storedShoppingListSnapshot(tripId).then((cached) => {
-			if (disposed) {
-				return;
-			}
-			snapshot = cached;
-			loading = false;
-			ready = true;
-			if (online) {
-				void refresh();
-			}
-		});
+		const stopResource = resource.start();
 		return (): void => {
-			disposed = true;
 			window.clearInterval(refreshInterval);
-			window.removeEventListener('online', updateOnline);
-			window.removeEventListener('offline', updateOnline);
+			stopResource();
+			stopOnline();
 			window.removeEventListener('focus', refreshWhenActive);
 			document.removeEventListener('visibilitychange', refreshWhenActive);
 		};
@@ -296,33 +318,31 @@
 				Bring
 			</p>
 			<div class="flex min-w-0 items-center justify-end gap-1">
-				<div
-					class="flex min-w-0 items-center justify-end gap-1.5 text-[0.68rem] font-semibold text-base-content/55"
-					role="status"
-				>
-					{#if !online}
-						<WifiOff class="shrink-0" size={14} />
-						<span class="max-w-44 truncate"
-							>Uten nett{snapshot ? ` · sist oppdatert ${updatedLabel}` : ''}</span
-						>
-					{:else if !serviceAvailable}
+				{#if offlineApi.status('shopping-list').pending > 0 || offlineApi.status('shopping-list').conflicts > 0}
+					<SyncStatus moduleId="shopping-list" />
+				{:else if online && !serviceAvailable}
+					<div
+						class="flex min-w-0 items-center justify-end gap-1.5 text-[0.68rem] font-semibold text-base-content/55"
+						role="status"
+					>
 						<WifiOff class="shrink-0" size={14} />
 						<span class="max-w-44 truncate"
 							>{snapshot
 								? `Viser lagret liste · sist oppdatert ${updatedLabel}`
 								: 'Kan ikke nå Bring'}</span
 						>
-					{:else if refreshing}
+					</div>
+				{:else if refreshing}
+					<div
+						class="flex min-w-0 items-center justify-end gap-1.5 text-[0.68rem] font-semibold text-base-content/55"
+						role="status"
+					>
 						<LoaderCircle class="shrink-0 animate-spin" size={14} />
 						<span class="max-w-44 truncate">Oppdaterer …</span>
-					{:else if snapshot}
-						<ListChecks class="shrink-0" size={14} />
-						<span class="max-w-44 truncate">Oppdatert {updatedLabel}</span>
-					{:else}
-						<LoaderCircle class="shrink-0 animate-spin" size={14} />
-						<span class="max-w-44 truncate">Kobler til Bring …</span>
-					{/if}
-				</div>
+					</div>
+				{:else}
+					<SyncStatus moduleId="shopping-list" />
+				{/if}
 				<button
 					class="btn btn-square h-7 min-h-7 w-7 shrink-0 btn-ghost p-0"
 					type="button"
@@ -400,176 +420,53 @@
 		</div>
 	{/if}
 
-	{#if loading && !snapshot}
-		<div class="space-y-2.5" aria-label="Laster handlelisten">
-			{#each [0, 1, 2, 3] as index (`skeleton-${index}`)}
-				<div class="h-16 animate-pulse rounded-lg bg-base-300/60"></div>
-			{/each}
-		</div>
-	{:else if snapshot?.items.length}
-		<label class="input mb-4 flex w-full items-center gap-2 bg-base-100">
-			<Search size={18} />
-			<input
-				class="min-w-0 grow"
-				type="search"
-				placeholder="Søk i handlelisten"
-				aria-label="Søk i handlelisten"
-				bind:value={query}
-			/>
-			{#if query}
-				<button
-					class="btn btn-square btn-ghost btn-xs"
-					type="button"
-					onclick={() => (query = '')}
-					aria-label="Tøm søket"
-					title="Tøm søket"
-				>
-					<X size={16} />
-				</button>
-			{/if}
-		</label>
-		{#if filteredItems.length}
-			<ul class="space-y-2" aria-label="Varer">
-				{#each filteredItems as item (item.sourceName)}
-					<li class="group relative">
-						<button
-							class="flex min-h-16 w-full cursor-pointer items-center rounded-lg border border-base-300/80 bg-base-100 py-3 pr-14 pl-4 text-left shadow-sm transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:border-success/35 hover:bg-success/8 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-success active:translate-y-0 active:bg-success/15 active:shadow-sm disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:translate-y-0 disabled:hover:shadow-sm"
-							type="button"
-							onclick={() => completeItem(item)}
-							disabled={!canMutate}
-							aria-label={`Marker ${item.name} som kjøpt`}
-						>
-							<span class="min-w-0 flex-1">
-								<span class="block leading-5 font-semibold">{item.name}</span>
-								{#if item.specification}
-									<span class="mt-0.5 block text-sm text-base-content/55">{item.specification}</span
-									>
-								{/if}
-							</span>
-						</button>
-						<button
-							class="btn absolute top-1/2 right-2 z-10 btn-circle -translate-y-1/2 cursor-pointer btn-ghost text-base-content/55 btn-sm hover:bg-base-300 hover:text-base-content focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary disabled:cursor-not-allowed"
-							type="button"
-							onclick={() => openEdit(item)}
-							disabled={!canMutate}
-							aria-label={`Endre ${item.name}`}
-							title={`Endre ${item.name}`}
-						>
-							{#if busyItem === item.sourceName}
-								<LoaderCircle class="animate-spin" size={18} />
-							{:else}
-								<Ellipsis size={20} />
-							{/if}
-						</button>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<div
-				class="grid min-h-32 place-items-center border-y border-dashed border-base-300 py-8 text-center"
-				aria-live="polite"
-			>
-				<p class="text-sm font-semibold text-base-content/55">Ingen varer matcher søket.</p>
-			</div>
-		{/if}
-	{:else if snapshot}
-		<div
-			class="grid min-h-52 place-items-center border-y border-dashed border-base-300 py-8 text-center"
-		>
-			<div>
-				<ShoppingBasket class="mx-auto mb-3 text-primary" size={34} />
-				<h2 class="font-display text-xl font-bold">Listen er tom</h2>
-				<p class="mt-1 text-sm text-base-content/55">Legg til det dere trenger til turen.</p>
-			</div>
-		</div>
-	{:else if !writeAvailable}
-		<div
-			class="grid min-h-52 place-items-center border-y border-dashed border-base-300 py-8 text-center"
-		>
-			<div>
-				<WifiOff class="mx-auto mb-3 text-base-content/45" size={34} />
-				<h2 class="font-display text-xl font-bold">Ingen lagret handleliste</h2>
-				<p class="mt-1 text-sm text-base-content/55">Åpne listen én gang når du har nett.</p>
-			</div>
-		</div>
-	{/if}
-
-	{#if recentItems.length}
-		<section class="mt-10">
-			<div class="mb-3 flex items-center justify-between gap-3 px-1">
-				<h2 class="font-display text-xl font-bold">Nylig kjøpt</h2>
-				<span
-					class="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary tabular-nums"
-					>{recentItems.length}</span
-				>
-			</div>
-			<ul class="space-y-2" aria-label="Nylig kjøpt">
-				{#each recentItems as item (item.sourceName)}
-					<li>
-						<button
-							class="group flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-lg border border-primary/15 bg-primary/8 px-4 py-2.5 text-left text-base-content/55 shadow-sm transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:border-primary/30 hover:bg-primary/14 hover:text-base-content/75 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:translate-y-0 active:bg-primary/18 active:shadow-sm disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:translate-y-0 disabled:hover:shadow-sm"
-							type="button"
-							onclick={() => restoreItem(item)}
-							disabled={!canMutate}
-							aria-label={`Legg ${item.name} tilbake på listen`}
-							title={`Legg ${item.name} tilbake på listen`}
-						>
-							<Check class="shrink-0 text-success/70" size={17} />
-							<span class="min-w-0 flex-1">
-								<span class="block truncate text-sm line-through">{item.name}</span>
-								{#if item.specification}
-									<span class="block truncate text-xs">{item.specification}</span>
-								{/if}
-							</span>
-							<span
-								class="flex min-w-6 shrink-0 items-center justify-end gap-1.5 text-xs font-semibold text-base-content/35 transition-colors group-hover:text-primary"
-							>
-								{#if busyItem === item.sourceName}
-									<LoaderCircle class="animate-spin" size={16} />
-								{:else}
-									<Undo2 size={16} />
-									<span class="hidden sm:inline">Legg tilbake</span>
-								{/if}
-							</span>
-						</button>
-					</li>
-				{/each}
-			</ul>
-		</section>
-	{/if}
+	<ShoppingListItems
+		{loading}
+		{snapshot}
+		bind:query
+		{filteredItems}
+		{recentItems}
+		{writeAvailable}
+		{canMutate}
+		{busyItem}
+		oncomplete={completeItem}
+		onedit={openEdit}
+		onrestore={restoreItem}
+	/>
 </section>
 
-<dialog bind:this={editDialog} class="modal" onclose={() => (editingItem = undefined)}>
-	<div class="modal-box max-w-md rounded-lg">
-		{#if editingItem}
-			<h2 class="font-display text-2xl font-bold">Endre vare</h2>
-			<p class="mt-1 text-sm font-semibold text-base-content/60">{editingItem.name}</p>
-			<form class="mt-5" onsubmit={saveEdit}>
-				<label class="form-control block">
-					<span class="mb-2 block text-sm font-semibold">Detaljer</span>
-					<input
-						class="input w-full bg-base-100"
-						aria-label="Detaljer for vare"
-						placeholder="For eksempel mengde eller merke"
-						maxlength="120"
-						value={editSpecification}
-						oninput={(event) => (editSpecification = safeInputValue(event.currentTarget))}
-						disabled={editing}
-					/>
-				</label>
-				<div class="mt-6 grid grid-cols-2 gap-2">
-					<button class="btn btn-ghost" type="button" onclick={closeEdit} disabled={editing}
-						>Avbryt</button
-					>
-					<button class="btn btn-primary" type="submit" disabled={editing}>
-						{#if editing}<LoaderCircle class="animate-spin" size={17} />{/if}
-						Lagre
-					</button>
-				</div>
-			</form>
-		{/if}
-	</div>
-	<form method="dialog" class="modal-backdrop">
-		<button type="submit" disabled={editing} aria-label="Lukk dialogen">Lukk</button>
-	</form>
-</dialog>
+<ModalDialog
+	bind:dialog={editDialog}
+	boxClass="modal-box max-w-md rounded-lg"
+	closeLabel="Lukk dialogen"
+	closeDisabled={editing}
+	onclose={() => (editingItem = undefined)}
+>
+	{#if editingItem}
+		<h2 class="font-display text-2xl font-bold">Endre vare</h2>
+		<p class="mt-1 text-sm font-semibold text-base-content/60">{editingItem.name}</p>
+		<form class="mt-5" onsubmit={saveEdit}>
+			<label class="form-control block">
+				<span class="mb-2 block text-sm font-semibold">Detaljer</span>
+				<input
+					class="input w-full bg-base-100"
+					aria-label="Detaljer for vare"
+					placeholder="For eksempel mengde eller merke"
+					maxlength="120"
+					value={editSpecification}
+					oninput={(event) => (editSpecification = safeInputValue(event.currentTarget))}
+					disabled={editing}
+				/>
+			</label>
+			<div class="mt-6 grid grid-cols-2 gap-2">
+				<button class="btn btn-ghost" type="button" onclick={closeEdit} disabled={editing}
+					>Avbryt</button
+				>
+				<button class="btn btn-primary" type="submit" disabled={editing}>
+					{#if editing}<LoaderCircle class="animate-spin" size={17} />{/if}
+					Lagre
+				</button>
+			</div>
+		</form>
+	{/if}
+</ModalDialog>

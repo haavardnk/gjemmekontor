@@ -99,7 +99,7 @@ test('adds, completes, and restores Bring items with responsive module navigatio
 	await page.getByRole('link', { name: 'Handleliste' }).click();
 
 	await expect(page).toHaveURL(/\/shopping-list$/);
-	await expect(page.getByRole('heading', { name: 'Handleliste' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Handleliste', exact: true })).toBeVisible();
 	await expect(page.getByText('Kroatia 2026 · 1 vare')).toBeVisible();
 	await expect(page.getByText('Olivenolje')).toBeVisible();
 	await expect(page.getByText('1 flaske')).toBeVisible();
@@ -288,19 +288,31 @@ test('syncs remote changes on focus and while open without overwriting local wri
 	await expect(page.getByText('Melk', { exact: true })).toBeVisible();
 });
 
-test('shows the cached list read-only without network access', async ({ context, page }) => {
+test('edits the cached list offline and keeps the optimistic result across reload', async ({
+	context,
+	page
+}) => {
 	let apiAvailable = true;
-	await page.route('**/api/shopping-list', async (route) => {
+	let completed = false;
+	await page.route('**/api/shopping-list{,/items}', async (route) => {
 		if (!apiAvailable) {
 			await route.abort('internetdisconnected');
 			return;
 		}
+		if (route.request().method() === 'PATCH') completed = true;
 		await route.fulfill({
 			json: {
 				listUuid: 'trip-list',
 				listName: 'Kroatia 2026',
-				items: [{ sourceName: 'Sonnencreme', name: 'Solkrem', specification: 'Faktor 50' }],
-				recentItems: [{ sourceName: 'Eier', name: 'Egg', specification: '' }],
+				items: completed
+					? []
+					: [{ sourceName: 'Sonnencreme', name: 'Solkrem', specification: 'Faktor 50' }],
+				recentItems: [
+					{ sourceName: 'Eier', name: 'Egg', specification: '' },
+					...(completed
+						? [{ sourceName: 'Sonnencreme', name: 'Solkrem', specification: 'Faktor 50' }]
+						: [])
+				],
 				fetchedAt: '2026-08-21T10:00:00.000Z'
 			}
 		});
@@ -317,10 +329,21 @@ test('shows the cached list read-only without network access', async ({ context,
 	await expect(page.getByText('Solkrem')).toBeVisible();
 	await expect(page.getByText('Faktor 50')).toBeVisible();
 	await expect(page.getByRole('status')).toContainText(/Uten nett|Viser lagret liste/);
-	await expect(page.getByRole('textbox', { name: 'Vare' })).toBeDisabled();
-	await expect(page.getByRole('button', { name: 'Marker Solkrem som kjøpt' })).toBeDisabled();
-	await expect(page.getByRole('button', { name: 'Endre Solkrem' })).toBeDisabled();
-	await expect(page.getByRole('button', { name: 'Legg Egg tilbake på listen' })).toBeDisabled();
+	await expect(page.getByRole('textbox', { name: 'Vare' })).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Marker Solkrem som kjøpt' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Marker Solkrem som kjøpt' }).click();
+	await expect(page.getByRole('button', { name: 'Legg Solkrem tilbake på listen' })).toBeVisible();
+	await expect(page.getByRole('status')).toContainText(/Uten nett · 1 venter/);
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'Legg Solkrem tilbake på listen' })).toBeVisible();
+
+	apiAvailable = true;
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect(page.getByRole('status')).toContainText(/Synkronisert/, { timeout: 15_000 });
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'Legg Solkrem tilbake på listen' })).toBeVisible();
+	expect(completed).toBe(true);
 });
 
 test('explains when no shopping list has been cached offline', async ({ context, page }) => {

@@ -4,14 +4,14 @@ import {
 	shoppingListSnapshotSchema
 } from '$lib/modules/shopping-list/domain/shopping-list';
 
-const snapshotKey = 'shopping-list:snapshot:current';
+export const shoppingListSnapshotKey = 'shopping-list:snapshot:current';
 
 export async function storedShoppingListSnapshot(
 	source: ClientDatabaseSource
 ): Promise<ShoppingListSnapshot | undefined> {
 	const { database, close } = await resolveClientDatabase(source);
 	const clientDatabase = database;
-	const record = await clientDatabase.get('moduleData', snapshotKey);
+	const record = await clientDatabase.get('moduleData', shoppingListSnapshotKey);
 	const current = shoppingListSnapshotSchema.safeParse(record?.value);
 	if (close) {
 		clientDatabase.close();
@@ -26,7 +26,7 @@ export async function storeShoppingListSnapshot(
 	const { database, close } = await resolveClientDatabase(source);
 	const clientDatabase = database;
 	await clientDatabase.put('moduleData', {
-		key: snapshotKey,
+		key: shoppingListSnapshotKey,
 		value: snapshot,
 		updatedAt: Date.now()
 	});
