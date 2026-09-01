@@ -6,5 +6,5 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => ({
 	members: listItineraryMembers(locals.db, requireTrip(locals).id),
-	googlePlacesApiKey: getMapRuntimeConfig().googlePlacesUiKitApiKey ?? ''
+	googlePlacesApiKey: getMapRuntimeConfig().googlePlacesBrowserApiKey ?? ''
 });

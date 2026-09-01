@@ -25,68 +25,37 @@
 		TrainFront,
 		Trash2,
 		Users,
+		WifiOff,
 		X
 	} from '@lucide/svelte';
+	import { onMount } from 'svelte';
 
 	import { page } from '$app/state';
-	import { ApiError, apiRequest } from '$lib/client/api';
+	import { watchOnlineStatus } from '$lib/client/online';
 	import { sharedState } from '$lib/client/state.svelte';
 	import type { ItineraryMember } from '$lib/modules/itinerary/server/members';
+	import ModalDialog from '$lib/ui/ModalDialog.svelte';
 	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
 	import {
-		bookingSchema,
-		type EditableItineraryEndpoint,
-		instantToLocalDateTime,
 		type ItineraryEndpoint,
-		itineraryItemKey,
 		itineraryItems,
 		type Journey,
-		journeySchema,
-		journeyTitle,
 		type KeyedItineraryItem,
-		localDateTimeToInstant,
-		noteSchema,
-		rentalSchema,
 		serializeItineraryItem,
-		staySchema,
 		type TimelineEvent,
-		timelineEvents,
-		type TransportMode
+		timelineEvents
 	} from '../domain/itinerary';
-	import EndpointFields from './EndpointFields.svelte';
-	import PlaceInput from './PlaceInput.svelte';
-	import TimeZoneSelect from './TimeZoneSelect.svelte';
+	import type { ItineraryEditorControls, ItineraryEntryType } from './itinerary-editor';
+	import ItineraryEditor from './ItineraryEditor.svelte';
 
-	type TransportEntryType = 'taxi' | 'train' | 'bus' | 'ferry' | 'transfer' | 'other-transport';
-	type EntryType = 'flight' | TransportEntryType | 'stay' | 'rental' | 'booking' | 'note';
 	type EntryFilter = 'all' | 'flight' | 'transport' | 'stay' | 'rental' | 'booking' | 'note';
-	type EditableLeg = {
-		id: string;
-		mode: TransportMode;
-		operator: string;
-		serviceNumber: string;
-		from: EditableItineraryEndpoint;
-		to: EditableItineraryEndpoint;
-		status: 'planned' | 'delayed' | 'cancelled' | 'completed';
-		notes: string;
-		provider?: Journey['legs'][number]['provider'];
-	};
-	type FlightCandidate = {
-		providerFlightId: string;
-		flightNumber: string;
-		operator: string;
-		status: EditableLeg['status'];
-		from: ItineraryEndpoint;
-		to: ItineraryEndpoint;
-		scheduledFrom: string;
-		scheduledTo: string;
-	};
 
 	let {
 		members,
 		googlePlacesApiKey = ''
 	}: { members: ItineraryMember[]; googlePlacesApiKey?: string } = $props();
+	let online = $state(true);
 	const timeZone = $derived(page.data.tripTimezone ?? 'Europe/Oslo');
 	const tripDays = $derived(page.data.tripDays ?? []);
 	const defaultDate = $derived(tripDays[0]?.date ?? new Date().toISOString().slice(0, 10));
@@ -94,97 +63,45 @@
 	const items = $derived(itineraryItems(sharedState.values));
 	const itemsByKey = $derived(new Map(items.map((item) => [item.key, item])));
 
-	const entryChoices = [
-		{ value: 'flight' as const, label: 'Fly', description: 'Ett eller flere fly', icon: Plane },
-		{
-			value: 'taxi' as const,
-			label: 'Taxi',
-			description: 'Henting og destinasjon',
-			icon: CarFront
-		},
-		{ value: 'train' as const, label: 'Tog', description: 'Togreise', icon: TrainFront },
-		{ value: 'bus' as const, label: 'Buss', description: 'Bussreise', icon: BusFront },
-		{
-			value: 'ferry' as const,
-			label: 'Ferge / båt',
-			description: 'Transport på sjøen',
-			icon: Ship
-		},
-		{
-			value: 'transfer' as const,
-			label: 'Privat transport',
-			description: 'Bestilt henting',
-			icon: Route
-		},
-		{
-			value: 'other-transport' as const,
-			label: 'Annen transport',
-			description: 'Annet transportmiddel',
-			icon: Route
-		},
-		{
-			value: 'stay' as const,
-			label: 'Overnatting',
-			description: 'Hotell, feriebolig eller camping',
-			icon: BedDouble
-		},
-		{
-			value: 'rental' as const,
-			label: 'Leie',
-			description: 'Bil, båt, sykkel eller utstyr',
-			icon: CarFront
-		},
-		{
-			value: 'booking' as const,
-			label: 'Bestilling',
-			description: 'Aktivitet, restaurant eller billett',
-			icon: TicketCheck
-		},
-		{ value: 'note' as const, label: 'Påminnelse', description: 'Et tidspunkt å huske', icon: Bell }
-	];
-	const coreChoices = [
-		{ value: 'flight' as const, label: 'Fly', description: 'Ett eller flere fly', icon: Plane },
-		{
-			value: 'transport' as const,
+	const choiceMetadata = {
+		flight: { label: 'Fly', description: 'Ett eller flere fly', icon: Plane },
+		transport: {
 			label: 'Transport',
 			description: 'Taxi, tog, buss eller båt',
 			icon: TrainFront
 		},
-		{
-			value: 'stay' as const,
+		taxi: { label: 'Taxi', description: 'Henting og destinasjon', icon: CarFront },
+		train: { label: 'Tog', description: 'Togreise', icon: TrainFront },
+		bus: { label: 'Buss', description: 'Bussreise', icon: BusFront },
+		ferry: { label: 'Ferge / båt', description: 'Transport på sjøen', icon: Ship },
+		transfer: { label: 'Privat transport', description: 'Bestilt henting', icon: Route },
+		'other-transport': {
+			label: 'Annen transport',
+			description: 'Annet transportmiddel',
+			icon: Route
+		},
+		stay: {
 			label: 'Overnatting',
 			description: 'Hotell, feriebolig eller camping',
 			icon: BedDouble
 		},
-		{
-			value: 'rental' as const,
-			label: 'Leie',
-			description: 'Bil, båt, sykkel eller utstyr',
-			icon: CarFront
-		},
-		{
-			value: 'booking' as const,
+		rental: { label: 'Leie', description: 'Bil, båt, sykkel eller utstyr', icon: CarFront },
+		booking: {
 			label: 'Bestilling',
 			description: 'Aktivitet, restaurant eller billett',
 			icon: TicketCheck
 		},
-		{ value: 'note' as const, label: 'Påminnelse', description: 'Et tidspunkt å huske', icon: Bell }
-	];
-	const transportChoices = entryChoices.filter((choice) =>
-		['taxi', 'train', 'bus', 'ferry', 'transfer', 'other-transport'].includes(choice.value)
-	) as Array<(typeof entryChoices)[number] & { value: TransportEntryType }>;
-	const filterChoices = [
-		{ value: 'flight' as const, label: 'Fly', icon: Plane },
-		{ value: 'transport' as const, label: 'Transport', icon: TrainFront },
-		{ value: 'stay' as const, label: 'Overnatting', icon: BedDouble },
-		{ value: 'rental' as const, label: 'Leie', icon: CarFront },
-		{ value: 'booking' as const, label: 'Bestilling', icon: TicketCheck },
-		{ value: 'note' as const, label: 'Påminnelse', icon: Bell }
-	];
+		note: { label: 'Påminnelse', description: 'Et tidspunkt å huske', icon: Bell }
+	} as const;
+	const choices = <T extends keyof typeof choiceMetadata>(values: readonly T[]) =>
+		values.map((value) => ({ value, ...choiceMetadata[value] }));
+
+	const coreChoices = choices(['flight', 'transport', 'stay', 'rental', 'booking', 'note']);
+	const filterChoices = coreChoices.map(({ value, label, icon }) => ({ value, label, icon }));
 
 	let entryFilter = $state<EntryFilter>('all');
-	let addDialog: HTMLDialogElement;
-	let filterDialog: HTMLDialogElement;
+	let addDialog = $state<HTMLDialogElement>(undefined!);
+	let filterDialog = $state<HTMLDialogElement>(undefined!);
 	const filteredItems = $derived(items.filter((item) => matchesFilter(item, entryFilter)));
 	const events = $derived(timelineEvents(filteredItems));
 	const groupedEvents = $derived.by(() => {
@@ -198,39 +115,9 @@
 		return groups;
 	});
 
-	let editorOpen = $state(false);
-	let editingKey = $state<string>();
-	let entryType = $state<EntryType>('flight');
-	let itemId = $state('');
-	let title = $state('');
-	let bookingReference = $state('');
-	let bookingUrl = $state('');
-	let selectedParticipants = $state<string[]>([]);
-	let notes = $state('');
-	let createdAt = $state('');
-	let createdBy = $state('');
-	let journeyGroupId = $state('');
-	let journeyDirection = $state<'one-way' | 'outbound' | 'return'>('one-way');
-	let legs = $state<EditableLeg[]>([]);
-	let manualLegIds = $state<string[]>([]);
-	let staySubtype = $state<'hotel' | 'holiday-rental' | 'camping' | 'other'>('hotel');
-	let rentalSubtype = $state<'car' | 'boat' | 'bike' | 'equipment' | 'other'>('car');
-	let bookingSubtype = $state<'activity' | 'restaurant' | 'event' | 'appointment' | 'other'>(
-		'activity'
-	);
-	let primary = $state<EditableItineraryEndpoint>(blankEndpoint('', '', '09:00'));
-	let secondary = $state<EditableItineraryEndpoint>(blankEndpoint('', '', '10:00'));
-	let bookingHasEnd = $state(false);
-	let returnSource = $state<KeyedItineraryItem & Journey>();
-	let formError = $state('');
-	let saving = $state(false);
-	let lookupLegId = $state<string>();
-	let lookupCandidates = $state<FlightCandidate[]>([]);
-	let lookupLoading = $state(false);
-	let lookupError = $state('');
-	let lookupController: AbortController | undefined;
+	let editorControls = $state<ItineraryEditorControls>();
 
-	function entryTypeForItem(item: KeyedItineraryItem): EntryType {
+	function entryTypeForItem(item: KeyedItineraryItem): ItineraryEntryType {
 		if (item.kind !== 'journey') return item.kind;
 		if (item.legs.every((leg) => leg.mode === 'flight')) return 'flight';
 		const mode = item.legs[0]?.mode;
@@ -243,12 +130,17 @@
 			: 'other-transport';
 	}
 
-	function isTransportEntry(value: EntryType): value is TransportEntryType {
-		return ['taxi', 'train', 'bus', 'ferry', 'transfer', 'other-transport'].includes(value);
+	function openNew(type: ItineraryEntryType): void {
+		addDialog.close();
+		editorControls?.openNew(type);
 	}
 
-	function transportModeFor(value: TransportEntryType): TransportMode {
-		return value === 'other-transport' ? 'other' : value;
+	function openEdit(item: KeyedItineraryItem): void {
+		editorControls?.openEdit(item);
+	}
+
+	function openReturn(item: KeyedItineraryItem & Journey): void {
+		editorControls?.openReturn(item);
 	}
 
 	function matchesFilter(item: KeyedItineraryItem, filter: EntryFilter): boolean {
@@ -259,18 +151,8 @@
 		return item.kind === filter;
 	}
 
-	function choiceFor(value: EntryType) {
-		return entryChoices.find((choice) => choice.value === value);
-	}
-
-	function editorLabel(value: EntryType): string {
-		return isTransportEntry(value) ? 'Transport' : (choiceFor(value)?.label ?? value);
-	}
-
 	function filterLabel(value: EntryFilter): string {
-		return value === 'all'
-			? 'Alle planer'
-			: (filterChoices.find((choice) => choice.value === value)?.label ?? value);
+		return value === 'all' ? 'Alle planer' : choiceMetadata[value].label;
 	}
 
 	function hasParticipantException(item: KeyedItineraryItem): boolean {
@@ -284,444 +166,6 @@
 				candidate.groupId === item.groupId &&
 				candidate.direction === 'return'
 		);
-	}
-
-	function blankEndpoint(
-		locationName = '',
-		locationCode = '',
-		time = '09:00',
-		date?: string,
-		zone?: string
-	): EditableItineraryEndpoint {
-		return {
-			locationName,
-			locationCode,
-			localDateTime: `${date ?? defaultDate}T${time}`,
-			timeZone: zone ?? timeZone,
-			terminal: '',
-			gate: '',
-			platform: ''
-		};
-	}
-
-	function editableEndpoint(endpoint: ItineraryEndpoint): EditableItineraryEndpoint {
-		return {
-			locationName: endpoint.locationName,
-			locationCode: endpoint.locationCode,
-			localDateTime: endpoint.localDateTime,
-			timeZone: endpoint.timeZone,
-			terminal: endpoint.terminal,
-			gate: endpoint.gate,
-			platform: endpoint.platform
-		};
-	}
-
-	function endpointWithInstant(endpoint: EditableItineraryEndpoint): ItineraryEndpoint {
-		return {
-			...endpoint,
-			locationName: endpoint.locationName.trim(),
-			locationCode: endpoint.locationCode.trim().toUpperCase(),
-			timeZone: endpoint.timeZone.trim(),
-			instant: localDateTimeToInstant(endpoint.localDateTime, endpoint.timeZone.trim()),
-			terminal: endpoint.terminal.trim(),
-			gate: endpoint.gate.trim(),
-			platform: endpoint.platform.trim()
-		};
-	}
-
-	function blankLeg(mode: TransportMode, from?: EditableItineraryEndpoint): EditableLeg {
-		const departure = from ? { ...from } : blankEndpoint('', '', '09:00');
-		const departureInstant = localDateTimeToInstant(departure.localDateTime, departure.timeZone);
-		const arrivalInstant = new Date(new Date(departureInstant).getTime() + 2 * 60 * 60_000);
-		return {
-			id: crypto.randomUUID(),
-			mode,
-			operator: '',
-			serviceNumber: '',
-			from: departure,
-			to: blankEndpoint(
-				'',
-				'',
-				instantToLocalDateTime(arrivalInstant.toISOString(), departure.timeZone).slice(11),
-				instantToLocalDateTime(arrivalInstant.toISOString(), departure.timeZone).slice(0, 10),
-				departure.timeZone
-			),
-			status: 'planned',
-			notes: ''
-		};
-	}
-
-	function resetEditor(type: EntryType): void {
-		lookupController?.abort();
-		lookupController = undefined;
-		entryType = type;
-		itemId = crypto.randomUUID();
-		editingKey = undefined;
-		title = '';
-		bookingReference = '';
-		bookingUrl = '';
-		selectedParticipants = members.map((member) => member.name);
-		notes = '';
-		createdAt = '';
-		createdBy = '';
-		journeyGroupId = itemId;
-		journeyDirection = 'one-way';
-		legs = [
-			blankLeg(
-				type === 'flight' ? 'flight' : isTransportEntry(type) ? transportModeFor(type) : 'train'
-			)
-		];
-		manualLegIds = [];
-		staySubtype = 'hotel';
-		rentalSubtype = 'car';
-		bookingSubtype = 'activity';
-		primary = blankEndpoint('', '', '09:00');
-		secondary = blankEndpoint('', '', '10:00');
-		bookingHasEnd = false;
-		returnSource = undefined;
-		formError = '';
-		lookupLegId = undefined;
-		lookupCandidates = [];
-		lookupLoading = false;
-		lookupError = '';
-	}
-
-	function openNew(type: EntryType): void {
-		resetEditor(type);
-		if (addDialog.open) addDialog.close();
-		editorOpen = true;
-	}
-
-	function openEdit(item: KeyedItineraryItem): void {
-		resetEditor(entryTypeForItem(item));
-		editingKey = item.key;
-		itemId = item.id;
-		title = item.title;
-		bookingReference = item.bookingReference;
-		bookingUrl = item.bookingUrl;
-		selectedParticipants = [...item.participants];
-		notes = item.notes;
-		createdAt = item.createdAt;
-		createdBy = item.createdBy;
-		switch (item.kind) {
-			case 'journey':
-				journeyGroupId = item.groupId;
-				journeyDirection = item.direction;
-				legs = item.legs.map((leg) => ({
-					...leg,
-					from: editableEndpoint(leg.from),
-					to: editableEndpoint(leg.to)
-				}));
-				manualLegIds = [];
-				break;
-			case 'stay':
-				staySubtype = item.subtype;
-				primary = editableEndpoint(item.checkIn);
-				secondary = editableEndpoint(item.checkOut);
-				break;
-			case 'rental':
-				rentalSubtype = item.subtype;
-				primary = editableEndpoint(item.pickup);
-				secondary = editableEndpoint(item.return);
-				break;
-			case 'booking':
-				bookingSubtype = item.subtype;
-				primary = editableEndpoint(item.start);
-				bookingHasEnd = Boolean(item.end);
-				secondary = item.end ? editableEndpoint(item.end) : blankEndpoint('', '', '10:00');
-				break;
-			case 'note':
-				primary = editableEndpoint(item.at);
-				break;
-		}
-		editorOpen = true;
-	}
-
-	function minutesOnDate(date: string, minutes: number): string {
-		return new Date(new Date(`${date}T00:00:00.000Z`).getTime() + minutes * 60_000)
-			.toISOString()
-			.slice(0, 16);
-	}
-
-	function openReturn(item: KeyedItineraryItem & Journey): void {
-		resetEditor(entryTypeForItem(item));
-		returnSource = item;
-		journeyGroupId = item.groupId;
-		journeyDirection = 'return';
-		bookingReference = item.bookingReference;
-		bookingUrl = item.bookingUrl;
-		selectedParticipants = [...item.participants];
-		legs = [...item.legs].reverse().map((leg, index) => ({
-			id: crypto.randomUUID(),
-			mode: leg.mode,
-			operator: leg.operator,
-			serviceNumber: '',
-			from: {
-				...editableEndpoint(leg.to),
-				localDateTime: minutesOnDate(finalDate, 9 * 60 + index * 180)
-			},
-			to: {
-				...editableEndpoint(leg.from),
-				localDateTime: minutesOnDate(finalDate, 11 * 60 + index * 180)
-			},
-			status: 'planned',
-			notes: ''
-		}));
-		manualLegIds = [];
-		editorOpen = true;
-	}
-
-	function addFlightLeg(): void {
-		const previous = legs.at(-1);
-		const leg = blankLeg('flight', previous ? { ...previous.to } : undefined);
-		legs.push(leg);
-	}
-
-	function removeLeg(index: number): void {
-		if (legs.length <= 1) return;
-		const [removed] = legs.splice(index, 1);
-		if (removed) manualLegIds = manualLegIds.filter((id) => id !== removed.id);
-	}
-
-	function toggleManualLeg(legId: string): void {
-		if (!manualLegIds.includes(legId) && lookupLegId === legId) {
-			lookupController?.abort();
-			lookupController = undefined;
-			lookupLegId = undefined;
-			lookupCandidates = [];
-			lookupLoading = false;
-			lookupError = '';
-		}
-		manualLegIds = manualLegIds.includes(legId)
-			? manualLegIds.filter((id) => id !== legId)
-			: [...manualLegIds, legId];
-	}
-
-	function updateDepartureDate(leg: EditableLeg, date: string): void {
-		const previousDate = leg.from.localDateTime.slice(0, 10);
-		leg.from.localDateTime = `${date}T${leg.from.localDateTime.slice(11)}`;
-		if (leg.to.localDateTime.startsWith(previousDate)) {
-			leg.to.localDateTime = `${date}T${leg.to.localDateTime.slice(11)}`;
-		}
-	}
-
-	function toggleParticipant(name: string): void {
-		selectedParticipants = selectedParticipants.includes(name)
-			? selectedParticipants.filter((participant) => participant !== name)
-			: [...selectedParticipants, name];
-	}
-
-	async function lookupFlight(leg: EditableLeg): Promise<void> {
-		if (!leg.serviceNumber.trim()) {
-			lookupError = 'Skriv inn flightnummer først.';
-			lookupLegId = leg.id;
-			return;
-		}
-		lookupController?.abort();
-		const controller = new AbortController();
-		lookupController = controller;
-		lookupLegId = leg.id;
-		lookupCandidates = [];
-		lookupError = '';
-		lookupLoading = true;
-		try {
-			const response = await apiRequest<{ provider: 'flightaware'; candidates: FlightCandidate[] }>(
-				'/api/itinerary/flights/lookup',
-				{
-					method: 'POST',
-					signal: controller.signal,
-					json: {
-						flightNumber: leg.serviceNumber.trim(),
-						departureDate: leg.from.localDateTime.slice(0, 10)
-					}
-				}
-			);
-			if (lookupController !== controller) return;
-			lookupCandidates = response.candidates;
-			if (response.candidates.length === 0) {
-				lookupError = 'Fant ingen flyvning på denne datoen.';
-				if (!manualLegIds.includes(leg.id)) manualLegIds = [...manualLegIds, leg.id];
-			}
-			if (response.candidates.length === 1) applyFlightCandidate(response.candidates[0]!, leg.id);
-		} catch (error) {
-			if (controller.signal.aborted || lookupController !== controller) return;
-			lookupError = flightLookupError(error);
-			if (!manualLegIds.includes(leg.id)) manualLegIds = [...manualLegIds, leg.id];
-		} finally {
-			if (lookupController === controller) {
-				lookupController = undefined;
-				lookupLoading = false;
-			}
-		}
-	}
-
-	function flightLookupError(error: unknown): string {
-		if (!(error instanceof ApiError)) return 'Flyoppslaget svarte ikke. Fyll inn manuelt.';
-		if (error.code === 'FLIGHT_LOOKUP_NOT_CONFIGURED')
-			return 'Flyoppslag er ikke konfigurert. Fyll inn manuelt.';
-		if (error.code === 'FLIGHT_LOOKUP_AUTH_FAILED') return 'FlightAware avviste API-nøkkelen.';
-		if (error.code === 'FLIGHT_LOOKUP_RATE_LIMITED')
-			return 'FlightAware begrenser oppslag. Vent litt og prøv igjen.';
-		if (error.code === 'FLIGHT_LOOKUP_DATE_UNAVAILABLE')
-			return 'FlightAware har ikke data for denne datoen.';
-		return 'Flyoppslaget svarte ikke. Fyll inn manuelt.';
-	}
-
-	function applyFlightCandidate(candidate: FlightCandidate, legId: string): void {
-		const leg = legs.find((entry) => entry.id === legId);
-		if (!leg) return;
-		leg.operator = candidate.operator;
-		leg.serviceNumber = candidate.flightNumber;
-		leg.status = candidate.status;
-		leg.from = editableEndpoint(candidate.from);
-		leg.to = editableEndpoint(candidate.to);
-		leg.provider = {
-			name: 'flightaware',
-			flightId: candidate.providerFlightId,
-			lastRefreshedAt: new Date().toISOString()
-		};
-		manualLegIds = manualLegIds.filter((id) => id !== leg.id);
-		lookupCandidates = [];
-		lookupError = '';
-	}
-
-	async function saveItem(event: SubmitEvent): Promise<void> {
-		event.preventDefault();
-		if (saving) return;
-		saving = true;
-		formError = '';
-		try {
-			const now = new Date().toISOString();
-			const actor = createdBy || (await sharedState.clientId());
-			const normalizedLegs = legs.map((leg) => {
-				const from = endpointWithInstant(leg.from);
-				const hidesArrival = entryType === 'taxi' || entryType === 'transfer';
-				return {
-					...leg,
-					mode:
-						entryType === 'flight'
-							? ('flight' as const)
-							: isTransportEntry(entryType)
-								? transportModeFor(entryType)
-								: leg.mode,
-					operator: leg.operator.trim(),
-					serviceNumber: leg.serviceNumber.trim().toUpperCase(),
-					notes: leg.notes.trim(),
-					from,
-					to: endpointWithInstant(
-						hidesArrival
-							? {
-									...leg.to,
-									localDateTime: leg.from.localDateTime,
-									timeZone: leg.from.timeZone,
-									locationCode: '',
-									terminal: '',
-									gate: '',
-									platform: ''
-								}
-							: leg.to
-					)
-				};
-			});
-			const common = {
-				id: itemId,
-				title:
-					entryType === 'flight' || isTransportEntry(entryType)
-						? journeyTitle(normalizedLegs)
-						: title.trim(),
-				bookingReference: bookingReference.trim(),
-				bookingUrl: bookingUrl.trim(),
-				participants: [...selectedParticipants],
-				notes: notes.trim(),
-				createdAt: createdAt || now,
-				createdBy: actor,
-				updatedAt: now,
-				tombstone: false,
-				version: 1 as const
-			};
-			let parsed;
-			if (entryType === 'flight' || isTransportEntry(entryType)) {
-				parsed = journeySchema.safeParse({
-					...common,
-					kind: 'journey',
-					groupId: journeyGroupId,
-					direction: journeyDirection,
-					legs:
-						isTransportEntry(entryType) && !editingKey ? normalizedLegs.slice(0, 1) : normalizedLegs
-				});
-			} else
-				switch (entryType) {
-					case 'stay':
-						parsed = staySchema.safeParse({
-							...common,
-							kind: 'stay',
-							subtype: staySubtype,
-							checkIn: endpointWithInstant(primary),
-							checkOut: endpointWithInstant({
-								...secondary,
-								locationName: primary.locationName,
-								locationCode: primary.locationCode,
-								timeZone: primary.timeZone
-							})
-						});
-						break;
-					case 'rental':
-						parsed = rentalSchema.safeParse({
-							...common,
-							kind: 'rental',
-							subtype: rentalSubtype,
-							pickup: endpointWithInstant(primary),
-							return: endpointWithInstant(secondary)
-						});
-						break;
-					case 'booking':
-						parsed = bookingSchema.safeParse({
-							...common,
-							kind: 'booking',
-							subtype: bookingSubtype,
-							start: endpointWithInstant(primary),
-							...(bookingHasEnd ? { end: endpointWithInstant(secondary) } : {})
-						});
-						break;
-					case 'note':
-						parsed = noteSchema.safeParse({
-							...common,
-							kind: 'note',
-							at: endpointWithInstant(primary)
-						});
-						break;
-				}
-			if (!parsed.success) {
-				formError = parsed.error.issues[0]?.message ?? 'Kontroller feltene.';
-				return;
-			}
-			const writes = [
-				{
-					key: editingKey ?? itineraryItemKey(parsed.data.id),
-					value: serializeItineraryItem(parsed.data)
-				}
-			];
-			if (returnSource && returnSource.direction === 'one-way') {
-				const sourceItem = Object.fromEntries(
-					Object.entries(returnSource).filter(([name]) => name !== 'key')
-				);
-				writes.unshift({
-					key: returnSource.key,
-					value: serializeItineraryItem(
-						journeySchema.parse({ ...sourceItem, direction: 'outbound', updatedAt: now })
-					)
-				});
-			}
-			await sharedState.setMany(writes);
-			editorOpen = false;
-		} catch (error) {
-			formError =
-				error instanceof RangeError || (error instanceof Error && error.message.includes('TIME'))
-					? 'Kontroller dato, klokkeslett og tidssone.'
-					: 'Kunne ikke lagre reiseplanen.';
-		} finally {
-			saving = false;
-		}
 	}
 
 	async function deleteItem(item: KeyedItineraryItem): Promise<void> {
@@ -790,6 +234,8 @@
 		if (event.kind === 'note') return Bell;
 		return Route;
 	}
+
+	onMount(() => watchOnlineStatus((value) => (online = value)));
 </script>
 
 <svelte:head><title>Reiseplan · {page.data.tripName} · Gjemmekontor</title></svelte:head>
@@ -801,6 +247,12 @@
 			<SyncStatus />
 		</div>
 		<h1 class="font-display mt-1 text-3xl font-bold text-neutral">Reiseplan</h1>
+		{#if !online}
+			<p class="mt-2 flex items-center gap-1.5 text-xs text-base-content/60" role="status">
+				<WifiOff size={14} /> Planlegging og manuell redigering virker uten nett. Flydata og stedsforslag
+				krever nett.
+			</p>
+		{/if}
 	</header>
 
 	<div class="mb-5 flex items-center gap-2">
@@ -1026,465 +478,71 @@
 	{/if}
 </section>
 
-<dialog
-	bind:this={addDialog}
-	class="modal modal-bottom sm:modal-middle"
-	aria-labelledby="add-plan-title"
+<ModalDialog
+	bind:dialog={addDialog}
+	modalClass="modal modal-bottom sm:modal-middle"
+	boxClass="modal-box max-w-lg rounded-t-2xl sm:rounded-box"
+	labelledBy="add-plan-title"
+	closeLabel="Lukk valg"
 >
-	<div class="modal-box max-w-lg rounded-t-2xl sm:rounded-box">
-		<div class="flex items-center justify-between">
-			<h2 id="add-plan-title" class="font-display text-2xl font-bold">Hva vil du legge til?</h2>
-			<button
-				class="btn btn-square btn-ghost btn-sm"
-				type="button"
-				onclick={() => addDialog.close()}
-				aria-label="Lukk"><X size={19} /></button
-			>
-		</div>
-		<div class="mt-5 grid grid-cols-2 gap-3">
-			{#each coreChoices as choice (choice.value)}<button
-					class="flex min-h-28 flex-col items-start justify-center rounded-xl border border-base-300 bg-base-100 p-4 text-left hover:border-primary hover:bg-primary/5"
-					type="button"
-					onclick={() => openNew(choice.value === 'transport' ? 'taxi' : choice.value)}
-					><choice.icon class="mb-2 text-primary" size={23} /><span class="font-bold"
-						>{choice.label}</span
-					><span class="mt-1 text-xs text-base-content/55">{choice.description}</span></button
-				>{/each}
-		</div>
+	<div class="flex items-center justify-between">
+		<h2 id="add-plan-title" class="font-display text-2xl font-bold">Hva vil du legge til?</h2>
+		<button
+			class="btn btn-square btn-ghost btn-sm"
+			type="button"
+			onclick={() => addDialog.close()}
+			aria-label="Lukk"><X size={19} /></button
+		>
 	</div>
-	<form method="dialog" class="modal-backdrop">
-		<button type="submit" aria-label="Lukk valg">Lukk</button>
-	</form>
-</dialog>
+	<div class="mt-5 grid grid-cols-2 gap-3">
+		{#each coreChoices as choice (choice.value)}<button
+				class="flex min-h-28 flex-col items-start justify-center rounded-xl border border-base-300 bg-base-100 p-4 text-left hover:border-primary hover:bg-primary/5"
+				type="button"
+				onclick={() => openNew(choice.value === 'transport' ? 'taxi' : choice.value)}
+				><choice.icon class="mb-2 text-primary" size={23} /><span class="font-bold"
+					>{choice.label}</span
+				><span class="mt-1 text-xs text-base-content/55">{choice.description}</span></button
+			>{/each}
+	</div>
+</ModalDialog>
 
-<dialog
-	bind:this={filterDialog}
-	class="modal modal-bottom sm:modal-middle"
-	aria-labelledby="itinerary-filter-title"
+<ModalDialog
+	bind:dialog={filterDialog}
+	modalClass="modal modal-bottom sm:modal-middle"
+	boxClass="modal-box max-w-sm rounded-t-2xl sm:rounded-box"
+	labelledBy="itinerary-filter-title"
+	closeLabel="Lukk filter"
 >
-	<div class="modal-box max-w-sm rounded-t-2xl sm:rounded-box">
-		<h2 id="itinerary-filter-title" class="font-display text-2xl font-bold">Vis i tidslinjen</h2>
-		<div class="mt-4 space-y-2">
-			<button
+	<h2 id="itinerary-filter-title" class="font-display text-2xl font-bold">Vis i tidslinjen</h2>
+	<div class="mt-4 space-y-2">
+		<button
+			class="btn w-full justify-start"
+			class:btn-primary={entryFilter === 'all'}
+			class:btn-ghost={entryFilter !== 'all'}
+			type="button"
+			onclick={() => {
+				entryFilter = 'all';
+				filterDialog.close();
+			}}><CalendarDays size={17} /> Alle planer</button
+		>{#each filterChoices as choice (choice.value)}<button
 				class="btn w-full justify-start"
-				class:btn-primary={entryFilter === 'all'}
-				class:btn-ghost={entryFilter !== 'all'}
+				class:btn-primary={entryFilter === choice.value}
+				class:btn-ghost={entryFilter !== choice.value}
 				type="button"
 				onclick={() => {
-					entryFilter = 'all';
+					entryFilter = choice.value;
 					filterDialog.close();
-				}}><CalendarDays size={17} /> Alle planer</button
-			>{#each filterChoices as choice (choice.value)}<button
-					class="btn w-full justify-start"
-					class:btn-primary={entryFilter === choice.value}
-					class:btn-ghost={entryFilter !== choice.value}
-					type="button"
-					onclick={() => {
-						entryFilter = choice.value;
-						filterDialog.close();
-					}}><choice.icon size={17} /> {choice.label}</button
-				>{/each}
-		</div>
+				}}><choice.icon size={17} /> {choice.label}</button
+			>{/each}
 	</div>
-	<form method="dialog" class="modal-backdrop">
-		<button type="submit" aria-label="Lukk filter">Lukk</button>
-	</form>
-</dialog>
+</ModalDialog>
 
-{#if editorOpen}
-	<div
-		class="modal modal-open"
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="itinerary-editor-title"
-	>
-		<div class="modal-box max-h-[92dvh] max-w-3xl overflow-y-auto">
-			<div class="flex items-start justify-between gap-3">
-				<div>
-					<p class="text-xs font-semibold tracking-wide text-primary uppercase">
-						{editorLabel(entryType)}
-					</p>
-					<h2 id="itinerary-editor-title" class="font-display text-2xl font-bold">
-						{editingKey
-							? `Rediger ${editorLabel(entryType).toLowerCase()}`
-							: returnSource
-								? 'Legg til returfly'
-								: `Ny ${editorLabel(entryType).toLowerCase()}`}
-					</h2>
-				</div>
-				<button
-					class="btn btn-square btn-ghost btn-sm"
-					type="button"
-					onclick={() => (editorOpen = false)}
-					aria-label="Lukk"><X size={19} /></button
-				>
-			</div>
-			<form class="mt-5 space-y-5" onsubmit={saveItem}>
-				{#if entryType === 'flight'}
-					<section class="space-y-4">
-						<p class="text-sm text-base-content/55">
-							{returnSource
-								? 'Skriv inn flightnummeret for returen. Legg bare til en mellomlanding hvis returen har flere fly.'
-								: 'Skriv inn flightnummer og dato. Flydetaljene fylles ut automatisk.'}
-						</p>
-						{#each legs as leg, index (leg.id)}<div
-								class="rounded-2xl border border-base-300 bg-base-200/45 p-4"
-								data-flight-leg={index + 1}
-							>
-								{#if legs.length > 1}<div class="mb-3 flex items-center justify-between">
-										<h4 class="flex items-center gap-2 font-bold">
-											<Plane size={17} />
-											{index === 0 ? 'Første fly' : `Fly ${index + 1}`}
-										</h4>
-										<button
-											class="btn btn-square btn-ghost text-error btn-sm"
-											type="button"
-											disabled={legs.length === 1}
-											onclick={() => removeLeg(index)}
-											aria-label={`Fjern flyvning ${index + 1}`}><Trash2 size={16} /></button
-										>
-									</div>{/if}
-								<div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-									<label class="block"
-										><span class="mb-1 block text-sm font-semibold">Flightnummer</span><input
-											class="input w-full uppercase input-sm"
-											bind:value={leg.serviceNumber}
-											maxlength="30"
-											placeholder="SK1461"
-											required
-										/></label
-									><label class="block"
-										><span class="mb-1 block text-sm font-semibold">Avreisedato</span><input
-											class="input w-full input-sm"
-											type="date"
-											value={leg.from.localDateTime.slice(0, 10)}
-											oninput={(event) => updateDepartureDate(leg, event.currentTarget.value)}
-											required
-										/></label
-									><button
-										class="btn self-end btn-primary btn-sm"
-										type="button"
-										disabled={lookupLoading && lookupLegId === leg.id}
-										onclick={() => lookupFlight(leg)}
-										>{lookupLoading && lookupLegId === leg.id ? 'Henter …' : 'Hent flydata'}</button
-									>
-								</div>
-								{#if leg.provider}<div
-										class="mt-3 rounded-xl border border-success/30 bg-success/5 p-3"
-									>
-										<p class="font-semibold">
-											{leg.serviceNumber} · {leg.from.locationCode || leg.from.locationName} → {leg
-												.to.locationCode || leg.to.locationName}
-										</p>
-										<p class="mt-1 text-xs text-base-content/60">
-											{leg.from.localDateTime.replace('T', ' ')} – {leg.to.localDateTime.replace(
-												'T',
-												' '
-											)}
-										</p>
-									</div>{/if}
-								{#if lookupLegId === leg.id && (lookupError || lookupCandidates.length)}<div
-										class="mt-3 rounded-xl border border-base-300 bg-base-100 p-3"
-									>
-										{#if lookupError}<p class="text-sm text-warning">
-												{lookupError}
-											</p>{/if}{#if lookupCandidates.length}<p class="mb-2 text-sm font-semibold">
-												Velg flyvning
-											</p>
-											<div class="space-y-2">
-												{#each lookupCandidates as candidate (candidate.providerFlightId)}<button
-														class="btn h-auto w-full justify-start btn-ghost py-2 text-left"
-														type="button"
-														onclick={() => applyFlightCandidate(candidate, leg.id)}
-														><span
-															><strong>{candidate.flightNumber}</strong> · {candidate.from
-																.locationCode}
-															{candidate.from.localDateTime.replace('T', ' ')} → {candidate.to
-																.locationCode}
-															{candidate.to.localDateTime.replace('T', ' ')}</span
-														></button
-													>{/each}
-											</div>{/if}
-									</div>{/if}
-								<button
-									class="btn mt-3 btn-ghost btn-xs"
-									type="button"
-									onclick={() => toggleManualLeg(leg.id)}
-									>{manualLegIds.includes(leg.id)
-										? 'Skjul manuelle detaljer'
-										: 'Fyll inn eller korriger manuelt'}</button
-								>
-								{#if manualLegIds.includes(leg.id)}<div class="mt-3 space-y-3">
-										<label class="block"
-											><span class="mb-1 block text-sm font-semibold">Flyselskap</span><input
-												class="input w-full input-sm"
-												bind:value={leg.operator}
-												maxlength="100"
-												placeholder="SAS"
-											/></label
-										>
-										<div class="grid gap-3 lg:grid-cols-2">
-											<EndpointFields
-												label="Fra"
-												bind:endpoint={leg.from}
-												travelDetails={true}
-												placeLabel="Flyplass"
-												{googlePlacesApiKey}
-											/><EndpointFields
-												label="Til"
-												bind:endpoint={leg.to}
-												travelDetails={true}
-												placeLabel="Flyplass"
-												{googlePlacesApiKey}
-											/>
-										</div>
-									</div>{/if}
-							</div>{/each}
-						<button class="btn w-full btn-outline btn-sm" type="button" onclick={addFlightLeg}
-							><Plus size={16} /> Legg til mellomlanding</button
-						>
-					</section>
-				{:else if isTransportEntry(entryType)}
-					{@const leg = legs[0]!}
-					<label class="block">
-						<span class="mb-1 block font-semibold">Transportmiddel</span>
-						<select class="select w-full" bind:value={entryType}>
-							{#each transportChoices as choice (choice.value)}
-								<option value={choice.value}>{choice.label}</option>
-							{/each}
-						</select>
-					</label>
-					{#if entryType === 'taxi' || entryType === 'transfer'}
-						<label class="block"
-							><span class="mb-1 block font-semibold"
-								>{entryType === 'taxi' ? 'Taxiselskap (valgfritt)' : 'Selskap (valgfritt)'}</span
-							><input class="input w-full" bind:value={leg.operator} maxlength="100" /></label
-						>
-						<div class="grid gap-4 sm:grid-cols-2">
-							<PlaceInput
-								label="Hentested"
-								bind:value={leg.from.locationName}
-								apiKey={googlePlacesApiKey}
-							/>
-							<label class="block"
-								><span class="mb-1 block font-semibold">Hentetid</span><input
-									class="input w-full"
-									type="datetime-local"
-									bind:value={leg.from.localDateTime}
-									required
-								/></label
-							>
-							<div class="sm:col-span-2">
-								<PlaceInput
-									label="Destinasjon"
-									bind:value={leg.to.locationName}
-									apiKey={googlePlacesApiKey}
-								/>
-							</div>
-						</div>
-						<details class="rounded-xl border border-base-300 p-3">
-							<summary class="cursor-pointer text-sm font-semibold text-base-content/60"
-								>Tidssone</summary
-							>
-							<div class="mt-3">
-								<TimeZoneSelect bind:value={leg.from.timeZone} at={leg.from.localDateTime} />
-							</div>
-						</details>
-					{:else}
-						<div class="grid gap-3 sm:grid-cols-2">
-							<label class="block"
-								><span class="mb-1 block font-semibold"
-									>{entryType === 'ferry' ? 'Rederi (valgfritt)' : 'Selskap (valgfritt)'}</span
-								><input class="input w-full" bind:value={leg.operator} maxlength="100" /></label
-							><label class="block"
-								><span class="mb-1 block font-semibold">Rutenummer (valgfritt)</span><input
-									class="input w-full"
-									bind:value={leg.serviceNumber}
-									maxlength="30"
-								/></label
-							>
-						</div>
-						<div class="grid gap-4 lg:grid-cols-2">
-							<EndpointFields
-								label="Fra"
-								bind:endpoint={leg.from}
-								{googlePlacesApiKey}
-							/><EndpointFields label="Til" bind:endpoint={leg.to} {googlePlacesApiKey} />
-						</div>
-					{/if}
-				{:else}
-					<label class="block"
-						><span class="mb-1 block font-semibold"
-							>{entryType === 'stay'
-								? 'Navn på overnatting'
-								: entryType === 'rental'
-									? 'Utleier / utleieselskap'
-									: entryType === 'booking'
-										? 'Hva er bestilt?'
-										: 'Påminnelse'}</span
-						><input
-							class="input w-full"
-							bind:value={title}
-							required
-							maxlength="200"
-							placeholder={entryType === 'stay'
-								? 'Hotel Norge'
-								: entryType === 'rental'
-									? 'Hertz'
-									: entryType === 'booking'
-										? 'Kajakktur'
-										: undefined}
-						/></label
-					>
-					{#if entryType === 'stay'}<PlaceInput
-							label="Sted"
-							bind:value={primary.locationName}
-							apiKey={googlePlacesApiKey}
-							placeholder="Split"
-						/><label class="block"
-							><span class="mb-1 block font-semibold">Type</span><select
-								class="select w-full"
-								bind:value={staySubtype}
-								><option value="hotel">Hotell</option><option value="holiday-rental"
-									>Airbnb / feriebolig</option
-								><option value="camping">Camping</option><option value="other">Annet</option
-								></select
-							></label
-						>
-						<div class="grid gap-4 sm:grid-cols-2">
-							<label class="block"
-								><span class="mb-1 block font-semibold">Innsjekking</span><input
-									class="input w-full"
-									type="datetime-local"
-									bind:value={primary.localDateTime}
-									required
-								/></label
-							><label class="block"
-								><span class="mb-1 block font-semibold">Utsjekking</span><input
-									class="input w-full"
-									type="datetime-local"
-									bind:value={secondary.localDateTime}
-									required
-								/></label
-							>
-						</div>
-						<details class="rounded-xl border border-base-300 p-3">
-							<summary class="cursor-pointer text-sm font-semibold text-base-content/60"
-								>Tidssone</summary
-							>
-							<div class="mt-3">
-								<TimeZoneSelect
-									bind:value={primary.timeZone}
-									label="Tidssone for oppholdet"
-									at={primary.localDateTime}
-								/>
-							</div>
-						</details>
-					{:else if entryType === 'rental'}<label class="block"
-							><span class="mb-1 block font-semibold">Type</span><select
-								class="select w-full"
-								bind:value={rentalSubtype}
-								><option value="car">Bil</option><option value="boat">Båt</option><option
-									value="bike">Sykkel / scooter</option
-								><option value="equipment">Utstyr</option><option value="other">Annet</option
-								></select
-							></label
-						>
-						<div class="grid gap-4 lg:grid-cols-2">
-							<EndpointFields
-								label="Henting"
-								bind:endpoint={primary}
-								{googlePlacesApiKey}
-							/><EndpointFields label="Levering" bind:endpoint={secondary} {googlePlacesApiKey} />
-						</div>
-					{:else if entryType === 'booking'}<div class="grid gap-3 sm:grid-cols-2">
-							<label class="block"
-								><span class="mb-1 block font-semibold">Type</span><select
-									class="select w-full"
-									bind:value={bookingSubtype}
-									><option value="activity">Aktivitet / utflukt</option><option value="restaurant"
-										>Restaurant</option
-									><option value="event">Arrangement / billett</option><option value="appointment"
-										>Avtale</option
-									><option value="other">Annet</option></select
-								></label
-							><label class="flex items-center gap-3 self-end rounded-xl border border-base-300 p-3"
-								><input
-									class="checkbox checkbox-primary"
-									type="checkbox"
-									bind:checked={bookingHasEnd}
-								/><span class="font-semibold">Har sluttid</span></label
-							>
-						</div>
-						<div class="grid gap-4 lg:grid-cols-2">
-							<EndpointFields
-								label="Start"
-								bind:endpoint={primary}
-								{googlePlacesApiKey}
-							/>{#if bookingHasEnd}<EndpointFields
-									label="Slutt"
-									bind:endpoint={secondary}
-									{googlePlacesApiKey}
-								/>{/if}
-						</div>
-					{:else}<EndpointFields
-							label="Tid og sted"
-							bind:endpoint={primary}
-							{googlePlacesApiKey}
-						/>{/if}
-				{/if}
-
-				{#if members.length}<fieldset class="rounded-xl border border-base-300 p-3">
-						<legend class="px-1 text-sm font-bold">Reisende</legend>
-						<p class="mb-3 text-xs text-base-content/55">
-							Alle er valgt som standard. Trykk for å velge bort.
-						</p>
-						<div class="flex flex-wrap gap-2">
-							{#each members as member (member.id)}<button
-									class="btn btn-sm"
-									class:btn-primary={selectedParticipants.includes(member.name)}
-									class:btn-ghost={!selectedParticipants.includes(member.name)}
-									type="button"
-									aria-pressed={selectedParticipants.includes(member.name)}
-									onclick={() => toggleParticipant(member.name)}
-									><Users size={14} /> {member.name}</button
-								>{/each}
-						</div>
-					</fieldset>{/if}
-				<details class="rounded-xl border border-base-300 p-3">
-					<summary class="cursor-pointer font-semibold">Bestilling og notater</summary>
-					<div class="mt-4 grid gap-3 sm:grid-cols-2">
-						<label class="block"
-							><span class="mb-1 block text-sm font-semibold">Referanse</span><input
-								class="input w-full input-sm"
-								bind:value={bookingReference}
-								maxlength="100"
-							/></label
-						><label class="block"
-							><span class="mb-1 block text-sm font-semibold">Lenke</span><input
-								class="input w-full input-sm"
-								type="url"
-								bind:value={bookingUrl}
-								maxlength="1000"
-								placeholder="https://…"
-							/></label
-						><label class="block sm:col-span-2"
-							><span class="mb-1 block text-sm font-semibold">Notater</span><textarea
-								class="textarea min-h-20 w-full"
-								bind:value={notes}
-								maxlength="4000"></textarea></label
-						>
-					</div>
-				</details>
-				{#if formError}<p class="alert text-sm alert-error" role="alert">{formError}</p>{/if}
-				<div class="modal-action">
-					<button class="btn btn-ghost" type="button" onclick={() => (editorOpen = false)}
-						>Avbryt</button
-					><button class="btn btn-primary" type="submit" disabled={saving}
-						>{saving ? 'Lagrer …' : 'Lagre'}</button
-					>
-				</div>
-			</form>
-		</div>
-	</div>
-{/if}
+<ItineraryEditor
+	{members}
+	{googlePlacesApiKey}
+	{online}
+	{defaultDate}
+	{finalDate}
+	{timeZone}
+	onready={(controls) => (editorControls = controls)}
+/>

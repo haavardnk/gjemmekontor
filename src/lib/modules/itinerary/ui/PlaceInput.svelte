@@ -2,7 +2,7 @@
 	import { LoaderCircle, MapPin } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 
-	import { loadGooglePlacesUiKit } from '$lib/modules/map/client/google-places-loader';
+	import { loadGooglePlacesLibrary } from '$lib/modules/map/public';
 
 	type GooglePlace = {
 		displayName?: string;
@@ -64,7 +64,7 @@
 		if (!apiKey || googleUnavailable) return undefined;
 		if (library) return library;
 		try {
-			await loadGooglePlacesUiKit(apiKey);
+			await loadGooglePlacesLibrary(apiKey);
 			const importLibrary = (globalThis as GoogleMapsGlobal).google?.maps?.importLibrary;
 			if (!importLibrary) throw new Error('GOOGLE_PLACES_UNAVAILABLE');
 			library = (await importLibrary('places')) as GooglePlacesAutocompleteLibrary;
@@ -79,7 +79,12 @@
 		open = true;
 		suggestions = [];
 		if (debounceTimer) clearTimeout(debounceTimer);
-		if (!apiKey || value.trim().length < 2) return;
+		if (
+			!apiKey ||
+			value.trim().length < 2 ||
+			(typeof navigator !== 'undefined' && navigator.onLine === false)
+		)
+			return;
 		debounceTimer = setTimeout(() => void fetchSuggestions(value.trim()), 250);
 	}
 
