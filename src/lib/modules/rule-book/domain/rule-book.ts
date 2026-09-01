@@ -4,6 +4,7 @@ import type { JsonValue } from '$lib/client/database';
 
 export const ruleBookGameKey = 'rule-book:game';
 const rulePrefix = 'rule-book:rule:';
+const preferencePrefix = 'rule-book:preference:';
 
 export const ruleBookParticipantSchema = z
 	.object({
@@ -56,6 +57,19 @@ export type RuleBookMember = { id: string; name: string; optedOut: boolean };
 
 export function ruleBookRuleKey(dayIndex: number): string {
 	return `${rulePrefix}${dayIndex}`;
+}
+
+export function ruleBookPreferenceKey(personId: string): string {
+	return `${preferencePrefix}${personId}`;
+}
+
+export function ruleBookMemberOptedOut(
+	values: Record<string, JsonValue>,
+	personId: string,
+	fallback = false
+): boolean {
+	const value = values[ruleBookPreferenceKey(personId)];
+	return typeof value === 'boolean' ? value : fallback;
 }
 
 export function ruleBookGame(values: Record<string, JsonValue>): RuleBookGame | undefined {

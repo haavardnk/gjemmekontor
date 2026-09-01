@@ -5,6 +5,7 @@ import {
 	activeRuleBookGameSchema,
 	ruleBookGameKey,
 	type RuleBookMember,
+	ruleBookMemberOptedOut,
 	serializeRuleBookGame,
 	shuffledParticipants
 } from '$lib/modules/rule-book/domain/rule-book';
@@ -35,7 +36,21 @@ export function listRuleBookMembers(db: Database.Database, tripId: string): Rule
 			 ORDER BY m.sort_order, p.display_name COLLATE NOCASE`
 		)
 		.all(tripId) as MemberRow[];
-	return rows.map((row) => ({ id: row.id, name: row.name, optedOut: row.opted_out === 1 }));
+	const preferences = Object.fromEntries(
+		(
+			db
+				.prepare(
+					`SELECT key, value FROM trip_state_entries
+					 WHERE trip_id = ? AND key LIKE 'rule-book:preference:%'`
+				)
+				.all(tripId) as Array<{ key: string; value: string }>
+		).map((entry) => [entry.key, JSON.parse(entry.value)])
+	);
+	return rows.map((row) => ({
+		id: row.id,
+		name: row.name,
+		optedOut: ruleBookMemberOptedOut(preferences, row.id, row.opted_out === 1)
+	}));
 }
 
 function audit(

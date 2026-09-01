@@ -2,18 +2,23 @@
 	import { LoaderCircle, ScrollText, Shuffle, Users } from '@lucide/svelte';
 
 	import { page } from '$app/state';
-	import { apiRequest } from '$lib/client/api';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
+		activeRuleBookGameSchema,
 		nextSectionNumber,
 		parseRuleBookRule,
 		participantForDay,
 		ruleBookGame,
+		ruleBookGameKey,
 		type RuleBookMember,
+		ruleBookMemberOptedOut,
+		ruleBookPreferenceKey,
 		ruleBookRuleKey,
 		ruleBookRules,
 		ruleForDay,
-		serializeRuleBookRule
+		serializeRuleBookGame,
+		serializeRuleBookRule,
+		shuffledParticipants
 	} from '$lib/modules/rule-book/domain/rule-book';
 	import { tripDayState } from '$lib/trip/day.svelte';
 	import { dateKeyAt, type TripDay } from '$lib/trip/itinerary';
@@ -24,7 +29,12 @@
 		days,
 		timeZone
 	}: { members: RuleBookMember[]; days: TripDay[]; timeZone: string } = $props();
-	let localMembers = $derived(members.map((member) => ({ ...member })));
+	const localMembers = $derived(
+		members.map((member) => ({
+			...member,
+			optedOut: ruleBookMemberOptedOut(sharedState.values, member.id, member.optedOut)
+		}))
+	);
 	let errorMessage = $state('');
 	let saving = $state(false);
 
@@ -57,16 +67,10 @@
 	});
 
 	async function setParticipation(member: RuleBookMember, participating: boolean): Promise<void> {
-		const previous = member.optedOut;
-		member.optedOut = !participating;
 		errorMessage = '';
 		try {
-			await apiRequest('/api/rule-book/preferences', {
-				method: 'POST',
-				json: { personId: member.id, optedOut: !participating }
-			});
+			await sharedState.set(ruleBookPreferenceKey(member.id), !participating);
 		} catch {
-			member.optedOut = previous;
 			errorMessage = 'Kunne ikke lagre deltakervalget. Prøv igjen.';
 		}
 	}
@@ -75,11 +79,15 @@
 		if (activeGame || participants.length < 2 || saving) return;
 		saving = true;
 		try {
-			await apiRequest('/api/rule-book/game', {
-				method: 'POST',
-				json: { clientId: await sharedState.clientId() }
+			const timestamp = new Date().toISOString();
+			const next = activeRuleBookGameSchema.parse({
+				version: 1,
+				status: 'active',
+				participantOrder: shuffledParticipants(participants),
+				startedAt: timestamp,
+				startedBy: await sharedState.clientId()
 			});
-			await sharedState.sync();
+			await sharedState.set(ruleBookGameKey, serializeRuleBookGame(next));
 			errorMessage = '';
 		} catch {
 			errorMessage = 'Kunne ikke starte spillet. Oppdater siden og prøv igjen.';
@@ -93,11 +101,7 @@
 		if (!window.confirm('Vil du endre deltakerne? Det trekkes en ny rekkefølge.')) return;
 		saving = true;
 		try {
-			await apiRequest('/api/rule-book/game', {
-				method: 'DELETE',
-				json: { clientId: await sharedState.clientId() }
-			});
-			await sharedState.sync();
+			await sharedState.set(ruleBookGameKey, null);
 			errorMessage = '';
 		} catch {
 			errorMessage = 'Kunne ikke åpne deltakervalget igjen.';

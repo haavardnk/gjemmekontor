@@ -26,7 +26,10 @@ async function login(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-test('starts a fixed rotation and keeps a numbered rule book', async ({ page }) => {
+test('starts a fixed rotation offline and keeps a synchronized numbered rule book', async ({
+	context,
+	page
+}) => {
 	await useSecondTripDay(page);
 	await login(page);
 	await page.getByRole('button', { name: 'Mer' }).click();
@@ -35,6 +38,8 @@ test('starts a fixed rotation and keeps a numbered rule book', async ({ page }) 
 	await expect(page).toHaveURL(/\/rule-book$/);
 	await expect(page.getByRole('heading', { name: 'Regelboka', level: 1 })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Mer' })).toHaveAttribute('aria-current', 'page');
+	await expect(page.getByLabel('Tilgjengelig uten nett')).toBeVisible();
+	await context.setOffline(true);
 
 	const includedNames = ['Håvard', 'Tina'];
 	const excludedNames = ['Tomine', 'Odd', 'Lise', 'Oskar'];
@@ -79,6 +84,12 @@ test('starts a fixed rotation and keeps a numbered rule book', async ({ page }) 
 		})
 	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Endre deltakere' })).toHaveCount(0);
+	await expect(page.getByRole('status')).toContainText(/Uten nett/);
+	await page.reload();
+	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toHaveValue(rule);
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect(page.getByRole('status')).toHaveText('Synkronisert', { timeout: 15_000 });
 
 	const missedRule = `Alle må bade før frokost ${crypto.randomUUID().slice(0, 8)}`;
 	await page
