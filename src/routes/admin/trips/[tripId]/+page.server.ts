@@ -59,7 +59,7 @@ export const load: PageServerLoad = ({ params, locals }) => {
 			configured: typeof mapModule?.config.googleMyMapsId === 'string',
 			aisProviderConfigured: Boolean(mapRuntime.aisStreamApiKey),
 			googlePlacesConfigured: Boolean(
-				mapRuntime.googlePlacesServerApiKey && mapRuntime.googlePlacesUiKitApiKey
+				mapRuntime.googlePlacesServerApiKey && mapRuntime.googlePlacesBrowserApiKey
 			),
 			tripadvisorConfigured: Boolean(mapRuntime.tripadvisorTerraApiKey),
 			mappings: (

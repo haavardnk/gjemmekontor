@@ -1,9 +1,17 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import { describe, expect, test } from 'vitest';
 
 import { moduleCatalog, validateModuleCatalog } from './catalog';
+
+function sourceFiles(directory: string): string[] {
+	return readdirSync(resolve(directory), { withFileTypes: true }).flatMap((entry) => {
+		const path = join(directory, entry.name);
+		if (entry.isDirectory()) return sourceFiles(path);
+		return /\.(?:svelte|ts)$/.test(entry.name) ? [path] : [];
+	});
+}
 
 describe('module catalog', (): void => {
 	test('has unique ownership metadata', (): void => {
@@ -24,28 +32,16 @@ describe('module catalog', (): void => {
 	});
 
 	test('keeps common and trip code independent from product modules', (): void => {
-		for (const file of [
-			'src/lib/client/database.ts',
-			'src/lib/client/state.svelte.ts',
-			'src/lib/server/database.ts',
-			'src/lib/server/state.ts',
-			'src/lib/trip/itinerary.ts',
-			'src/lib/trip/day.svelte.ts'
-		]) {
+		const files = ['client', 'server', 'trip', 'ui'].flatMap((directory) =>
+			sourceFiles(`src/lib/${directory}`)
+		);
+		for (const file of files) {
 			expect(readFileSync(resolve(file), 'utf8'), file).not.toContain('$lib/modules/');
 		}
 	});
 
 	test('allows sibling module imports only through public entry points', (): void => {
-		const files = [
-			'src/lib/modules/map/ui/MapPage.svelte',
-			'src/lib/modules/map/ui/MapView.svelte',
-			'src/lib/modules/logbook/domain/map-overlay.ts',
-			'src/lib/modules/logbook/ui/LogbookView.svelte',
-			'src/lib/modules/menu/domain/shopping.ts',
-			'src/lib/modules/menu/server/shopping.ts'
-		];
-		for (const file of files) {
+		for (const file of sourceFiles('src/lib/modules')) {
 			const sourceModule = file.split('/')[3];
 			const imports = [
 				...readFileSync(resolve(file), 'utf8').matchAll(/\$lib\/modules\/([^/'"]+)\/([^'"]+)/g)

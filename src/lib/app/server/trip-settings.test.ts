@@ -187,6 +187,49 @@ describe('trip settings', (): void => {
 		});
 	});
 
+	test('versions changed module configuration once and records its history', (): void => {
+		const tripId = createTestTrip();
+		const input = {
+			mapGoogleMyMapsId: 'versioned-map-id',
+			mapDefaultMode: 'normal' as const,
+			mapEnabledOverlays: ['depth-contours'] as const,
+			mapOfflinePackages: ['normal'] as const
+		};
+		const version = (): number =>
+			(
+				db
+					.prepare(
+						"SELECT config_version FROM trip_modules WHERE trip_id = ? AND module_id = 'map'"
+					)
+					.get(tripId) as { config_version: number }
+			).config_version;
+		const historyCount = (): number =>
+			(
+				db
+					.prepare(
+						"SELECT COUNT(*) AS count FROM trip_module_config_history WHERE trip_id = ? AND module_id = 'map'"
+					)
+					.get(tripId) as { count: number }
+			).count;
+		const initialVersion = version();
+
+		setTripMapConfiguration(db, tripId, {
+			...input,
+			mapEnabledOverlays: [...input.mapEnabledOverlays],
+			mapOfflinePackages: [...input.mapOfflinePackages]
+		});
+		expect(version()).toBe(initialVersion + 1);
+		expect(historyCount()).toBe(1);
+
+		setTripMapConfiguration(db, tripId, {
+			...input,
+			mapEnabledOverlays: [...input.mapEnabledOverlays],
+			mapOfflinePackages: [...input.mapOfflinePackages]
+		});
+		expect(version()).toBe(initialVersion + 1);
+		expect(historyCount()).toBe(1);
+	});
+
 	test('keeps a verified Bring connection through trip edits', (): void => {
 		const tripId = createTestTrip();
 		setTripShoppingListConnection(db, tripId, {
