@@ -3,6 +3,7 @@
 		Backpack,
 		BookOpen,
 		ChevronsUpDown,
+		CloudCheck,
 		Ellipsis,
 		LogOut,
 		Map,
@@ -14,23 +15,28 @@
 		Video
 	} from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { moduleCatalog, type ModuleId, pathMatchesPrefix } from '$lib/app/modules/catalog';
+	import { offlineApi } from '$lib/client/offline-api.svelte';
+	import { watchOnlineStatus } from '$lib/client/online';
 	import { warmAppShell } from '$lib/client/pwa';
 	import { sharedState } from '$lib/client/state.svelte';
 	import { tripDayState } from '$lib/trip/day.svelte';
 
 	import BrandLogo from './BrandLogo.svelte';
+	import ModalDialog from './ModalDialog.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
 	let { children }: { children: Snippet } = $props();
 	let mounted = $state(false);
+	let online = $state(true);
+	let offlineReady = $state(false);
 	let signingOut = $state(false);
 	let moreOpen = $state(false);
-	let moreDialog: HTMLDialogElement;
+	let moreDialog = $state<HTMLDialogElement>(undefined!);
 
 	async function signOut(): Promise<void> {
 		signingOut = true;
@@ -72,6 +78,12 @@
 		moreLinks.some((link) => pathMatchesPrefix(page.url.pathname, link.path))
 	);
 	const homePath = $derived(enabledModules[0]?.primaryPath ?? '/');
+	if (typeof window !== 'undefined' && page.data.tripId) {
+		offlineApi.prepare(
+			page.data.tripId,
+			untrack(() => enabledModuleIds)
+		);
+	}
 
 	function isCurrent(path: string): boolean {
 		return pathMatchesPrefix(page.url.pathname, path);
@@ -89,10 +101,12 @@
 
 	onMount(() => {
 		mounted = true;
+		const stopOnline = watchOnlineStatus((value) => (online = value));
 		if (!page.data.tripId) {
-			return;
+			return stopOnline;
 		}
 		void sharedState.start(page.data.tripId, enabledModuleIds);
+		void offlineApi.start(page.data.tripId, enabledModuleIds);
 		void tripDayState.start(
 			page.data.tripId,
 			page.data.tripDays ?? [],
@@ -101,9 +115,11 @@
 		void warmAppShell(
 			enabledModules.map((module) => module.primaryPath),
 			page.data.tripId
-		);
+		).then((ready) => (offlineReady = ready));
 		return (): void => {
+			stopOnline();
 			sharedState.stop();
+			offlineApi.stop();
 			tripDayState.stop();
 		};
 	});
@@ -112,10 +128,25 @@
 <header
 	class="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-base-300 bg-base-100 px-4 lg:pl-24"
 >
-	<a class="text-primary" href={resolve(homePath)} aria-label="Gjemmekontor" title="Gjemmekontor">
+	<a
+		class="text-primary"
+		href={resolve(homePath)}
+		data-sveltekit-reload={online ? undefined : true}
+		aria-label="Gjemmekontor"
+		title="Gjemmekontor"
+	>
 		<BrandLogo class="size-10" label="" />
 	</a>
 	<div class="flex items-center gap-1">
+		{#if offlineReady}
+			<span
+				class="inline-flex size-8 items-center justify-center text-success"
+				title="Tilgjengelig uten nett"
+				aria-label="Tilgjengelig uten nett"
+			>
+				<CloudCheck size={18} />
+			</span>
+		{/if}
 		<a
 			class="btn btn-square btn-ghost btn-sm"
 			href={resolve('/trips')}
@@ -164,6 +195,7 @@
 			class:flex={quickLinks.includes(link)}
 			class:hidden={moreLinks.includes(link)}
 			href={link.href}
+			data-sveltekit-reload={online ? undefined : true}
 			aria-current={isCurrent(link.path) ? 'page' : undefined}
 		>
 			<link.icon size={21} />
@@ -188,32 +220,30 @@
 	{/if}
 </nav>
 
-<dialog
+<ModalDialog
+	bind:dialog={moreDialog}
 	id="mobile-more-navigation"
-	bind:this={moreDialog}
-	class="modal modal-bottom lg:hidden"
-	aria-label="Flere moduler"
+	modalClass="modal modal-bottom lg:hidden"
+	boxClass="modal-box rounded-t-2xl rounded-b-none p-4 pb-6"
+	label="Flere moduler"
+	closeLabel="Lukk menyen"
 	onclose={() => (moreOpen = false)}
 >
-	<div class="modal-box rounded-t-2xl rounded-b-none p-4 pb-6">
-		<nav class="grid grid-cols-2 gap-3" aria-label="Flere moduler">
-			{#each moreLinks as link (link.href)}
-				<a
-					class="flex min-h-24 flex-col items-center justify-center gap-2 rounded-box border border-base-300 bg-base-200/55 p-3 font-semibold text-base-content/70 aria-[current=page]:border-primary/35 aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
-					href={link.href}
-					onclick={closeMore}
-					aria-current={isCurrent(link.path) ? 'page' : undefined}
-				>
-					<link.icon size={25} />
-					<span>{link.label}</span>
-				</a>
-			{/each}
-		</nav>
-	</div>
-	<form method="dialog" class="modal-backdrop">
-		<button type="submit" aria-label="Lukk menyen">Lukk</button>
-	</form>
-</dialog>
+	<nav class="grid grid-cols-2 gap-3" aria-label="Flere moduler">
+		{#each moreLinks as link (link.href)}
+			<a
+				class="flex min-h-24 flex-col items-center justify-center gap-2 rounded-box border border-base-300 bg-base-200/55 p-3 font-semibold text-base-content/70 aria-[current=page]:border-primary/35 aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+				href={link.href}
+				data-sveltekit-reload={online ? undefined : true}
+				onclick={closeMore}
+				aria-current={isCurrent(link.path) ? 'page' : undefined}
+			>
+				<link.icon size={25} />
+				<span>{link.label}</span>
+			</a>
+		{/each}
+	</nav>
+</ModalDialog>
 
 <style>
 	.module-nav {
