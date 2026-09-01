@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CirclePlus, FileCheck2, FileUp, Pencil, RefreshCw, Trash2 } from '@lucide/svelte';
+	import { CirclePlus, FileCheck2, Pencil, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
 	import { page } from '$app/state';
@@ -18,7 +18,6 @@
 	import { extractGpxXml, gpxMaximumBytes } from '../domain/gpx';
 	import {
 		type LocationReference,
-		type LogbookGpx,
 		type LogbookLeg,
 		logbookLegKey,
 		logbookLegs,
@@ -30,6 +29,8 @@
 		serializeLogbookLeg
 	} from '../domain/logbook';
 	import LocationInput from './LocationInput.svelte';
+	import { editLogbookLegDraft, newLogbookLegDraft } from './logbook-leg-draft';
+	import LogbookLegEditor from './LogbookLegEditor.svelte';
 
 	let { day, mapEnabled, timeZone }: { day: TripDay; mapEnabled: boolean; timeZone: string } =
 		$props();
@@ -38,23 +39,7 @@
 	let snapshot = $state<MapSnapshot>();
 	let locationsReady = $state(false);
 	let addingLeg = $state(false);
-	let fileInput = $state<HTMLInputElement>();
-	let editingKey = $state<string>();
-	let editingCreatedAt = $state('');
-	let editingCreatedBy = $state('');
-	let from = $state('');
-	let to = $state('');
-	let departure = $state('09:00');
-	let arrival = $state('12:00');
-	let nauticalMiles = $state(0);
-	let sailingMinutes = $state(0);
-	let engineMinutes = $state(0);
-	let mooring = $state<(typeof mooringChoices)[number]['value']>('anchor');
-	let customMooring = $state('');
-	let gpx = $state<LogbookGpx>();
-	let gpxFile = $state<File>();
-	let readingGpx = $state(false);
-	let formError = $state('');
+	let draft = $state(newLogbookLegDraft());
 
 	const legs = $derived(logbookLegs(sharedState.values, day.id));
 	const totals = $derived(logbookTotals(legs));
@@ -62,7 +47,9 @@
 	const weatherKey = $derived(`logbook:day:${day.id}:weather`);
 	const notesKey = $derived(`logbook:day:${day.id}:notes`);
 	const destination = $derived(parseLocation(sharedState.values[destinationKey]));
-	const gpxDateMismatch = $derived(gpx !== undefined && localDate(gpx.departureAt) !== day.date);
+	const gpxDateMismatch = $derived(
+		draft.gpx !== undefined && localDate(draft.gpx.departureAt) !== day.date
+	);
 	const points = $derived(
 		(snapshot?.features ?? []).filter(
 			(
@@ -90,15 +77,15 @@
 			.sort((left, right) => left.name.localeCompare(right.name, 'nb-NO'))
 	);
 	const canSaveLeg = $derived(
-		from.trim().length > 0 &&
-			to.trim().length > 0 &&
-			departure.length > 0 &&
-			arrival.length > 0 &&
-			nauticalMiles >= 0 &&
-			sailingMinutes >= 0 &&
-			engineMinutes >= 0 &&
-			(mooring !== 'other' || customMooring.trim().length > 0) &&
-			(editingKey !== undefined || gpx !== undefined)
+		draft.from.trim().length > 0 &&
+			draft.to.trim().length > 0 &&
+			draft.departure.length > 0 &&
+			draft.arrival.length > 0 &&
+			draft.nauticalMiles >= 0 &&
+			draft.sailingMinutes >= 0 &&
+			draft.engineMinutes >= 0 &&
+			(draft.mooring !== 'other' || draft.customMooring.trim().length > 0) &&
+			(draft.editingKey !== undefined || draft.gpx !== undefined)
 	);
 
 	function textValue(key: string): string {
@@ -136,42 +123,12 @@
 
 	function openLeg(): void {
 		addingLeg = true;
-		editingKey = undefined;
-		editingCreatedAt = '';
-		editingCreatedBy = '';
-		from = legs.at(-1)?.to.name ?? destination?.name ?? '';
-		to = '';
-		departure = '09:00';
-		arrival = '12:00';
-		nauticalMiles = 0;
-		sailingMinutes = 0;
-		engineMinutes = 0;
-		mooring = 'anchor';
-		customMooring = '';
-		gpx = undefined;
-		gpxFile = undefined;
-		readingGpx = false;
-		formError = '';
+		draft = newLogbookLegDraft(legs.at(-1)?.to.name ?? destination?.name ?? '');
 	}
 
 	function editLeg(key: string, leg: LogbookLeg): void {
 		addingLeg = true;
-		editingKey = key;
-		editingCreatedAt = leg.createdAt;
-		editingCreatedBy = leg.createdBy;
-		from = leg.from.name;
-		to = leg.to.name;
-		departure = leg.departure;
-		arrival = leg.arrival;
-		nauticalMiles = leg.nauticalMiles;
-		sailingMinutes = leg.sailingMinutes;
-		engineMinutes = leg.engineMinutes;
-		mooring = leg.mooring;
-		customMooring = leg.customMooring;
-		gpx = leg.gpx;
-		gpxFile = undefined;
-		readingGpx = false;
-		formError = '';
+		draft = editLogbookLegDraft(key, leg);
 	}
 
 	function localTime(value: string): string {
@@ -213,60 +170,60 @@
 		const file = input.files?.[0];
 		input.value = '';
 		if (!file) return;
-		readingGpx = true;
-		formError = '';
+		draft.readingGpx = true;
+		draft.error = '';
 		try {
 			if (file.size > gpxMaximumBytes) throw new Error('GPX_TOO_LARGE');
 			const extraction = extractGpxXml(await file.text(), (xml) =>
 				new DOMParser().parseFromString(xml, 'text/xml')
 			);
-			gpx = {
+			draft.gpx = {
 				id: crypto.randomUUID(),
 				filename: file.name,
 				checksum: await checksum(file),
 				byteSize: file.size,
 				...extraction
 			};
-			gpxFile = file;
-			departure = localTime(extraction.departureAt);
-			arrival = localTime(extraction.arrivalAt);
-			nauticalMiles = Number(extraction.nauticalMiles.toFixed(1));
+			draft.gpxFile = file;
+			draft.departure = localTime(extraction.departureAt);
+			draft.arrival = localTime(extraction.arrivalAt);
+			draft.nauticalMiles = Number(extraction.nauticalMiles.toFixed(1));
 		} catch (error) {
-			formError = gpxError(error);
+			draft.error = gpxError(error);
 		} finally {
-			readingGpx = false;
+			draft.readingGpx = false;
 		}
 	}
 
 	async function addLeg(): Promise<void> {
-		const fromLocation = locationForName(from);
-		const toLocation = locationForName(to);
+		const fromLocation = locationForName(draft.from);
+		const toLocation = locationForName(draft.to);
 		if (!fromLocation || !toLocation) {
-			formError = 'Fyll ut både fra og til.';
+			draft.error = 'Fyll ut både fra og til.';
 			return;
 		}
 		const parsed = logbookLegSchema.safeParse({
 			from: fromLocation,
 			to: toLocation,
-			departure,
-			arrival,
-			nauticalMiles,
-			sailingMinutes,
-			engineMinutes,
-			mooring,
-			customMooring: mooring === 'other' ? customMooring.trim() : '',
-			gpx,
-			createdAt: editingCreatedAt || new Date().toISOString(),
-			createdBy: editingCreatedBy || (await sharedState.clientId()),
+			departure: draft.departure,
+			arrival: draft.arrival,
+			nauticalMiles: draft.nauticalMiles,
+			sailingMinutes: draft.sailingMinutes,
+			engineMinutes: draft.engineMinutes,
+			mooring: draft.mooring,
+			customMooring: draft.mooring === 'other' ? draft.customMooring.trim() : '',
+			gpx: draft.gpx,
+			createdAt: draft.createdAt || new Date().toISOString(),
+			createdBy: draft.createdBy || (await sharedState.clientId()),
 			tombstone: false
 		});
 		if (!parsed.success) {
-			formError = 'Kontroller tidene og tallene før du lagrer.';
+			draft.error = 'Kontroller tidene og tallene før du lagrer.';
 			return;
 		}
-		const key = editingKey ?? logbookLegKey(day.id, crypto.randomUUID());
+		const key = draft.editingKey ?? logbookLegKey(day.id, crypto.randomUUID());
 		const parsedGpx = parsed.data.gpx;
-		if (gpxFile && parsedGpx) {
+		if (draft.gpxFile && parsedGpx) {
 			const extraction = {
 				version: parsedGpx.version,
 				name: parsedGpx.name,
@@ -289,7 +246,7 @@
 				path: `/api/logbook/gpx/${encodeURIComponent(parsedGpx.id)}`,
 				query: { legKey: key, filename: parsedGpx.filename },
 				contentType: 'application/gpx+xml',
-				data: gpxFile,
+				data: draft.gpxFile,
 				createdAt: Date.now(),
 				expectedResponse: {
 					checksum: parsedGpx.checksum,
@@ -489,149 +446,15 @@
 </div>
 
 {#if addingLeg}
-	<div class="modal modal-open" role="dialog" aria-modal="true" aria-labelledby="add-leg-title">
-		<div class="modal-box max-w-xl">
-			<h2 id="add-leg-title" class="font-display text-2xl font-bold">
-				{editingKey ? 'Rediger etappe' : 'Ny etappe'}
-			</h2>
-			<input
-				class="hidden"
-				type="file"
-				accept=".gpx,application/gpx+xml"
-				bind:this={fileInput}
-				onchange={importGpx}
-			/>
-			<section class="mt-4 rounded-lg border border-base-300 bg-base-200 p-4">
-				{#if gpx}
-					<div class="flex items-start gap-3">
-						<FileCheck2 class="mt-0.5 shrink-0 text-success" size={21} />
-						<div class="min-w-0 flex-1">
-							<p class="truncate font-semibold">{gpx.filename}</p>
-							<p class="mt-1 text-sm text-base-content/65">
-								{localTime(gpx.departureAt)}–{localTime(gpx.arrivalAt)} · {gpx.nauticalMiles.toLocaleString(
-									'nb-NO',
-									{ maximumFractionDigits: 1 }
-								)} nm
-							</p>
-							<p class="mt-1 text-xs text-base-content/55">
-								Aktiv {durationSeconds(gpx.activeSeconds)} · Totalt {durationSeconds(
-									gpx.elapsedSeconds
-								)} · {durationSeconds(gpx.stationarySeconds)} uten bevegelse fjernet
-							</p>
-						</div>
-						<button
-							class="btn btn-square btn-ghost btn-sm"
-							type="button"
-							disabled={readingGpx}
-							onclick={() => fileInput?.click()}
-							aria-label="Bytt GPX-fil"
-							title="Bytt GPX-fil"><RefreshCw size={17} /></button
-						>
-					</div>
-					{#if gpxDateMismatch}
-						<p class="mt-3 text-sm text-warning" role="alert">
-							Datoen i GPX-filen er en annen enn valgt dag. Kontroller at etappen ligger riktig.
-						</p>
-					{/if}
-				{:else}
-					<div class="text-center">
-						<FileUp class="mx-auto text-primary" size={28} />
-						<p class="mt-2 font-semibold">Legg til GPX fra Orca</p>
-						<p class="mt-1 text-sm text-base-content/60">
-							Etappen, tidene og distansen hentes fra filen.
-						</p>
-						<button
-							class="btn mt-3 btn-primary btn-sm"
-							type="button"
-							disabled={readingGpx}
-							onclick={() => fileInput?.click()}
-							><FileUp size={16} />{readingGpx ? 'Leser GPX …' : 'Velg GPX-fil'}</button
-						>
-					</div>
-				{/if}
-			</section>
-			{#if gpx || editingKey}
-				<div class="mt-4 grid gap-4 sm:grid-cols-2">
-					<LocationInput label="Fra" bind:value={from} suggestions={locationSuggestions} />
-					<LocationInput label="Til" bind:value={to} suggestions={locationSuggestions} />
-					<label class="block"
-						><span class="mb-1 block font-semibold">Avgang</span><input
-							class="input w-full"
-							type="time"
-							readonly={gpx !== undefined}
-							bind:value={departure}
-						/></label
-					>
-					<label class="block"
-						><span class="mb-1 block font-semibold">Ankomst</span><input
-							class="input w-full"
-							type="time"
-							readonly={gpx !== undefined}
-							bind:value={arrival}
-						/></label
-					>
-					<label class="block"
-						><span class="mb-1 block font-semibold">Nautiske mil</span><input
-							class="input w-full"
-							type="number"
-							min="0"
-							max="500"
-							step="0.1"
-							readonly={gpx !== undefined}
-							bind:value={nauticalMiles}
-						/></label
-					>
-					<label class="block"
-						><span class="mb-1 block font-semibold">Fortøyning</span><select
-							class="select w-full"
-							bind:value={mooring}
-							>{#each mooringChoices as choice (choice.value)}<option value={choice.value}
-									>{choice.label}</option
-								>{/each}</select
-						></label
-					>
-					<label class="block"
-						><span class="mb-1 block font-semibold">Seiling, minutter</span><input
-							class="input w-full"
-							type="number"
-							min="0"
-							max="1440"
-							bind:value={sailingMinutes}
-						/></label
-					>
-					<label class="block"
-						><span class="mb-1 block font-semibold">Motor, minutter</span><input
-							class="input w-full"
-							type="number"
-							min="0"
-							max="1440"
-							bind:value={engineMinutes}
-						/></label
-					>
-					{#if mooring === 'other'}<label class="block sm:col-span-2"
-							><span class="mb-1 block font-semibold">Fortøyningstype</span><input
-								class="input w-full"
-								bind:value={customMooring}
-								maxlength="100"
-							/></label
-						>{/if}
-				</div>
-			{/if}
-			{#if formError}<p class="mt-3 text-sm text-error" role="alert">{formError}</p>{/if}
-			<div class="modal-action">
-				<button class="btn" type="button" onclick={() => (addingLeg = false)}>Avbryt</button><button
-					class="btn btn-primary"
-					type="button"
-					disabled={!canSaveLeg}
-					onclick={addLeg}>{editingKey ? 'Lagre endringer' : 'Lagre etappe'}</button
-				>
-			</div>
-		</div>
-		<button
-			class="modal-backdrop"
-			type="button"
-			onclick={() => (addingLeg = false)}
-			aria-label="Lukk"
-		></button>
-	</div>
+	<LogbookLegEditor
+		{draft}
+		{locationSuggestions}
+		dateMismatch={gpxDateMismatch}
+		canSave={canSaveLeg}
+		formatTime={localTime}
+		formatDuration={durationSeconds}
+		onimport={importGpx}
+		onsave={addLeg}
+		onclose={() => (addingLeg = false)}
+	/>
 {/if}
