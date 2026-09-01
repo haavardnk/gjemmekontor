@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/t/kroatia-2026/unlock');
+	await page.goto('/t/testreise/unlock');
 	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
@@ -79,9 +79,9 @@ test('keeps manual flight edits when a pending lookup is cancelled', async ({ pa
 						from: {
 							locationName: 'Oslo lufthavn',
 							locationCode: 'OSL',
-							localDateTime: '2026-09-05T08:00',
+							localDateTime: '2027-06-01T08:00',
 							timeZone: 'Europe/Oslo',
-							instant: '2026-09-05T06:00:00.000Z',
+							instant: '2027-06-01T06:00:00.000Z',
 							terminal: '',
 							gate: '',
 							platform: ''
@@ -89,15 +89,15 @@ test('keeps manual flight edits when a pending lookup is cancelled', async ({ pa
 						to: {
 							locationName: 'København',
 							locationCode: 'CPH',
-							localDateTime: '2026-09-05T09:10',
+							localDateTime: '2027-06-01T09:10',
 							timeZone: 'Europe/Copenhagen',
-							instant: '2026-09-05T07:10:00.000Z',
+							instant: '2027-06-01T07:10:00.000Z',
 							terminal: '',
 							gate: '',
 							platform: ''
 						},
-						scheduledFrom: '2026-09-05T06:00:00.000Z',
-						scheduledTo: '2026-09-05T07:10:00.000Z'
+						scheduledFrom: '2027-06-01T06:00:00.000Z',
+						scheduledTo: '2027-06-01T07:10:00.000Z'
 					}
 				]
 			}
@@ -113,7 +113,7 @@ test('keeps manual flight edits when a pending lookup is cancelled', async ({ pa
 		.click();
 	const editor = page.getByRole('dialog', { name: 'Ny fly' });
 	await editor.getByRole('textbox', { name: 'Flightnummer' }).fill('SK1461');
-	await editor.locator('input[type="date"]').fill('2026-09-05');
+	await editor.locator('input[type="date"]').fill('2027-06-01');
 	await editor.getByRole('button', { name: 'Hent flydata' }).click();
 	await expect(editor.getByRole('button', { name: 'Henter …' })).toBeVisible();
 	await editor.getByRole('button', { name: 'Fyll inn eller korriger manuelt' }).click();
@@ -135,8 +135,8 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 				class TestAutocompleteSessionToken {}
 				class TestPlace {
 					async fetchFields() {
-						this.displayName = 'Split Airport';
-						this.formattedAddress = 'Cesta Dr. Franje Tuđmana 1270, Kaštela, Croatia';
+						this.displayName = 'Testflyplass';
+						this.formattedAddress = 'Testgata 1, Testbyen';
 					}
 				}
 				const places = {
@@ -145,7 +145,7 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 						async fetchAutocompleteSuggestions(request) {
 							if (request.language !== 'nb') throw new Error('INVALID_AUTOCOMPLETE_LANGUAGE');
 							return { suggestions: [{ placePrediction: {
-								text: { toString: () => 'Split Airport, Kaštela, Croatia' },
+								text: { toString: () => 'Testflyplass, Testbyen' },
 								toPlace: () => new TestPlace()
 							} }] };
 						}
@@ -166,21 +166,18 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 	await chooser.getByRole('button', { name: /^Fly/ }).click();
 	let editor = page.getByRole('dialog', { name: 'Ny fly' });
 	await expect(editor.getByRole('textbox', { name: 'Navn' })).toHaveCount(0);
-	await expect(editor.getByRole('button', { name: 'Håvard' })).toHaveAttribute(
-		'aria-pressed',
-		'true'
-	);
+	await expect(editor.getByRole('button', { name: 'Ada' })).toHaveAttribute('aria-pressed', 'true');
 	await editor.getByText('Bestilling og notater').click();
 	await editor.getByRole('textbox', { name: 'Referanse' }).fill('ABC123');
 	await addFlightLeg(editor, 1, {
 		number: 'SK1461',
 		from: 'Oslo lufthavn',
 		fromCode: 'OSL',
-		fromTime: '2026-09-05T08:00',
+		fromTime: '2027-06-01T08:00',
 		fromZone: 'Europe/Oslo',
 		to: 'København',
 		toCode: 'CPH',
-		toTime: '2026-09-05T09:10',
+		toTime: '2027-06-01T09:10',
 		toZone: 'Europe/Copenhagen'
 	});
 	await editor.getByRole('button', { name: 'Legg til mellomlanding' }).click();
@@ -188,11 +185,11 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 		number: 'SK973',
 		from: 'København',
 		fromCode: 'CPH',
-		fromTime: '2026-09-05T10:45',
+		fromTime: '2027-06-01T10:45',
 		fromZone: 'Europe/Copenhagen',
 		to: 'Bangkok',
 		toCode: 'BKK',
-		toTime: '2026-09-06T05:55',
+		toTime: '2027-06-02T05:55',
 		toZone: 'Asia/Bangkok'
 	});
 	await editor.getByRole('button', { name: 'Lagre', exact: true }).click();
@@ -215,13 +212,13 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 	await chooser.getByRole('button', { name: /^Overnatting/ }).click();
 	editor = page.getByRole('dialog', { name: 'Ny overnatting' });
 	await editor.getByRole('textbox', { name: 'Navn på overnatting' }).fill('Hotel Test');
-	await editor.getByRole('combobox', { name: 'Sted' }).fill('Split');
-	await editor.getByRole('button', { name: 'Split Airport, Kaštela, Croatia' }).click();
+	await editor.getByRole('combobox', { name: 'Sted' }).fill('Testbyen');
+	await editor.getByRole('button', { name: 'Testflyplass, Testbyen' }).click();
 	await expect(editor.getByRole('combobox', { name: 'Sted' })).toHaveValue(
-		'Split Airport, Cesta Dr. Franje Tuđmana 1270, Kaštela, Croatia'
+		'Testflyplass, Testgata 1, Testbyen'
 	);
-	await editor.locator('input[type="datetime-local"]').nth(0).fill('2026-09-06T15:00');
-	await editor.locator('input[type="datetime-local"]').nth(1).fill('2026-09-08T11:00');
+	await editor.locator('input[type="datetime-local"]').nth(0).fill('2027-06-02T15:00');
+	await editor.locator('input[type="datetime-local"]').nth(1).fill('2027-06-04T11:00');
 	await editor.getByRole('button', { name: 'Lagre', exact: true }).click();
 	await expect(editor).not.toBeVisible();
 
@@ -237,10 +234,10 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 	await expect(editor.getByRole('group', { name: 'Fra' })).toBeVisible();
 	await expect(editor.getByRole('group', { name: 'Til' })).toBeVisible();
 	await editor.getByRole('combobox', { name: 'Transportmiddel' }).selectOption('taxi');
-	await editor.getByRole('textbox', { name: 'Taxiselskap (valgfritt)' }).fill('Split Taxi');
-	await editor.getByRole('combobox', { name: 'Hentested' }).fill('Split lufthavn');
+	await editor.getByRole('textbox', { name: 'Taxiselskap (valgfritt)' }).fill('Testtaxi');
+	await editor.getByRole('combobox', { name: 'Hentested' }).fill('Testflyplass');
 	await editor.getByRole('combobox', { name: 'Destinasjon' }).fill('Hotel Test');
-	await editor.locator('input[type="datetime-local"]').fill('2026-09-06T07:30');
+	await editor.locator('input[type="datetime-local"]').fill('2027-06-02T07:30');
 	await editor.getByRole('button', { name: 'Lagre', exact: true }).click();
 	await expect(editor).not.toBeVisible();
 
@@ -248,15 +245,15 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 	chooser = page.getByRole('dialog', { name: 'Hva vil du legge til?' });
 	await chooser.getByRole('button', { name: /^Leie/ }).click();
 	editor = page.getByRole('dialog', { name: 'Ny leie' });
-	await editor.getByRole('textbox', { name: 'Utleier / utleieselskap' }).fill('Bad Buoy');
+	await editor.getByRole('textbox', { name: 'Utleier / utleieselskap' }).fill('Testutleie');
 	await editor.getByRole('combobox', { name: 'Type' }).selectOption('boat');
 	await fillEndpoint(editor.getByRole('group', { name: 'Henting' }), {
-		place: 'Split havn',
-		dateTime: '2026-09-07T09:00'
+		place: 'Testhavn',
+		dateTime: '2027-06-03T09:00'
 	});
 	await fillEndpoint(editor.getByRole('group', { name: 'Levering' }), {
-		place: 'Split havn',
-		dateTime: '2026-09-07T18:00'
+		place: 'Testhavn',
+		dateTime: '2027-06-03T18:00'
 	});
 	await editor.getByRole('button', { name: 'Lagre', exact: true }).click();
 	await expect(editor).not.toBeVisible();
@@ -270,16 +267,16 @@ test('builds simplified flight and accommodation timelines without mobile overfl
 		.locator('article', { hasText: 'Hotel Test' })
 		.filter({ has: page.locator('.lucide-bed-double') });
 	await expect(stayCards).toHaveCount(2);
-	await expect(page.locator('article', { hasText: 'Split Taxi' })).toContainText('Split lufthavn');
-	const boatCards = page.locator('article', { hasText: 'Bad Buoy' });
+	await expect(page.locator('article', { hasText: 'Testtaxi' })).toContainText('Testflyplass');
+	const boatCards = page.locator('article', { hasText: 'Testutleie' });
 	await expect(boatCards).toHaveCount(2);
 	await expect(boatCards.first().locator('.lucide-sailboat').first()).toBeVisible();
-	await expect(boatCards.first().getByText('Håvard')).toHaveCount(0);
+	await expect(boatCards.first().getByText('Ada')).toHaveCount(0);
 
 	await page.reload();
 	await expect(page.locator('article', { hasText: 'SK1461' })).toHaveCount(1);
 	await expect(stayCards).toHaveCount(2);
-	await expect(page.locator('article', { hasText: 'Bad Buoy' })).toHaveCount(2);
+	await expect(page.locator('article', { hasText: 'Testutleie' })).toHaveCount(2);
 	await expect(page.locator('[data-itinerary-timeline]')).toHaveCount(1);
 	await expect(page.locator('[data-timeline-date]')).toHaveCount(4);
 	const dimensions = await page.evaluate(() => ({

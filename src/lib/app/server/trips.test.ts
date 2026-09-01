@@ -17,7 +17,7 @@ beforeEach((): void => {
 		`INSERT INTO trips
 		 (id, slug, name, destination, starts_on, ends_on, timezone, locale,
 		  status, visibility, welcome_text, created_at, updated_at)
-		 VALUES ('trip-a', 'testtur', 'Testtur', '', '2026-09-01', '2026-09-04',
+		 VALUES ('trip-a', 'testtur', 'Testtur', '', '2027-06-01', '2027-06-04',
 		         'Europe/Oslo', 'nb-NO', 'active', 'listed', 'Velkommen', ?, ?)`
 	).run('2026-08-27', '2026-08-27');
 });

@@ -46,7 +46,7 @@ const general = {
 
 describe('trip settings', (): void => {
 	test('creates an active trip atomically with members and ordered modules', (): void => {
-		const personId = addPersonToTripDraft('Tina');
+		const personId = addPersonToTripDraft('Ada');
 		const order: ModuleId[] = ['gear', ...defaultModuleIds.filter((id) => id !== 'gear')];
 		const tripId = createTrip(db, {
 			...general,
@@ -103,11 +103,11 @@ describe('trip settings', (): void => {
 
 	test('keeps people global after they leave a trip', (): void => {
 		const tripId = createTestTrip();
-		const personId = addPersonToTrip(db, tripId, { displayName: 'Oskar' });
+		const personId = addPersonToTrip(db, tripId, { displayName: 'Bo' });
 		removePersonFromTrip(db, tripId, personId);
 
 		expect(db.prepare('SELECT display_name FROM people WHERE id = ?').get(personId)).toEqual({
-			display_name: 'Oskar'
+			display_name: 'Bo'
 		});
 		expect(
 			getTripSettings(db, tripId)?.people.find((person) => person.id === personId)
@@ -233,8 +233,8 @@ describe('trip settings', (): void => {
 	test('keeps a verified Bring connection through trip edits', (): void => {
 		const tripId = createTestTrip();
 		setTripShoppingListConnection(db, tripId, {
-			listUuid: 'bring-kroatia',
-			listName: 'Kroatia 2026',
+			listUuid: 'e2e-list',
+			listName: 'Testreise',
 			verifiedAt: '2026-08-27T12:00:00.000Z'
 		});
 
@@ -246,16 +246,16 @@ describe('trip settings', (): void => {
 			mapDefaultMode: 'normal',
 			mapEnabledOverlays: [],
 			mapOfflinePackages: [],
-			shoppingListUuid: 'bring-kroatia',
-			shoppingListName: 'Kroatia 2026',
+			shoppingListUuid: 'e2e-list',
+			shoppingListName: 'Testreise',
 			shoppingListVerifiedAt: '2026-08-27T12:00:00.000Z'
 		});
 
 		expect(
 			getTripSettings(db, tripId)?.modules.find((module) => module.id === 'shopping-list')?.config
 		).toEqual({
-			listUuid: 'bring-kroatia',
-			listName: 'Kroatia 2026',
+			listUuid: 'e2e-list',
+			listName: 'Testreise',
 			providerStatus: 'verified',
 			verifiedAt: '2026-08-27T12:00:00.000Z'
 		});

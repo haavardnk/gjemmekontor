@@ -51,7 +51,7 @@ describe('AIS vessel state', (): void => {
 				vessels,
 				envelope('ShipStaticData', {
 					CallSign: 'LBHF@@',
-					Destination: 'SPLIT@@',
+					Destination: 'TESTPORT@@',
 					Dimension: { A: 20, B: 27, C: 7, D: 7 },
 					ImoNumber: 9353333,
 					MaximumStaticDraught: 4.5,
@@ -82,7 +82,7 @@ describe('AIS vessel state', (): void => {
 				geometry: { type: 'Point', coordinates: [16.25, 43.25] },
 				properties: expect.objectContaining({
 					callSign: 'LBHF',
-					destination: 'SPLIT',
+					destination: 'TESTPORT',
 					direction: 86.7,
 					lengthMeters: 47,
 					name: 'KV FARM',

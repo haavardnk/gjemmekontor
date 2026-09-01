@@ -6,8 +6,8 @@ import { expect, type Page, test } from '@playwright/test';
 const googleIconHref = 'https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png';
 const anchorageStyleKey = 'source-style-anchorage';
 const marinaStyleKey = 'source-style-marina';
-const sourceMapId = 'test-map';
-const tripId = '82a8d607-acc9-4c50-a948-463e6a34ef25';
+const sourceMapId = 'e2e-map';
+const tripId = '00000000-0000-4000-8000-000000000001';
 const mapCameraStorageKey = `mapCamera:${tripId}`;
 const sourceUrl = `https://www.google.com/maps/d/viewer?mid=${sourceMapId}`;
 const transparentPng = Buffer.from(
@@ -39,7 +39,7 @@ const layerTwo = {
 const snapshot = {
 	version: 1,
 	type: 'FeatureCollection',
-	title: 'Croatia seiltur! V2',
+	title: 'Testkart',
 	description: 'Seiltur',
 	fetchedAt: '2026-08-20T10:00:00.000Z',
 	sourceHash: 'fixture',
@@ -71,16 +71,16 @@ const snapshot = {
 			id: 'poi-one',
 			geometry: { type: 'Point', coordinates: [16.25, 43.25] },
 			properties: {
-				title: 'Stiniva-bukten',
+				title: 'Testbukta',
 				description: '<p>En smal bukt med klart vann.</p>',
 				snippet: '',
-				address: 'Vis, Kroatia',
+				address: 'Testbyen',
 				layerId: layerOne.id,
 				layerName: layerOne.name,
 				layerPath: layerOne.path,
 				extendedData: {
 					Dybde: '8–12 meter',
-					naziv: 'Stiniva-bukten',
+					naziv: 'Testbukta',
 					opis: 'En smal bukt med klart vann.'
 				},
 				style: { color: '#f57c00', iconHref: googleIconHref },
@@ -92,8 +92,8 @@ const snapshot = {
 			id: 'poi-two',
 			geometry: { type: 'Point', coordinates: [16.3, 43.3] },
 			properties: {
-				title: 'Marina Kaštela',
-				description: '<p>Marina nær Split.</p>',
+				title: 'Testmarina',
+				description: '<p>Generisk testmarina.</p>',
 				snippet: '',
 				address: '',
 				layerId: layerOne.id,
@@ -185,7 +185,7 @@ async function mockMap(page: Page, mapSnapshot = snapshot): Promise<void> {
 								direction: 87,
 								lengthMeters: 47,
 								widthMeters: 14,
-								destination: 'SPLIT',
+								destination: 'TESTPORT',
 								lastSeenAt: '2026-08-25T12:00:00.000Z'
 							}
 						}
@@ -265,7 +265,7 @@ async function mockMap(page: Page, mapSnapshot = snapshot): Promise<void> {
 }
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/t/kroatia-2026/unlock');
+	await page.goto('/t/testreise/unlock');
 	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
@@ -286,8 +286,8 @@ async function openMoreModule(page: Page, name: 'Loggbok' | 'Utstyr'): Promise<v
 test.use({ viewport: { width: 390, height: 844 } });
 
 const actualLeg = {
-	from: { kind: 'text', name: 'Split' },
-	to: { kind: 'text', name: 'Hvar' },
+	from: { kind: 'text', name: 'Startsted' },
+	to: { kind: 'text', name: 'Sluttsted' },
 	departure: '10:00',
 	arrival: '11:00',
 	nauticalMiles: 4,
@@ -302,8 +302,8 @@ const actualLeg = {
 		byteSize: 100,
 		version: 1,
 		name: 'Tur',
-		departureAt: '2026-09-05T08:00:00.000Z',
-		arrivalAt: '2026-09-05T09:00:00.000Z',
+		departureAt: '2027-06-01T08:00:00.000Z',
+		arrivalAt: '2027-06-01T09:00:00.000Z',
 		nauticalMiles: 4,
 		activeSeconds: 3_000,
 		elapsedSeconds: 3_600,
@@ -319,7 +319,7 @@ const actualLeg = {
 		stationaryBlocks: [],
 		recordingGaps: []
 	},
-	createdAt: '2026-09-05T10:00:00.000Z',
+	createdAt: '2027-06-01T10:00:00.000Z',
 	createdBy: 'map-test',
 	tombstone: false
 };
@@ -377,9 +377,9 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await expect.poll(() => satelliteRequests.length).toBeGreaterThan(0);
 	await page.getByRole('button', { name: 'Sjøkart' }).click();
 	await expect.poll(() => marineProfileRequests.length).toBeGreaterThan(0);
-	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Stiniva');
-	await page.getByRole('button', { name: /Stiniva-bukten/ }).click();
-	await expect(page.getByRole('heading', { name: 'Stiniva-bukten' })).toBeVisible();
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Testbukta');
+	await page.getByRole('button', { name: /Testbukta/ }).click();
+	await expect(page.getByRole('heading', { name: 'Testbukta' })).toBeVisible();
 	await expect(page.getByText('En smal bukt med klart vann.')).toBeVisible();
 	await expect(page.getByText('Navn', { exact: true })).toHaveCount(0);
 	await expect(page.getByText('Beskrivelse', { exact: true })).toBeVisible();
@@ -391,12 +391,12 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	).toHaveAttribute('data-source-icon-href', googleIconHref);
 	await expect(page.getByRole('link', { name: 'Åpne i Google Maps' })).toHaveAttribute(
 		'href',
-		'https://www.google.com/maps/search/?api=1&query=Stiniva-bukten%2C%20Vis%2C%20Kroatia'
+		'https://www.google.com/maps/search/?api=1&query=Testbukta%2C%20Testbyen'
 	);
 	await expect(page.getByRole('link', { name: 'Vis posisjonen i Google Maps' })).toHaveCount(0);
 
 	await page.getByRole('button', { name: 'Oppdater kartet' }).click();
-	await expect(page.getByRole('heading', { name: 'Stiniva-bukten' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Testbukta' })).toBeVisible();
 	await page.getByRole('button', { name: 'Lukk detaljer' }).click();
 	await page.getByRole('button', { name: 'Velg kartlag' }).click();
 	await expect(page.getByRole('heading', { name: 'Kartlag' })).toBeVisible();
@@ -425,9 +425,6 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await expect(sourceSection.getByRole('link', { name: 'OpenFreeMap' })).toBeVisible();
 	await expect(sourceSection.getByRole('link', { name: 'OpenSeaMap' })).toBeVisible();
 	await expect(
-		page.getByRole('link', { name: 'Offisielle kroatiske sjøkart hos HHI' })
-	).toBeVisible();
-	await expect(
 		page.locator('button[data-source-icon-href]', {
 			hasText: 'Ankerplasser og fortøyninger'
 		})
@@ -439,10 +436,10 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	await anchorageFilter.click();
 	await expect(anchorageFilter).toHaveAttribute('aria-pressed', 'true');
 	await page.getByRole('button', { name: 'Lukk kartlag' }).last().click();
-	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Marina Kaštela');
-	await expect(page.getByRole('button', { name: /Marina Kaštela/ })).toBeVisible();
-	await page.getByRole('button', { name: /Marina Kaštela/ }).click();
-	await expect(page.getByRole('heading', { name: 'Marina Kaštela' })).toBeVisible();
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Testmarina');
+	await expect(page.getByRole('button', { name: /Testmarina/ })).toBeVisible();
+	await page.getByRole('button', { name: /Testmarina/ }).click();
+	await expect(page.getByRole('heading', { name: 'Testmarina' })).toBeVisible();
 	await page.getByRole('button', { name: 'Lukk detaljer' }).click();
 	await page.getByRole('button', { name: 'Velg kartlag' }).click();
 	await page.getByRole('button', { name: /Marinaer og havner/ }).click();
@@ -466,8 +463,8 @@ test('searches, filters, refreshes, and opens point details without mobile overf
 	expect(drawerDimensions.width).toBeLessThanOrEqual(drawerDimensions.viewport);
 	await page.getByRole('button', { name: 'Dagens etappe' }).click();
 	await page.getByRole('button', { name: 'Lukk kartlag' }).last().click();
-	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Stiniva');
-	await expect(page.getByRole('button', { name: /Stiniva-bukten/ })).toBeVisible();
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Testbukta');
+	await expect(page.getByRole('button', { name: /Testbukta/ })).toBeVisible();
 
 	const dimensions = await page.evaluate(() => ({
 		width: document.documentElement.scrollWidth,
@@ -518,7 +515,7 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 					photos: photosHaveLoaded ? tripadvisorPhotos : [],
 					photosLoaded: photosHaveLoaded,
 					cachedAt: '2026-08-25T10:00:00.000Z',
-					expiresAt: '2026-09-24T10:00:00.000Z'
+					expiresAt: '2027-06-20T10:00:00.000Z'
 				}
 			}
 		});
@@ -539,7 +536,7 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 					photos: tripadvisorPhotos,
 					photosLoaded: true,
 					cachedAt: '2026-08-25T10:01:00.000Z',
-					expiresAt: '2026-09-24T10:01:00.000Z'
+					expiresAt: '2027-06-20T10:01:00.000Z'
 				}
 			}
 		});
@@ -585,8 +582,8 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 	});
 
 	await login(page);
-	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Marina Kaštela');
-	await page.getByRole('button', { name: /Marina Kaštela/ }).click();
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Testmarina');
+	await page.getByRole('button', { name: /Testmarina/ }).click();
 	await expect(page.locator('[data-tripadvisor-details]')).toContainText('4,7');
 	await expect(page.locator('[data-tripadvisor-details]')).toContainText(/4,7\s*\(321\)/);
 	await expect(page.getByRole('link', { name: 'Åpne stedet på Tripadvisor' })).toHaveAttribute(
@@ -633,8 +630,8 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 	await expect(page.locator('[data-photo-viewer="Tripadvisor"]')).toHaveCount(0);
 
 	await page.getByRole('button', { name: 'Lukk detaljer' }).click();
-	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Marina Kaštela');
-	await page.getByRole('button', { name: /Marina Kaštela/ }).click();
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Testmarina');
+	await page.getByRole('button', { name: /Testmarina/ }).click();
 	await expect(page.locator('[data-google-place-details]')).toContainText('4,5');
 
 	expect(enrichmentRequests).toBe(2);
@@ -671,7 +668,7 @@ test('opens an OpenFreeMap restaurant in the shared Google and Tripadvisor POI s
 					photos: [],
 					photosLoaded: true,
 					cachedAt: '2026-08-26T10:00:00.000Z',
-					expiresAt: '2026-09-25T10:00:00.000Z'
+					expiresAt: '2027-06-21T10:00:00.000Z'
 				}
 			}
 		});
@@ -783,9 +780,9 @@ test('centers the selected POI after closing the mobile sheet', async ({ page })
 	await mockMap(page);
 	await login(page);
 	await expect(page.locator('[data-map-ready]')).toHaveAttribute('data-map-ready', 'true');
-	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Stiniva');
-	await page.getByRole('button', { name: /Stiniva-bukten/ }).click();
-	await expect(page.getByRole('heading', { name: 'Stiniva-bukten' })).toBeVisible();
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Testbukta');
+	await page.getByRole('button', { name: /Testbukta/ }).click();
+	await expect(page.getByRole('heading', { name: 'Testbukta' })).toBeVisible();
 	await expect
 		.poll(() => page.evaluate((key) => sessionStorage.getItem(key), mapCameraStorageKey))
 		.not.toBeNull();
@@ -873,23 +870,21 @@ test('shows all map points after the Google day folders end', async ({ page }) =
 	await page.getByRole('link', { name: 'Kart' }).click();
 	await page.getByRole('button', { name: 'Velg kartlag' }).click();
 	await expect(
-		page.getByText(
-			'Google-kartets dagsmapper dekker 5.–18. september. Alle kartpunkter vises for søndag 20. september.'
-		)
+		page.getByText('Ingen dagsmappe finnes for testdag 16. Alle kartpunkter vises.')
 	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Dagens etappe' })).toBeDisabled();
 });
 
 test('uses the device date for today instead of another page selection', async ({ page }) => {
-	await page.clock.setFixedTime(new Date('2026-09-10T10:00:00.000Z'));
+	await page.clock.setFixedTime(new Date('2027-06-06T10:00:00.000Z'));
 	await mockMap(page, {
 		...snapshot,
 		layers: [
 			...snapshot.layers,
 			{
 				id: 'day-six-seven',
-				name: 'Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo',
-				path: ['Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo'],
+				name: 'Dag 6 og 7 - Test',
+				path: ['Dag 6 og 7 - Test'],
 				color: '#dc6b3f',
 				featureCount: 0,
 				pointCount: 0,
@@ -909,7 +904,7 @@ test('uses the device date for today instead of another page selection', async (
 	await page.getByRole('button', { name: 'Velg kartlag' }).click();
 	await expect(
 		page.getByRole('paragraph').filter({
-			hasText: 'Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo'
+			hasText: 'Dag 6 og 7 - Test'
 		})
 	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Dagens etappe' })).toBeEnabled();
@@ -1106,8 +1101,8 @@ test('restores the cached map snapshot when the map API is unavailable', async (
 	await page.reload();
 
 	await expect(page.getByRole('searchbox', { name: 'Søk i kartet' })).toBeVisible();
-	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Stiniva');
-	await expect(page.getByRole('button', { name: /Stiniva-bukten/ })).toBeVisible();
+	await page.getByRole('searchbox', { name: 'Søk i kartet' }).fill('Testbukta');
+	await expect(page.getByRole('button', { name: /Testbukta/ })).toBeVisible();
 	await expect(
 		page.getByText('Får ikke kontakt med serveren. Viser sist lagrede kart hvis det finnes.')
 	).toBeVisible();

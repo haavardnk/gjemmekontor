@@ -2,43 +2,19 @@ import { describe, expect, test } from 'vitest';
 
 import type { JsonValue } from '$lib/client/database';
 
-import {
-	cameraChoices,
-	mediaKey,
-	type MediaRow,
-	mediaRows,
-	offloadCameraChoices,
-	serializeMediaRow
-} from './digest';
+import { mediaKey, type MediaRow, mediaRows, serializeMediaRow } from './digest';
 
 const first: MediaRow = {
 	description: 'Seilene går opp',
-	camera: 'Pocket 4',
+	camera: 'Testkamera',
 	customCamera: '',
 	filename: 'A001.mp4',
-	createdAt: '2026-09-05T10:00:00.000Z',
+	createdAt: '2027-06-01T10:00:00.000Z',
 	createdBy: 'client-a',
 	tombstone: false
 };
 
 describe('Digest media rows', (): void => {
-	test('uses all required camera choices', (): void => {
-		expect(cameraChoices).toEqual([
-			'Pocket 4',
-			'A7 IV',
-			'A7 III',
-			'Insta360 X5',
-			'Osmo Action 4',
-			'Mini Pro 5',
-			'Håvard sin mobil',
-			'Odd sin mobil',
-			'Tina sin mobil',
-			'Lise sin mobil',
-			'Annet'
-		]);
-		expect(offloadCameraChoices).toEqual(cameraChoices.slice(0, -1));
-	});
-
 	test.each([
 		[0, 'row-a', 'digest:d0:video:row-a'],
 		[18, 'row-b', 'digest:d18:video:row-b']
@@ -47,7 +23,7 @@ describe('Digest media rows', (): void => {
 	});
 
 	test('parses current rows, ignores other days and tombstones, and sorts stably', (): void => {
-		const later = { ...first, createdAt: '2026-09-05T11:00:00.000Z' };
+		const later = { ...first, createdAt: '2027-06-01T11:00:00.000Z' };
 		const deleted = { ...first, tombstone: true };
 		const values: Record<string, JsonValue> = {
 			[mediaKey(0, 'later')]: serializeMediaRow(later),

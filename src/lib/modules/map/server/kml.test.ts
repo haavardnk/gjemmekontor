@@ -7,41 +7,24 @@ import { parseKml } from './kml';
 
 const fixture = readFileSync(resolve('tests/fixtures/google-map.kml'), 'utf8');
 const googleIconHref = 'https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png';
-const layerNames = [
-	'Anker, bøye og marina',
-	'Dag 1 - Lørdag',
-	'Dag 2 og 3 - Søndag og Mandag - Hvar Vest',
-	'Dag 4 og 5 - Tirsdag og Onsdag - Vis',
-	'Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo',
-	'Dag 8 og 9 - Lørdag og Søndag',
-	'Dag 10 og 11 - Mandag og Tirsdag',
-	'Dag 12 og 13 - Onsdag og Torsdag',
-	'Dag 14 - Fredag'
-];
+const layerNames = ['Teststeder', 'Testdag 1'];
 
 describe('KML parser', (): void => {
-	test('parses the real Google My Maps fixture', (): void => {
+	test('parses a representative Google My Maps fixture', (): void => {
 		const snapshot = parseKml(fixture, '2026-08-20T00:00:00.000Z');
 		const points = snapshot.features.filter((feature) => feature.geometry.type === 'Point');
 		const lines = snapshot.features.filter((feature) => feature.geometry.type === 'LineString');
 		const withExtendedData = snapshot.features.filter(
 			(feature) => Object.keys(feature.properties.extendedData).length > 0
 		);
-		const blueLagoon = snapshot.features.find(
-			(feature) => feature.properties.title === '4 Blue lagoon anchorage'
-		);
-		const boatBar = snapshot.features.find(
-			(feature) => feature.properties.title === 'Båt med bar :)'
-		);
-		const maslinicaAnchorage = snapshot.features.find((feature) =>
-			feature.properties.title.startsWith('6 Islands in front of Maslinica')
+		const testBay = snapshot.features.find((feature) => feature.properties.title === 'Testbukta');
+		const restaurant = snapshot.features.find(
+			(feature) => feature.properties.title === 'Testrestaurant'
 		);
 
-		expect(snapshot.title).toBe('Croatia seiltur! V2');
+		expect(snapshot.title).toBe('Syntetisk testkart');
 		expect(snapshot.version).toBe(1);
-		expect(snapshot.sourceHash).toBe(
-			'92abaf1dbbe4914fdfc5c71caa66e8977810d27bdd9fc902e6cfe22196f32d0d'
-		);
+		expect(snapshot.sourceHash).toMatch(/^[0-9a-f]{64}$/);
 		expect(snapshot.layers.map((layer) => layer.name)).toEqual(layerNames);
 		expect(snapshot.sourceStyles).toMatchObject([
 			{
@@ -50,7 +33,7 @@ describe('KML parser', (): void => {
 				iconCode: '1623',
 				symbol: 'anchorage',
 				label: 'Ankerplasser og fortøyninger',
-				count: 63
+				count: 2
 			},
 			{
 				color: '#9a5b3f',
@@ -58,52 +41,20 @@ describe('KML parser', (): void => {
 				iconCode: '1577',
 				symbol: 'restaurant',
 				label: 'Restauranter',
-				count: 31
-			},
-			{
-				color: '#2563a8',
-				iconHref: googleIconHref,
-				iconCode: '1681',
-				symbol: 'marina',
-				label: 'Marinaer og havner',
-				count: 28
-			},
-			{
-				color: '#d64545',
-				iconHref: googleIconHref,
-				iconCode: '1563',
-				symbol: 'buoy-field',
-				label: 'Bøyefelt',
-				count: 13
-			},
-			{
-				color: '#39724d',
-				iconHref: googleIconHref,
-				iconCode: '1685',
-				symbol: 'shop',
-				label: 'Butikker og forsyninger',
-				count: 3
-			},
-			{
-				color: '#d15f45',
-				iconHref: googleIconHref,
-				iconCode: '1517',
-				symbol: 'bar',
-				label: 'Barer',
-				count: 2
+				count: 1
 			}
 		]);
-		expect(snapshot.sourceStyles).toHaveLength(6);
-		expect(snapshot.sourceStyles.reduce((total, style) => total + style.count, 0)).toBe(140);
+		expect(snapshot.sourceStyles).toHaveLength(2);
+		expect(snapshot.sourceStyles.reduce((total, style) => total + style.count, 0)).toBe(3);
 		expect(
 			points.every((feature) =>
 				snapshot.sourceStyles.some((style) => style.key === feature.properties.sourceStyleKey)
 			)
 		).toBe(true);
-		expect(snapshot.features).toHaveLength(149);
-		expect(points).toHaveLength(140);
-		expect(lines).toHaveLength(9);
-		expect(withExtendedData).toHaveLength(146);
+		expect(snapshot.features).toHaveLength(4);
+		expect(points).toHaveLength(3);
+		expect(lines).toHaveLength(1);
+		expect(withExtendedData).toHaveLength(2);
 		expect(snapshot.bounds[0]).toBeLessThan(snapshot.bounds[2]);
 		expect(snapshot.bounds[1]).toBeLessThan(snapshot.bounds[3]);
 		expect(snapshot.features[0]?.properties.style.color).toBe('#f57c00');
@@ -113,28 +64,15 @@ describe('KML parser', (): void => {
 		expect(new Set(snapshot.features.map((feature) => feature.id)).size).toBe(
 			snapshot.features.length
 		);
-		expect(blueLagoon?.properties.description).not.toContain('Coordinates:');
-		expect(blueLagoon?.properties.description).not.toContain('naziv:');
-		expect(blueLagoon?.properties.description).not.toContain('opis:');
-		expect(blueLagoon?.properties.extendedData).toMatchObject({
-			'Sea bed': 'Sand and Sea grass',
-			'Wind Protection': 'Protected from NW, W'
+		expect(testBay?.properties.description).toBe('En rolig testbeskrivelse.');
+		expect(testBay?.properties.extendedData).toMatchObject({
+			'Sea bed': 'Sand',
+			'Wind Protection': 'Sheltered'
 		});
-		expect(maslinicaAnchorage?.properties.description).toMatch(
-			/^Anchoring ground at a depth of 6-14m, sand and rocks\./
-		);
-		expect(maslinicaAnchorage?.properties.description).not.toContain('Coordinates:');
-		expect(maslinicaAnchorage?.properties.description).not.toContain('Sea bed:');
-		expect(maslinicaAnchorage?.properties.description).not.toContain('Wind Protection:');
-		expect(maslinicaAnchorage?.properties.extendedData).toMatchObject({
-			'Sea bed': 'Sand and Rocks',
-			'Wind Protection': 'Protected from E, SE'
-		});
-		expect(boatBar?.properties.description).toBe('');
-		expect(boatBar?.properties.extendedData).toEqual({
-			description: '',
-			naziv: 'Båt med bar :)',
-			opis: ''
+		expect(restaurant?.properties.description).toBe('Serverer testmat.');
+		expect(restaurant?.properties.extendedData).toEqual({
+			description: 'Serverer testmat.',
+			booking: 'Ikke nødvendig.'
 		});
 		expect(parseKml(fixture).features.map((feature) => feature.id)).toEqual(
 			snapshot.features.map((feature) => feature.id)

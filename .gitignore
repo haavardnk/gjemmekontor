@@ -32,6 +32,9 @@ test-results
 .kb/
 
 # Local agent configuration
+/AGENTS.md
+/.agents/
+/.codex/
 .github/*
 !.github/workflows/
 .github/workflows/*

@@ -14,11 +14,11 @@ async function useSecondTripDay(page: Page): Promise<void> {
 			}
 		}
 		Object.defineProperty(window, 'Date', { configurable: true, value: FixedDate });
-	}, new Date('2026-09-06T10:00:00.000Z').valueOf());
+	}, new Date('2027-06-02T10:00:00.000Z').valueOf());
 }
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/t/kroatia-2026/unlock');
+	await page.goto('/t/testreise/unlock');
 	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
@@ -41,8 +41,8 @@ test('starts a fixed rotation offline and keeps a synchronized numbered rule boo
 	await expect(page.getByLabel('Tilgjengelig uten nett')).toBeVisible();
 	await context.setOffline(true);
 
-	const includedNames = ['Håvard', 'Tina'];
-	const excludedNames = ['Tomine', 'Odd', 'Lise', 'Oskar'];
+	const includedNames = ['Ada', 'Bo'];
+	const excludedNames = ['Cleo', 'Dina', 'Eli', 'Finn'];
 	for (const name of [...includedNames, ...excludedNames]) {
 		await expect(page.getByRole('checkbox', { name })).toBeChecked();
 	}
@@ -77,7 +77,7 @@ test('starts a fixed rotation offline and keeps a synchronized numbered rule boo
 	await page.getByRole('textbox', { name: '§ 1' }).fill(rule);
 	await page.getByRole('button', { name: 'Legg til regel' }).click();
 	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toHaveValue(rule);
-	await expect(page.getByText('Mandag 7. september', { exact: true })).toBeVisible();
+	await expect(page.getByText('Testdag 3', { exact: true })).toBeVisible();
 	await expect(
 		page.getByText(new RegExp(`(${includedNames.join('|')}) lager den neste regelen`), {
 			exact: true
@@ -92,9 +92,7 @@ test('starts a fixed rotation offline and keeps a synchronized numbered rule boo
 	await expect(page.getByRole('status')).toHaveText('Synkronisert', { timeout: 15_000 });
 
 	const missedRule = `Alle må bade før frokost ${crypto.randomUUID().slice(0, 8)}`;
-	await page
-		.getByRole('combobox', { name: 'Velg dag' })
-		.selectOption({ label: 'Lørdag 5. september' });
+	await page.getByRole('combobox', { name: 'Velg dag' }).selectOption({ label: 'Testdag 1' });
 	await page.getByRole('textbox', { name: '§ 2' }).fill(missedRule);
 	await page.getByRole('button', { name: 'Legg til regel' }).click();
 

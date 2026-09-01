@@ -26,8 +26,8 @@ test('adds newly bundled modules to existing trips disabled and at the end', ():
 		{
 			name: 'Testtur',
 			destination: 'Oslo',
-			startsOn: '2026-09-01',
-			endsOn: '2026-09-02',
+			startsOn: '2027-06-01',
+			endsOn: '2027-06-02',
 			timezone: 'Europe/Oslo',
 			welcomeText: 'Velkommen',
 			password: 'test-password',

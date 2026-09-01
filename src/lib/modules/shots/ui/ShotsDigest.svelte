@@ -11,7 +11,7 @@
 
 	let adding = $state(false);
 	let description = $state('');
-	let camera = $state('Pocket 4');
+	let camera = $state('');
 	let customCamera = $state('');
 	let filename = $state('');
 

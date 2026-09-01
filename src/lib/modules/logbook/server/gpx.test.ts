@@ -11,7 +11,7 @@ import { createTrip } from '$lib/app/server/trip-settings';
 import { handleGetGpx, handlePutGpx } from './gpx';
 
 const uploadId = '019d0d25-8ea0-7000-8000-000000000001';
-const xml = `<?xml version="1.0"?><gpx creator="test" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Tur</name><trkseg><trkpt lat="43" lon="16"><time>2026-09-05T08:00:00Z</time></trkpt><trkpt lat="43.01" lon="16"><time>2026-09-05T08:00:20Z</time></trkpt></trkseg></trk></gpx>`;
+const xml = `<?xml version="1.0"?><gpx creator="test" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Tur</name><trkseg><trkpt lat="43" lon="16"><time>2027-06-01T08:00:00Z</time></trkpt><trkpt lat="43.01" lon="16"><time>2027-06-01T08:00:20Z</time></trkpt></trkseg></trk></gpx>`;
 
 let dataDir = '';
 let db: ReturnType<typeof createApplicationDatabase>;
@@ -50,9 +50,9 @@ function testTrip(name: string): string {
 	return createTrip(db, {
 		name,
 		destination: '',
-		startsOn: '2026-09-05',
-		endsOn: '2026-09-23',
-		timezone: 'Europe/Zagreb',
+		startsOn: '2027-06-01',
+		endsOn: '2027-06-19',
+		timezone: 'Europe/Oslo',
 		welcomeText: 'Velkommen om bord',
 		password: 'shared-trip-password',
 		memberIds: [],
@@ -77,7 +77,7 @@ describe('GPX archive', (): void => {
 			uploadId,
 			db,
 			tripId,
-			() => new Date('2026-09-05T09:00:00Z')
+			() => new Date('2027-06-01T09:00:00Z')
 		);
 		expect(uploaded.status).toBe(201);
 		expect(await uploaded.json()).toMatchObject({

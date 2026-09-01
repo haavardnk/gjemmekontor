@@ -9,8 +9,8 @@ import { SharedState } from './state.svelte';
 const extraction = {
 	version: 1 as const,
 	name: 'Tur',
-	departureAt: '2026-09-05T08:00:00.000Z',
-	arrivalAt: '2026-09-05T09:00:00.000Z',
+	departureAt: '2027-06-01T08:00:00.000Z',
+	arrivalAt: '2027-06-01T09:00:00.000Z',
 	nauticalMiles: 4,
 	activeSeconds: 3_000,
 	elapsedSeconds: 3_600,

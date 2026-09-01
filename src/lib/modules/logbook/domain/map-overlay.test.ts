@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import type { JsonValue } from '$lib/client/database';
 import type { MapFeature } from '$lib/modules/map/public';
-import { kroatia2026Days as tripDays } from '$lib/trip/kroatia-2026';
+import type { TripDay } from '$lib/trip/itinerary';
 
 import { type LogbookLeg, logbookLegKey, serializeLogbookLeg } from './logbook';
 import {
@@ -13,6 +13,15 @@ import {
 	loggedNauticalMiles,
 	visibleActualRoutes
 } from './map-overlay';
+
+const tripDays: TripDay[] = Array.from({ length: 4 }, (_, index) => ({
+	id: `test-day-${index + 1}`,
+	index,
+	date: `2027-06-0${index + 1}`,
+	dateLabel: `Testdag ${index + 1}`,
+	title: `Dag ${index + 1}`,
+	phase: 'Testfase'
+}));
 
 const leg: LogbookLeg = {
 	from: { kind: 'text', name: 'A' },
@@ -31,8 +40,8 @@ const leg: LogbookLeg = {
 		byteSize: 100,
 		version: 1,
 		name: 'Tur',
-		departureAt: '2026-09-05T08:00:00.000Z',
-		arrivalAt: '2026-09-05T09:00:00.000Z',
+		departureAt: '2027-06-01T08:00:00.000Z',
+		arrivalAt: '2027-06-01T09:00:00.000Z',
 		nauticalMiles: 4,
 		activeSeconds: 3_000,
 		elapsedSeconds: 3_600,
@@ -52,7 +61,7 @@ const leg: LogbookLeg = {
 		stationaryBlocks: [],
 		recordingGaps: []
 	},
-	createdAt: '2026-09-05T10:00:00.000Z',
+	createdAt: '2027-06-01T10:00:00.000Z',
 	createdBy: 'client-a',
 	tombstone: false
 };
@@ -83,17 +92,8 @@ function plannedFeature(id: string, layerName: string): MapFeature {
 }
 
 describe('trip routes', (): void => {
-	test('maps every trip date to the Google day folders', (): void => {
-		const folderNames = [
-			'Dag 1 - Lørdag',
-			'Dag 2 og 3 - Søndag og Mandag - Hvar Vest',
-			'Dag 4 og 5 - Tirsdag og Onsdag - Vis',
-			'Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo',
-			'Dag 8 og 9 - Lørdag og Søndag',
-			'Dag 10 og 11 - Mandag og Tirsdag',
-			'Dag 12 og 13 - Onsdag og Torsdag',
-			'Dag 14 - Fredag'
-		];
+	test('maps trip dates to numbered map folders', (): void => {
+		const folderNames = ['Dag 1 - Test', 'Dag 2 og 3 - Test', 'Dag 4 - Test'];
 		const assignments = Object.fromEntries(
 			tripDays.map((day) => [
 				day.date,
@@ -102,25 +102,10 @@ describe('trip routes', (): void => {
 		);
 
 		expect(assignments).toEqual({
-			'2026-09-05': ['Dag 1 - Lørdag'],
-			'2026-09-06': ['Dag 2 og 3 - Søndag og Mandag - Hvar Vest'],
-			'2026-09-07': ['Dag 2 og 3 - Søndag og Mandag - Hvar Vest'],
-			'2026-09-08': ['Dag 4 og 5 - Tirsdag og Onsdag - Vis'],
-			'2026-09-09': ['Dag 4 og 5 - Tirsdag og Onsdag - Vis'],
-			'2026-09-10': ['Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo'],
-			'2026-09-11': ['Dag 6 og 7 - Torsdag og Fredag - Susac og Lastovo'],
-			'2026-09-12': ['Dag 8 og 9 - Lørdag og Søndag'],
-			'2026-09-13': ['Dag 8 og 9 - Lørdag og Søndag'],
-			'2026-09-14': ['Dag 10 og 11 - Mandag og Tirsdag'],
-			'2026-09-15': ['Dag 10 og 11 - Mandag og Tirsdag'],
-			'2026-09-16': ['Dag 12 og 13 - Onsdag og Torsdag'],
-			'2026-09-17': ['Dag 12 og 13 - Onsdag og Torsdag'],
-			'2026-09-18': ['Dag 14 - Fredag'],
-			'2026-09-19': [],
-			'2026-09-20': [],
-			'2026-09-21': [],
-			'2026-09-22': [],
-			'2026-09-23': []
+			'2027-06-01': ['Dag 1 - Test'],
+			'2027-06-02': ['Dag 2 og 3 - Test'],
+			'2027-06-03': ['Dag 2 og 3 - Test'],
+			'2027-06-04': ['Dag 4 - Test']
 		});
 	});
 
@@ -165,7 +150,7 @@ describe('trip routes', (): void => {
 		expect(visibleActualRoutes(routes, 1, true)[0]?.properties.dayIndex).toBe(1);
 	});
 
-	test('uses the supplied trip calendar instead of the Kroatia day range', (): void => {
+	test('uses the supplied trip calendar', (): void => {
 		const customDay = {
 			id: 'custom-day-id',
 			index: 25,

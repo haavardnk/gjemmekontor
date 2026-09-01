@@ -9,9 +9,9 @@ import { TripDayState } from './day.svelte';
 import { dateKeyAt, tripDayIndexAt } from './itinerary';
 
 const databaseNames: string[] = [];
-const testTimeZone = 'Europe/Zagreb';
+const testTimeZone = 'Europe/Oslo';
 const testDays = Array.from({ length: 19 }, (_, index) => {
-	const date = new Date(Date.UTC(2026, 8, 5 + index)).toISOString().slice(0, 10);
+	const date = new Date(Date.UTC(2027, 5, 1 + index)).toISOString().slice(0, 10);
 	return {
 		id: `test-day-${index}`,
 		index,
@@ -39,12 +39,12 @@ function state(options: ConstructorParameters<typeof TripDayState>[0] = {}): Tri
 }
 
 describe('trip day selection', (): void => {
-	test('uses the calendar date in Zagreb at UTC boundaries', (): void => {
-		expect(dateKeyAt(new Date('2026-09-04T22:00:00.000Z'), testTimeZone)).toBe('2026-09-05');
-		expect(tripDayIndexAt(new Date('2026-09-04T22:00:00.000Z'), testDays, testTimeZone)).toBe(0);
-		expect(tripDayIndexAt(new Date('2026-09-23T21:59:59.000Z'), testDays, testTimeZone)).toBe(18);
+	test('uses the calendar date in Oslo at UTC boundaries', (): void => {
+		expect(dateKeyAt(new Date('2027-05-31T22:00:00.000Z'), testTimeZone)).toBe('2027-06-01');
+		expect(tripDayIndexAt(new Date('2027-05-31T22:00:00.000Z'), testDays, testTimeZone)).toBe(0);
+		expect(tripDayIndexAt(new Date('2027-06-19T21:59:59.000Z'), testDays, testTimeZone)).toBe(18);
 		expect(
-			tripDayIndexAt(new Date('2026-09-23T22:00:00.000Z'), testDays, testTimeZone)
+			tripDayIndexAt(new Date('2027-06-19T22:00:00.000Z'), testDays, testTimeZone)
 		).toBeUndefined();
 	});
 
@@ -55,7 +55,7 @@ describe('trip day selection', (): void => {
 		database.close();
 		const controller = state({
 			databaseName: name,
-			now: () => new Date('2026-09-08T10:00:00.000Z')
+			now: () => new Date('2027-06-04T10:00:00.000Z')
 		});
 
 		await controller.initialize();
@@ -108,7 +108,7 @@ describe('trip day selection', (): void => {
 	});
 
 	test('returns to today on app resume only while the trip is active', async (): Promise<void> => {
-		let now = new Date('2026-09-10T10:00:00.000Z');
+		let now = new Date('2027-06-06T10:00:00.000Z');
 		const controller = state({ databaseName: databaseName(), now: () => now });
 		await controller.initialize();
 		await controller.select(15);
@@ -125,10 +125,10 @@ describe('trip day selection', (): void => {
 	});
 
 	test('offers the new day after midnight without changing selection', async (): Promise<void> => {
-		let now = new Date('2026-09-05T21:59:00.000Z');
+		let now = new Date('2027-06-01T21:59:00.000Z');
 		const controller = state({ databaseName: databaseName(), now: () => now });
 		await controller.initialize();
-		now = new Date('2026-09-05T22:01:00.000Z');
+		now = new Date('2027-06-01T22:01:00.000Z');
 
 		controller.refreshToday();
 

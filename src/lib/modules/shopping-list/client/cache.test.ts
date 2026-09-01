@@ -24,7 +24,7 @@ function databaseName(): string {
 
 const snapshot: ShoppingListSnapshot = {
 	listUuid: 'trip-list',
-	listName: 'Kroatia',
+	listName: 'Testreise',
 	items: [{ sourceName: 'Milch', name: 'Melk', specification: '2 liter' }],
 	recentItems: [{ sourceName: 'Eier', name: 'Egg', specification: '' }],
 	fetchedAt: '2026-08-21T10:00:00.000Z'

@@ -45,9 +45,7 @@ export const shotContentSchema = z
 			.array(
 				z.object({
 					dayIndex: z.number().int().nonnegative(),
-					modules: z.array(identifier).max(1000),
-					core: z.enum(['boat', 'villa', 'travel']),
-					flexible: z.boolean()
+					modules: z.array(identifier).max(1000)
 				})
 			)
 			.max(3660)
@@ -108,13 +106,12 @@ export const shotContentSchema = z
 	});
 
 export type ShotContent = z.infer<typeof shotContentSchema>;
+export type ShotModule = ShotContent['modules'][string];
 
 function dayPlans(days: readonly TripDay[]): ShotContent['dayPlans'] {
 	return days.map((day) => ({
 		dayIndex: day.index,
-		modules: [],
-		core: 'travel' as const,
-		flexible: false
+		modules: []
 	}));
 }
 
@@ -136,18 +133,18 @@ export function standardShotContent(days: readonly TripDay[]): ShotContent {
 		modules: {
 			dagensHistorie: {
 				title: 'Dagens historie',
-				camera: 'Pocket 4 eller mobil',
+				camera: 'Kamera eller mobil',
 				aRoll: [0, 1],
 				shots: [
-					{ text: 'En tydelig åpning som viser hvor dagen begynner.' },
-					{ text: 'Dagens viktigste handling og reaksjonene rundt den.' },
+					{ text: 'En tydelig åpning som viser hvor dagen begynner.', camera: 'Kamera' },
+					{ text: 'Dagens viktigste handling og reaksjonene rundt den.', camera: 'Mobil' },
 					{ text: 'Detaljer, omgivelser og en rolig overgang.' },
 					{ text: 'Et avsluttende klipp som runder av dagen.' }
 				]
 			},
 			maltid: {
 				title: 'Måltid',
-				camera: 'Pocket 4 eller mobil',
+				camera: 'Kamera eller mobil',
 				aRoll: [1],
 				shots: [
 					{ text: 'Forberedelser og råvarer før maten er klar.' },

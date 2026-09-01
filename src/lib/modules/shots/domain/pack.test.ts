@@ -1,26 +1,37 @@
 import { describe, expect, test } from 'vitest';
 
-import { kroatia2026Days as tripDays } from '$lib/trip/kroatia-2026';
+import type { TripDay } from '$lib/trip/itinerary';
 
-import { activityModuleIds, backupChecks, scenarioGroups, shotModules } from './content';
-import { shotsDayPlan } from './day-plan';
-import { cameraChoices } from './digest';
 import { blankShotContent, shotContentSchema, standardShotContent } from './pack';
 
+const tripDays: TripDay[] = Array.from({ length: 3 }, (_, index) => ({
+	id: `test-day-${index + 1}`,
+	index,
+	date: `2027-06-0${index + 1}`,
+	dateLabel: `Testdag ${index + 1}`,
+	title: `Dag ${index + 1}`,
+	phase: 'Testfase'
+}));
+
 describe('shot content packs', (): void => {
-	test('validates the complete Kroatia content pack', (): void => {
-		const content = shotContentSchema.parse({
-			version: 1,
-			cameras: cameraChoices,
-			backupChecks,
-			modules: shotModules,
-			activityModuleIds,
-			scenarioGroups,
-			dayPlans: tripDays.map((day) => ({ dayIndex: day.index, ...shotsDayPlan(day.index) }))
+	test('validates the generic standard content pack', (): void => {
+		const content = shotContentSchema.parse(standardShotContent(tripDays));
+
+		expect(Object.keys(content.modules).length).toBeGreaterThan(0);
+		expect(content.dayPlans).toHaveLength(tripDays.length);
+	});
+
+	test('strips obsolete trip-specific day metadata from persisted packs', (): void => {
+		const content = standardShotContent(tripDays);
+		const parsed = shotContentSchema.parse({
+			...content,
+			dayPlans: content.dayPlans.map((plan) => ({
+				...plan,
+				obsolete: true
+			}))
 		});
 
-		expect(Object.keys(content.modules)).toHaveLength(Object.keys(shotModules).length);
-		expect(content.dayPlans).toHaveLength(tripDays.length);
+		expect(parsed.dayPlans).toEqual(content.dayPlans);
 	});
 
 	test('rejects broken scene and day references', (): void => {

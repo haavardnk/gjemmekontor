@@ -12,7 +12,7 @@ const feature: MapFeature = {
 		title: 'Konoba Test',
 		description: '',
 		snippet: '',
-		address: 'Split, Croatia',
+		address: 'Testbyen, Testland',
 		layerId: 'layer',
 		layerName: 'Layer',
 		layerPath: ['Layer'],
@@ -34,7 +34,7 @@ describe('Google Places ID adapter', (): void => {
 		expect(new Headers(options.headers).get('X-Goog-FieldMask')).toBe('places.id');
 		expect(new Headers(options.headers).get('X-Goog-Api-Key')).toBe('server-key');
 		expect(JSON.parse(String(options.body))).toMatchObject({
-			textQuery: 'Konoba Test, Split, Croatia',
+			textQuery: 'Konoba Test, Testbyen, Testland',
 			pageSize: 1,
 			locationBias: { circle: { center: { latitude: 43.2, longitude: 16.2 }, radius: 500 } }
 		});
@@ -52,7 +52,7 @@ describe('Google Places ID adapter', (): void => {
 
 	test('removes destination numbering from the text query', async (): Promise<void> => {
 		const numberedFeature = structuredClone(feature);
-		numberedFeature.properties.title = '4 Blue lagoon anchorage';
+		numberedFeature.properties.title = '4 Testbukta';
 		numberedFeature.properties.layerPath = ['Dag 1 - Lørdag'];
 		numberedFeature.properties.style.iconCode = '1623';
 		const fetchImplementation = vi
@@ -62,8 +62,6 @@ describe('Google Places ID adapter', (): void => {
 
 		await adapter.searchId(numberedFeature);
 		const options = fetchImplementation.mock.calls[0]?.[1];
-		expect(JSON.parse(String(options?.body)).textQuery).toBe(
-			'Blue lagoon anchorage, Split, Croatia'
-		);
+		expect(JSON.parse(String(options?.body)).textQuery).toBe('Testbukta, Testbyen, Testland');
 	});
 });

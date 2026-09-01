@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/t/kroatia-2026/unlock');
+	await page.goto('/t/testreise/unlock');
 	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
@@ -9,7 +9,7 @@ async function login(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-const gpx = `<?xml version="1.0"?><gpx creator="Orca App" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Testetappe</name><trkseg><trkpt lat="43" lon="16"><time>2026-09-05T08:00:00Z</time></trkpt><trkpt lat="43" lon="16"><time>2026-09-05T08:01:00Z</time></trkpt><trkpt lat="43" lon="16"><time>2026-09-05T08:02:00Z</time></trkpt><trkpt lat="43" lon="16"><time>2026-09-05T08:03:00Z</time></trkpt><trkpt lat="43.01" lon="16"><time>2026-09-05T08:03:20Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2026-09-05T08:03:40Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2026-09-05T08:04:40Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2026-09-05T08:05:40Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2026-09-05T08:06:40Z</time></trkpt></trkseg></trk></gpx>`;
+const gpx = `<?xml version="1.0"?><gpx creator="Orca App" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Testetappe</name><trkseg><trkpt lat="43" lon="16"><time>2027-06-01T08:00:00Z</time></trkpt><trkpt lat="43" lon="16"><time>2027-06-01T08:01:00Z</time></trkpt><trkpt lat="43" lon="16"><time>2027-06-01T08:02:00Z</time></trkpt><trkpt lat="43" lon="16"><time>2027-06-01T08:03:00Z</time></trkpt><trkpt lat="43.01" lon="16"><time>2027-06-01T08:03:20Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2027-06-01T08:03:40Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2027-06-01T08:04:40Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2027-06-01T08:05:40Z</time></trkpt><trkpt lat="43.02" lon="16"><time>2027-06-01T08:06:40Z</time></trkpt></trkseg></trk></gpx>`;
 
 function largeGpx(pointCount: number): string {
 	const points = Array.from({ length: pointCount }, (_value, index) => {
@@ -52,7 +52,7 @@ test('persists daily details and manages journey legs without mobile overflow', 
 		buffer: Buffer.from(gpx)
 	});
 	await expect(dialog.getByRole('combobox', { name: 'Fra' })).toBeVisible();
-	await dialog.getByRole('combobox', { name: 'Fra' }).fill('Split');
+	await dialog.getByRole('combobox', { name: 'Fra' }).fill('Teststed');
 	await dialog.getByRole('combobox', { name: 'Til' }).fill(arrival);
 	await expect(dialog.getByRole('textbox', { name: 'Avgang' })).toHaveAttribute('readonly', '');
 	await expect(dialog.getByRole('textbox', { name: 'Ankomst' })).toHaveAttribute('readonly', '');

@@ -40,7 +40,7 @@ function journey(): Journey {
 		title: 'Oslo til Bangkok',
 		bookingReference: 'ABC123',
 		bookingUrl: '',
-		participants: ['Håvard'],
+		participants: ['Ada'],
 		notes: '',
 		version: 1,
 		createdAt: '2026-08-29T10:00:00.000Z',
@@ -53,8 +53,8 @@ function journey(): Journey {
 				mode: 'flight',
 				operator: 'SAS',
 				serviceNumber: 'SK1461',
-				from: endpoint('Oslo lufthavn', 'OSL', '2026-09-05T08:00'),
-				to: endpoint('København', 'CPH', '2026-09-05T09:10', 'Europe/Copenhagen'),
+				from: endpoint('Oslo lufthavn', 'OSL', '2027-06-01T08:00'),
+				to: endpoint('København', 'CPH', '2027-06-01T09:10', 'Europe/Copenhagen'),
 				status: 'planned',
 				notes: ''
 			},
@@ -63,8 +63,8 @@ function journey(): Journey {
 				mode: 'flight',
 				operator: 'SAS',
 				serviceNumber: 'SK973',
-				from: endpoint('København', 'CPH', '2026-09-05T10:45', 'Europe/Copenhagen'),
-				to: endpoint('Bangkok', 'BKK', '2026-09-06T05:55', 'Asia/Bangkok'),
+				from: endpoint('København', 'CPH', '2027-06-01T10:45', 'Europe/Copenhagen'),
+				to: endpoint('Bangkok', 'BKK', '2027-06-02T05:55', 'Asia/Bangkok'),
 				status: 'planned',
 				notes: ''
 			}
@@ -88,7 +88,7 @@ describe('itinerary domain', (): void => {
 
 	test('does not show a connection duration when the next leg changes location', (): void => {
 		const item = journey();
-		item.legs[1]!.from = endpoint('København H', 'CPH-H', '2026-09-05T10:45');
+		item.legs[1]!.from = endpoint('København H', 'CPH-H', '2027-06-01T10:45');
 
 		const events = timelineEvents([{ key: itineraryItemKey(item.id), ...item }]);
 		expect(events).toHaveLength(2);
@@ -105,8 +105,8 @@ describe('itinerary domain', (): void => {
 			bookingUrl: '',
 			participants: [],
 			notes: '',
-			checkIn: endpoint('Hotel Norge', '', '2026-09-05T15:00'),
-			checkOut: endpoint('Hotel Norge', '', '2026-09-07T11:00'),
+			checkIn: endpoint('Hotel Norge', '', '2027-06-01T15:00'),
+			checkOut: endpoint('Hotel Norge', '', '2027-06-03T11:00'),
 			version: 1 as const,
 			createdAt: '2026-08-29T10:00:00.000Z',
 			createdBy: 'client-a',
@@ -123,7 +123,7 @@ describe('itinerary domain', (): void => {
 		for (const [localDateTime, timeZone] of [
 			['2026-01-15T08:30', 'Europe/Oslo'],
 			['2026-08-15T08:30', 'Europe/Oslo'],
-			['2026-09-06T05:55', 'Asia/Bangkok']
+			['2027-06-02T05:55', 'Asia/Bangkok']
 		] as const) {
 			const instant = localDateTimeToInstant(localDateTime, timeZone);
 			expect(instantToLocalDateTime(instant, timeZone)).toBe(localDateTime);

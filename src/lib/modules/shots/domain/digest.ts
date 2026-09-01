@@ -2,22 +2,6 @@ import { z } from 'zod';
 
 import type { JsonValue } from '$lib/client/database';
 
-export const cameraChoices = [
-	'Pocket 4',
-	'A7 IV',
-	'A7 III',
-	'Insta360 X5',
-	'Osmo Action 4',
-	'Mini Pro 5',
-	'Håvard sin mobil',
-	'Odd sin mobil',
-	'Tina sin mobil',
-	'Lise sin mobil',
-	'Annet'
-] as const;
-
-export const offloadCameraChoices = cameraChoices.filter((choice) => choice !== 'Annet');
-
 export const mediaRowSchema = z.object({
 	description: z.string().max(500),
 	camera: z.string().trim().min(1).max(100),

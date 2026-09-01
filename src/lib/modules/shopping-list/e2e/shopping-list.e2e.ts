@@ -3,7 +3,7 @@ import { expect, type Page, test } from '@playwright/test';
 type Item = { sourceName: string; name: string; specification: string };
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/t/kroatia-2026/unlock');
+	await page.goto('/t/testreise/unlock');
 	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
@@ -85,7 +85,7 @@ test('adds, completes, and restores Bring items with responsive module navigatio
 		await route.fulfill({
 			json: {
 				listUuid: 'trip-list',
-				listName: 'Kroatia 2026',
+				listName: 'Testreise',
 				items,
 				recentItems,
 				fetchedAt: '2026-08-21T10:00:00.000Z'
@@ -100,7 +100,7 @@ test('adds, completes, and restores Bring items with responsive module navigatio
 
 	await expect(page).toHaveURL(/\/shopping-list$/);
 	await expect(page.getByRole('heading', { name: 'Handleliste', exact: true })).toBeVisible();
-	await expect(page.getByText('Kroatia 2026 · 1 vare')).toBeVisible();
+	await expect(page.getByText('Testreise · 1 vare')).toBeVisible();
 	await expect(page.getByText('Olivenolje')).toBeVisible();
 	await expect(page.getByText('1 flaske')).toBeVisible();
 	const syncStatusBounds = await page.getByRole('status').boundingBox();
@@ -235,7 +235,7 @@ test('syncs remote changes on focus and while open without overwriting local wri
 			await route.fulfill({
 				json: {
 					listUuid: 'trip-list',
-					listName: 'Kroatia 2026',
+					listName: 'Testreise',
 					items: responseItems,
 					recentItems: [],
 					fetchedAt: '2026-08-21T10:00:00.000Z'
@@ -251,7 +251,7 @@ test('syncs remote changes on focus and while open without overwriting local wri
 		await route.fulfill({
 			json: {
 				listUuid: 'trip-list',
-				listName: 'Kroatia 2026',
+				listName: 'Testreise',
 				items,
 				recentItems: [],
 				fetchedAt: '2026-08-21T10:00:01.000Z'
@@ -303,7 +303,7 @@ test('edits the cached list offline and keeps the optimistic result across reloa
 		await route.fulfill({
 			json: {
 				listUuid: 'trip-list',
-				listName: 'Kroatia 2026',
+				listName: 'Testreise',
 				items: completed
 					? []
 					: [{ sourceName: 'Sonnencreme', name: 'Solkrem', specification: 'Faktor 50' }],

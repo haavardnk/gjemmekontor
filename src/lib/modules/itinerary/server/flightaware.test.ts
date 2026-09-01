@@ -29,10 +29,10 @@ describe('FlightAware lookup', (): void => {
 								name: 'København',
 								timezone: 'Europe/Copenhagen'
 							},
-							scheduled_out: '2026-09-05T06:00:00.000Z',
-							scheduled_in: '2026-09-05T07:10:00.000Z',
-							estimated_out: '2026-09-05T06:20:00.000Z',
-							estimated_in: '2026-09-05T07:30:00.000Z',
+							scheduled_out: '2027-06-01T06:00:00.000Z',
+							scheduled_in: '2027-06-01T07:10:00.000Z',
+							estimated_out: '2027-06-01T06:20:00.000Z',
+							estimated_in: '2027-06-01T07:30:00.000Z',
 							terminal_origin: '2',
 							gate_origin: 'D4'
 						}
@@ -41,7 +41,7 @@ describe('FlightAware lookup', (): void => {
 			}
 		);
 
-		const candidates = await lookupFlightAwareFlights('secret', 'SK 1461', '2026-09-05', fetcher);
+		const candidates = await lookupFlightAwareFlights('secret', 'SK 1461', '2027-06-01', fetcher);
 
 		expect(candidates).toHaveLength(1);
 		expect(candidates[0]).toMatchObject({
@@ -50,11 +50,11 @@ describe('FlightAware lookup', (): void => {
 			status: 'delayed',
 			from: {
 				locationCode: 'OSL',
-				localDateTime: '2026-09-05T08:20',
+				localDateTime: '2027-06-01T08:20',
 				terminal: '2',
 				gate: 'D4'
 			},
-			to: { locationCode: 'CPH', localDateTime: '2026-09-05T09:30' }
+			to: { locationCode: 'CPH', localDateTime: '2027-06-01T09:30' }
 		});
 		expect(requestedUrl).toContain('/flights/SK1461');
 		expect(requestedHeaders).toMatchObject({ 'x-apikey': 'secret' });
@@ -68,14 +68,14 @@ describe('FlightAware lookup', (): void => {
 						fa_flight_id: 'old',
 						origin: { name: 'Oslo', timezone: 'Europe/Oslo' },
 						destination: { name: 'København', timezone: 'Europe/Copenhagen' },
-						scheduled_out: '2026-09-04T06:00:00.000Z',
-						scheduled_in: '2026-09-04T07:00:00.000Z'
+						scheduled_out: '2027-05-31T06:00:00.000Z',
+						scheduled_in: '2027-05-31T07:00:00.000Z'
 					}
 				]
 			})
 		);
 
-		expect(await lookupFlightAwareFlights('secret', 'SK1461', '2026-09-05', fetcher)).toEqual([]);
+		expect(await lookupFlightAwareFlights('secret', 'SK1461', '2027-06-01', fetcher)).toEqual([]);
 	});
 
 	test('uses published schedules and airport timezones beyond the live two-day window', async (): Promise<void> => {
@@ -92,7 +92,7 @@ describe('FlightAware lookup', (): void => {
 					{ status: 400 }
 				);
 			}
-			if (url.includes('/schedules/2026-09-05/2026-09-06')) {
+			if (url.includes('/schedules/2027-06-01/2027-06-02')) {
 				return Response.json({
 					scheduled: [
 						{
@@ -105,8 +105,8 @@ describe('FlightAware lookup', (): void => {
 							destination: 'EKCH',
 							destination_icao: 'EKCH',
 							destination_iata: 'CPH',
-							scheduled_out: '2026-09-05T04:00:00Z',
-							scheduled_in: '2026-09-05T05:15:00Z',
+							scheduled_out: '2027-06-01T04:00:00Z',
+							scheduled_in: '2027-06-01T05:15:00Z',
 							fa_flight_id: null
 						},
 						{
@@ -116,8 +116,8 @@ describe('FlightAware lookup', (): void => {
 							actual_ident_iata: 'SK1461',
 							origin: 'ENGM',
 							destination: 'EKCH',
-							scheduled_out: '2026-09-05T04:00:00Z',
-							scheduled_in: '2026-09-05T05:15:00Z'
+							scheduled_out: '2027-06-01T04:00:00Z',
+							scheduled_in: '2027-06-01T05:15:00Z'
 						}
 					]
 				});
@@ -143,23 +143,23 @@ describe('FlightAware lookup', (): void => {
 			return Response.json({}, { status: 404 });
 		});
 
-		const candidates = await lookupFlightAwareFlights('secret', 'SK1461', '2026-09-05', fetcher);
+		const candidates = await lookupFlightAwareFlights('secret', 'SK1461', '2027-06-01', fetcher);
 
 		expect(candidates).toHaveLength(1);
 		expect(candidates[0]).toMatchObject({
-			providerFlightId: 'schedule:SAS1461:2026-09-05T04:00:00Z',
+			providerFlightId: 'schedule:SAS1461:2027-06-01T04:00:00Z',
 			flightNumber: 'SK1461',
 			status: 'planned',
 			from: {
 				locationName: 'Oslo, Gardermoen',
 				locationCode: 'OSL',
-				localDateTime: '2026-09-05T06:00',
+				localDateTime: '2027-06-01T06:00',
 				timeZone: 'Europe/Oslo'
 			},
 			to: {
 				locationName: 'Copenhagen',
 				locationCode: 'CPH',
-				localDateTime: '2026-09-05T07:15',
+				localDateTime: '2027-06-01T07:15',
 				timeZone: 'Europe/Copenhagen'
 			}
 		});
@@ -171,7 +171,7 @@ describe('FlightAware lookup', (): void => {
 		const fetcher = vi.fn(async (): Promise<Response> => Response.json({ flights: 'invalid' }));
 
 		await expect(
-			lookupFlightAwareFlights('secret', 'SK1461', '2026-09-05', fetcher)
+			lookupFlightAwareFlights('secret', 'SK1461', '2027-06-01', fetcher)
 		).rejects.toThrow('INVALID_FLIGHTAWARE_RESPONSE');
 	});
 });

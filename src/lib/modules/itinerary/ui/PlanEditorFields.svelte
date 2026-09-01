@@ -55,7 +55,7 @@
 		label="Sted"
 		bind:value={primary.locationName}
 		apiKey={googlePlacesApiKey}
-		placeholder="Split"
+		placeholder="Sted"
 	/><label class="block"
 		><span class="mb-1 block font-semibold">Type</span><select
 			class="select w-full"

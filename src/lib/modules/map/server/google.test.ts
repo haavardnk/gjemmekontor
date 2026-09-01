@@ -52,8 +52,8 @@ describe('Google map cache', (): void => {
 		const refreshed = await service.refresh();
 		const secondHeaders = fetchImplementation.mock.calls[1]?.[1]?.headers as Headers;
 
-		expect(initial.snapshot.features).toHaveLength(149);
-		expect(new Set(initial.snapshot.features.map((feature) => feature.id)).size).toBe(149);
+		expect(initial.snapshot.features).toHaveLength(4);
+		expect(new Set(initial.snapshot.features.map((feature) => feature.id)).size).toBe(4);
 		expect(refreshed.snapshot.fetchedAt).toBe('2026-08-20T00:16:00.000Z');
 		expect(secondHeaders.get('If-None-Match')).toBe('fixture-etag');
 		expect(secondHeaders.get('If-Modified-Since')).toBe('Wed, 19 Aug 2026 10:00:00 GMT');
@@ -82,7 +82,7 @@ describe('Google map cache', (): void => {
 		resolveFetch?.(new Response(fixture));
 
 		expect(first).toBe(second);
-		expect((await first).snapshot.features).toHaveLength(149);
+		expect((await first).snapshot.features).toHaveLength(4);
 		expect(fetchImplementation).toHaveBeenCalledTimes(1);
 	});
 

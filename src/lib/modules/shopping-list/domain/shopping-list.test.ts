@@ -18,7 +18,7 @@ describe('shopping list', (): void => {
 
 		const snapshot = shoppingListSnapshotSchema.parse({
 			listUuid: 'trip-list',
-			listName: 'Kroatia',
+			listName: 'Testreise',
 			items,
 			recentItems: [],
 			fetchedAt: '2026-08-21T10:00:00.000Z'

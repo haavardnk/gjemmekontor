@@ -22,9 +22,7 @@
 		tripDay
 			? {
 					...tripDay,
-					modules: plan?.modules ?? [],
-					core: plan?.core ?? ('travel' as const),
-					flexible: plan?.flexible ?? false
+					modules: plan?.modules ?? []
 				}
 			: undefined
 	);

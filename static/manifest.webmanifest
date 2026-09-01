@@ -1,7 +1,7 @@
 {
 	"name": "Gjemmekontor",
 	"short_name": "Gjemmekontor",
-	"description": "Felles reiseapp for Gjemmekontor i Kroatia",
+	"description": "Felles reiseapp for Gjemmekontor",
 	"lang": "nb",
 	"start_url": "/map",
 	"scope": "/",

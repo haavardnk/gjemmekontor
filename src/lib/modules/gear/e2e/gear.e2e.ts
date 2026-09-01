@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 async function login(page: Page): Promise<void> {
-	await page.goto('/t/kroatia-2026/unlock');
+	await page.goto('/t/testreise/unlock');
 	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
@@ -13,8 +13,8 @@ test('plans, filters, reorders, purchases, and packs shared gear', async ({ page
 	const suffix = crypto.randomUUID().slice(0, 8);
 	const firstCategoryName = `Sikkerhet ${suffix}`;
 	const secondCategoryName = `Elektronikk ${suffix}`;
-	const ownerName = 'Håvard';
-	const secondOwnerName = 'Tina';
+	const ownerName = 'Ada';
+	const secondOwnerName = 'Bo';
 	const purchaseItemName = `Redningsvest ${suffix}`;
 	const availableItemName = `Kartplotter ${suffix}`;
 
@@ -126,7 +126,7 @@ test('plans, filters, reorders, purchases, and packs shared gear', async ({ page
 	const secondOwnerGroup = page.getByRole('group', { name: secondOwnerName, exact: true });
 	await expect(secondOwnerGroup).toContainText(availableItemName);
 	await expect(secondOwnerGroup).toContainText(secondCategoryName);
-	await expect(page.getByRole('group', { name: 'Tomine', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('group', { name: 'Cleo', exact: true })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Grupper etter kategori' }).click();
 
 	await page.setViewportSize({ width: 768, height: 900 });
@@ -179,7 +179,7 @@ test('keeps gear edits through an offline reload and synchronizes them on reconn
 	await category.getByRole('button', { name: 'Legg til utstyr' }).click();
 	dialog = page.getByRole('dialog');
 	await dialog.getByRole('textbox', { name: 'Utstyrsnavn' }).fill(itemName);
-	await dialog.getByRole('checkbox', { name: 'Håvard' }).check();
+	await dialog.getByRole('checkbox', { name: 'Ada' }).check();
 	await dialog.getByRole('button', { name: 'Lagre' }).click();
 	await expect(page.getByRole('status')).toContainText(/Uten nett · 2 venter/);
 	await expect(category).toContainText(itemName);

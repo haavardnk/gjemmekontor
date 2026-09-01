@@ -32,7 +32,7 @@ function item(overrides: Partial<GearItemView> = {}): GearItemView {
 
 function data(items = [item()]): GearPageData {
 	return {
-		people: [{ id: ownerId, name: 'Håvard', activeTripMember: true }],
+		people: [{ id: ownerId, name: 'Ada', activeTripMember: true }],
 		categories: [{ id: categoryId, name: 'Klær', position: 0 }],
 		items
 	};
@@ -92,7 +92,7 @@ describe('gear command plans', (): void => {
 		expect(() => saveGearCategory(data(), { name: ' klær ' })).toThrow('GEAR_CATEGORY_DUPLICATE');
 		expect(() =>
 			markGearItemAvailable(
-				{ ...data(), people: [{ id: ownerId, name: 'Håvard', activeTripMember: false }] },
+				{ ...data(), people: [{ id: ownerId, name: 'Ada', activeTripMember: false }] },
 				itemId
 			)
 		).toThrow('GEAR_OWNER_REQUIRED');

@@ -87,7 +87,7 @@ describe('GPX extraction', (): void => {
 	});
 
 	test('rejects GPX segments that move backward in time', (): void => {
-		const xml = `<?xml version="1.0"?><gpx creator="test" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="43" lon="16"><time>2026-09-05T09:00:00Z</time></trkpt><trkpt lat="43.1" lon="16"><time>2026-09-05T09:01:00Z</time></trkpt></trkseg><trkseg><trkpt lat="43.2" lon="16"><time>2026-09-05T08:00:00Z</time></trkpt><trkpt lat="43.3" lon="16"><time>2026-09-05T08:01:00Z</time></trkpt></trkseg></trk></gpx>`;
+		const xml = `<?xml version="1.0"?><gpx creator="test" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="43" lon="16"><time>2027-06-01T09:00:00Z</time></trkpt><trkpt lat="43.1" lon="16"><time>2027-06-01T09:01:00Z</time></trkpt></trkseg><trkseg><trkpt lat="43.2" lon="16"><time>2027-06-01T08:00:00Z</time></trkpt><trkpt lat="43.3" lon="16"><time>2027-06-01T08:01:00Z</time></trkpt></trkseg></trk></gpx>`;
 
 		expect(() => extractGpxXml(xml, parse)).toThrow('GPX_TIMESTAMPS_NOT_MONOTONIC');
 	});

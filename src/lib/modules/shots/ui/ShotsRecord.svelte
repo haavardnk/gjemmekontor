@@ -2,9 +2,9 @@
 	import { ChevronDown, CirclePlus, Search, X } from '@lucide/svelte';
 
 	import { sharedState } from '$lib/client/state.svelte';
+	import type { TripDay } from '$lib/trip/itinerary';
 
-	import type { ShotModule } from '../domain/content';
-	import type { ShotsDay } from '../domain/day-plan';
+	import type { ShotModule } from '../domain/pack';
 
 	let {
 		day,
@@ -12,7 +12,7 @@
 		activityModuleIds,
 		scenarioGroups
 	}: {
-		day: ShotsDay;
+		day: TripDay & { modules: string[] };
 		modules: Record<string, ShotModule>;
 		activityModuleIds: string[];
 		scenarioGroups: Array<{ title: string; ids: string[] }>;

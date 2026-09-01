@@ -14,8 +14,8 @@ import {
 } from './logbook';
 
 const leg: LogbookLeg = {
-	from: { kind: 'text', name: 'Split' },
-	to: { kind: 'map', featureId: 'poi-1', name: 'Hvar', coordinates: [16.44, 43.17] },
+	from: { kind: 'text', name: 'Teststed' },
+	to: { kind: 'map', featureId: 'poi-1', name: 'Testhavn', coordinates: [16.44, 43.17] },
 	departure: '09:15',
 	arrival: '13:30',
 	nauticalMiles: 22.4,
@@ -23,7 +23,7 @@ const leg: LogbookLeg = {
 	engineMinutes: 45,
 	mooring: 'anchor',
 	customMooring: '',
-	createdAt: '2026-09-05T08:00:00.000Z',
+	createdAt: '2027-06-01T08:00:00.000Z',
 	createdBy: 'client-a',
 	tombstone: false
 };
@@ -48,8 +48,8 @@ describe('Logbook', (): void => {
 				byteSize: 100,
 				version: 1,
 				name: 'Tur',
-				departureAt: '2026-09-05T08:00:00.000Z',
-				arrivalAt: '2026-09-05T09:00:00.000Z',
+				departureAt: '2027-06-01T08:00:00.000Z',
+				arrivalAt: '2027-06-01T09:00:00.000Z',
 				nauticalMiles: 4.2,
 				activeSeconds: 3_000,
 				elapsedSeconds: 3_600,
@@ -72,7 +72,7 @@ describe('Logbook', (): void => {
 	});
 
 	test('sorts by departure and hides tombstones and invalid rows', (): void => {
-		const earlier = { ...leg, departure: '08:30', createdAt: '2026-09-05T09:00:00.000Z' };
+		const earlier = { ...leg, departure: '08:30', createdAt: '2027-06-01T09:00:00.000Z' };
 		const deleted = { ...leg, tombstone: true };
 		const values: Record<string, JsonValue> = {
 			[logbookLegKey('day-a', 'later')]: serializeLogbookLeg(leg),

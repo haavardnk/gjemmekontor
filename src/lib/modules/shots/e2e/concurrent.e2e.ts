@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 async function loginDigest(page: Page): Promise<void> {
-	await page.goto('/t/kroatia-2026/unlock');
+	await page.goto('/t/testreise/unlock');
 	await page.locator('#password').fill('test-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
 	await expect(page).toHaveURL(/\/map$/);
@@ -34,8 +34,8 @@ test('merges rows created by two offline clients', async ({ browser }) => {
 		await firstContext.setOffline(true);
 		await secondContext.setOffline(true);
 
-		await addVideo(firstPage, firstDescription, 'Osmo Action 4');
-		await addVideo(secondPage, secondDescription, 'Pocket 4');
+		await addVideo(firstPage, firstDescription, 'Kamera');
+		await addVideo(secondPage, secondDescription, 'Mobil');
 
 		await firstContext.setOffline(false);
 		await expect(firstPage.getByRole('status')).toHaveText('Synkronisert', {

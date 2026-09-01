@@ -26,7 +26,7 @@ function fakeClient(initial = [{ name: 'Øl', specification: '6 bokser' }]): Bri
 		items: [...initial],
 		recentItems: [{ name: 'Eier', specification: '' }],
 		login: vi.fn(async (): Promise<void> => undefined),
-		loadLists: vi.fn(async () => ({ lists: [{ listUuid: 'trip-list', name: 'Kroatia' }] })),
+		loadLists: vi.fn(async () => ({ lists: [{ listUuid: 'trip-list', name: 'Testreise' }] })),
 		loadCatalog: vi.fn(async () => ({
 			catalog: {
 				sections: [
@@ -81,7 +81,7 @@ describe('Bring service', (): void => {
 		const client = fakeClient();
 		const connection = await new BringConnectionService(config, () => client).verify('trip-list');
 
-		expect(connection).toEqual({ listUuid: 'trip-list', listName: 'Kroatia' });
+		expect(connection).toEqual({ listUuid: 'trip-list', listName: 'Testreise' });
 		expect(client.login).toHaveBeenCalledOnce();
 		expect(client.loadLists).toHaveBeenCalledOnce();
 	});
@@ -94,24 +94,22 @@ describe('Bring service', (): void => {
 			lists = [...lists, { listUuid: 'new-trip-list', name }];
 		});
 
-		const connection = await new BringConnectionService(config, () => client).create(
-			'Kroatia 2026'
-		);
+		const connection = await new BringConnectionService(config, () => client).create('Testreise');
 
-		expect(connection).toEqual({ listUuid: 'new-trip-list', listName: 'Kroatia 2026' });
-		expect(client.createList).toHaveBeenCalledWith('Kroatia 2026');
+		expect(connection).toEqual({ listUuid: 'new-trip-list', listName: 'Testreise' });
+		expect(client.createList).toHaveBeenCalledWith('Testreise');
 		expect(client.loadLists).toHaveBeenCalledTimes(2);
 	});
 
 	test('rejects duplicate list names without creating or selecting one', async (): Promise<void> => {
 		const client = fakeClient();
 		client.loadLists = vi.fn(async () => ({
-			lists: [{ listUuid: 'existing', name: 'KROATIA 2026' }]
+			lists: [{ listUuid: 'existing', name: 'TESTREISE' }]
 		}));
 		client.createList = vi.fn(async () => undefined);
 
 		await expect(
-			new BringConnectionService(config, () => client).create('Kroatia 2026')
+			new BringConnectionService(config, () => client).create('Testreise')
 		).rejects.toEqual(new BringServiceError('BRING_LIST_NAME_CONFLICT'));
 		expect(client.createList).not.toHaveBeenCalled();
 	});
@@ -124,7 +122,7 @@ describe('Bring service', (): void => {
 		client.createList = vi.fn(async () => undefined);
 
 		await expect(
-			new BringConnectionService(config, () => client).create('Kroatia 2026')
+			new BringConnectionService(config, () => client).create('Testreise')
 		).rejects.toEqual(new BringServiceError('BRING_LIST_CREATE_FAILED'));
 	});
 
@@ -146,7 +144,7 @@ describe('Bring service', (): void => {
 
 		expect(first).toEqual({
 			listUuid: 'trip-list',
-			listName: 'Kroatia',
+			listName: 'Testreise',
 			items: [
 				{ sourceName: 'Appelsin', name: 'Appelsin', specification: '' },
 				{ sourceName: 'Appelsin', name: 'Appelsin', specification: '4 stk' },

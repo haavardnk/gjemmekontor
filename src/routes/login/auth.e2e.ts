@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('selects a trip and requires its shared password', async ({ page }) => {
-	const loginResponse = await page.request.get('/t/kroatia-2026/unlock');
+	const loginResponse = await page.request.get('/t/testreise/unlock');
 	const loginHtml = await loginResponse.text();
 	expect(loginHtml).toMatch(/<form\b[^>]*\bmethod="post"/);
 
@@ -9,11 +9,9 @@ test('selects a trip and requires its shared password', async ({ page }) => {
 	await expect(page).toHaveURL(/\/trips$/);
 	await expect(page.getByRole('img', { name: 'Gjemmekontor' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Velg reise' })).toBeVisible();
-	await page.getByRole('link', { name: /Kroatia 2026/ }).click();
-	await expect(page).toHaveURL(/\/t\/kroatia-2026\/unlock$/);
-	await expect(
-		page.getByRole('heading', { name: 'Velkommen om bord på S/Y Bad Buoy' })
-	).toBeVisible();
+	await page.getByRole('link', { name: /Testreise/ }).click();
+	await expect(page).toHaveURL(/\/t\/testreise\/unlock$/);
+	await expect(page.getByRole('heading', { name: 'Velkommen til testreisen' })).toBeVisible();
 
 	await page.locator('#password').fill('wrong-password');
 	await page.getByRole('button', { name: 'Logg inn' }).click();
@@ -32,7 +30,7 @@ test('selects a trip and requires its shared password', async ({ page }) => {
 test('accepts the native login form without putting the password in the URL', async ({
 	request
 }) => {
-	const response = await request.post('/t/kroatia-2026/unlock', {
+	const response = await request.post('/t/testreise/unlock', {
 		form: { password: 'test-password' },
 		headers: {
 			accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -42,7 +40,7 @@ test('accepts the native login form without putting the password in the URL', as
 	});
 	expect(response.status()).toBe(303);
 	expect(response.headers().location).toBe('/map');
-	expect(response.url()).toBe('http://127.0.0.1:4173/t/kroatia-2026/unlock');
+	expect(response.url()).toBe('http://127.0.0.1:4173/t/testreise/unlock');
 	expect(response.url()).not.toContain('password');
 });
 

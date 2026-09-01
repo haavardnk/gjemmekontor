@@ -41,9 +41,7 @@ function alignDayPlans(content: ShotContent, days: readonly TripDay[]): ShotCont
 			(day) =>
 				byIndex.get(day.index) ?? {
 					dayIndex: day.index,
-					modules: [],
-					core: 'travel',
-					flexible: false
+					modules: []
 				}
 		)
 	};

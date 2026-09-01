@@ -162,8 +162,8 @@
 				{#if currentLayers.length > 0}
 					{currentLayers.map((layer) => layer.name).join(', ')}
 				{:else}
-					Google-kartets dagsmapper dekker 5.–18. september. Alle kartpunkter vises for
-					{currentDateLabel?.toLocaleLowerCase('nb-NO')}.
+					Ingen dagsmappe finnes for {currentDateLabel?.toLocaleLowerCase('nb-NO')}. Alle
+					kartpunkter vises.
 				{/if}
 			</p>
 			<div class="join w-full">
@@ -325,12 +325,6 @@
 				>,
 				<a class="link" href="https://aisstream.io/" target="_blank" rel="noreferrer">AISStream</a>.
 			</p>
-			<a
-				class="link font-semibold"
-				href="https://www.hhi.hr/proizvodi-i-usluge/pomorske-navigacijske-karte"
-				target="_blank"
-				rel="noreferrer">Offisielle kroatiske sjøkart hos HHI</a
-			>
 		</div>
 	</aside>
 {/if}

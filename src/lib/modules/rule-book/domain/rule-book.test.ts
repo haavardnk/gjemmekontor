@@ -60,18 +60,18 @@ describe('rule book', () => {
 				dayIndex: 1,
 				sectionNumber: 2,
 				text: 'Andre regel',
-				createdAt: '2026-09-06T10:00:00.000Z',
+				createdAt: '2027-06-02T10:00:00.000Z',
 				createdBy: 'client-1',
-				updatedAt: '2026-09-06T10:00:00.000Z'
+				updatedAt: '2027-06-02T10:00:00.000Z'
 			},
 			[ruleBookRuleKey(0)]: {
 				version: 1,
 				dayIndex: 0,
 				sectionNumber: 1,
 				text: 'Første regel',
-				createdAt: '2026-09-05T10:00:00.000Z',
+				createdAt: '2027-06-01T10:00:00.000Z',
 				createdBy: 'client-1',
-				updatedAt: '2026-09-05T10:00:00.000Z'
+				updatedAt: '2027-06-01T10:00:00.000Z'
 			},
 			'rule-book:rule:broken': { text: 'Ugyldig' }
 		};

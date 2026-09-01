@@ -30,7 +30,7 @@ const feature: MapFeature = {
 		title: 'Konoba Test',
 		description: '',
 		snippet: '',
-		address: 'Split, Croatia',
+		address: 'Testbyen, Testland',
 		layerId: 'layer',
 		layerName: 'Layer',
 		layerPath: ['Layer'],
@@ -169,7 +169,7 @@ describe('POI enrichment orchestration', (): void => {
 
 	test('re-searches old mappings for numbered destinations', async (): Promise<void> => {
 		const destination = structuredClone(feature);
-		destination.properties.title = '4 Blue lagoon anchorage';
+		destination.properties.title = '4 Testbukta';
 		destination.properties.layerPath = ['Anker, bøye og marina'];
 		destination.properties.style.iconCode = '1623';
 		const mappedAt = '2026-08-25T10:00:00.000Z';
