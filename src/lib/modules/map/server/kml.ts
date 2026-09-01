@@ -1,11 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
-import sanitizeHtml from 'sanitize-html';
-
 import {
-	type GeometryCollection,
-	type LineStringGeometry,
 	type MapBounds,
 	type MapFeature,
 	type MapFeatureStyle,
@@ -14,13 +9,20 @@ import {
 	mapPointCategory,
 	type MapSnapshot,
 	type MapSourceStyleKey,
-	type MapSourceStyleLegend,
-	type PointGeometry,
-	type PolygonGeometry,
-	type Position
+	type MapSourceStyleLegend
 } from '$lib/modules/map/domain/types';
 
-type XmlNode = Record<string, unknown>;
+import { geometries, geometryCounts, positions } from './kml-geometry';
+import {
+	extendedData,
+	node,
+	parseKmlDocument,
+	parseStyle,
+	plainText,
+	safeHtml,
+	text,
+	values
+} from './kml-xml';
 
 const fallbackColors = [
 	'#0f766e',
@@ -33,180 +35,6 @@ const fallbackColors = [
 	'#6656a3',
 	'#56717d'
 ];
-
-const parser = new XMLParser({
-	ignoreAttributes: false,
-	attributeNamePrefix: '@_',
-	parseTagValue: false,
-	trimValues: false
-});
-
-function node(value: unknown): XmlNode | undefined {
-	return value !== null && typeof value === 'object' && !Array.isArray(value)
-		? (value as XmlNode)
-		: undefined;
-}
-
-function values(value: unknown): unknown[] {
-	if (value === undefined || value === null) {
-		return [];
-	}
-	return Array.isArray(value) ? value : [value];
-}
-
-function text(value: unknown): string {
-	if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-		return String(value).trim();
-	}
-	const valueNode = node(value);
-	if (!valueNode) {
-		return '';
-	}
-	return text(valueNode['#text']);
-}
-
-function safeHtml(value: unknown): string {
-	return sanitizeHtml(text(value), {
-		allowedTags: ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'a'],
-		allowedAttributes: { a: ['href'] },
-		allowedSchemes: ['https'],
-		allowProtocolRelative: false,
-		disallowedTagsMode: 'discard'
-	}).trim();
-}
-
-function kmlColor(value: unknown): { color?: string; opacity?: number } {
-	const raw = text(value).replace(/^#/, '');
-	if (!/^[0-9a-f]{8}$/i.test(raw)) {
-		return {};
-	}
-	const alpha = Number.parseInt(raw.slice(0, 2), 16) / 255;
-	const blue = raw.slice(2, 4);
-	const green = raw.slice(4, 6);
-	const red = raw.slice(6, 8);
-	return { color: `#${red}${green}${blue}`.toLowerCase(), opacity: alpha };
-}
-
-function parseStyle(value: unknown, id = ''): MapFeatureStyle {
-	const style = node(value);
-	if (!style) {
-		return {};
-	}
-	const iconStyle = node(style.IconStyle);
-	const lineStyle = node(style.LineStyle);
-	const polygonStyle = node(style.PolyStyle);
-	const iconColor = kmlColor(iconStyle?.color);
-	const lineColor = kmlColor(lineStyle?.color);
-	const fillColor = kmlColor(polygonStyle?.color);
-	const width = Number(text(lineStyle?.width));
-	return {
-		color: lineColor.color ?? iconColor.color,
-		opacity: lineColor.opacity ?? iconColor.opacity,
-		fillColor: fillColor.color,
-		fillOpacity: fillColor.opacity,
-		width: Number.isFinite(width) && width > 0 ? width : undefined,
-		iconHref: text(node(iconStyle?.Icon)?.href) || undefined,
-		iconCode: id.match(/^icon-(\d+)-/)?.[1]
-	};
-}
-
-function parseCoordinates(value: unknown): Position[] {
-	return text(value)
-		.split(/\s+/)
-		.filter(Boolean)
-		.map((coordinate): Position | undefined => {
-			const parts = coordinate.split(',');
-			const longitude = Number(parts[0]);
-			const latitude = Number(parts[1]);
-			if (
-				!Number.isFinite(longitude) ||
-				!Number.isFinite(latitude) ||
-				longitude < -180 ||
-				longitude > 180 ||
-				latitude < -90 ||
-				latitude > 90
-			) {
-				return undefined;
-			}
-			return [longitude, latitude];
-		})
-		.filter((coordinate): coordinate is Position => coordinate !== undefined);
-}
-
-function point(value: unknown): PointGeometry | undefined {
-	const coordinates = parseCoordinates(node(value)?.coordinates);
-	return coordinates.length === 1
-		? { type: 'Point', coordinates: coordinates[0] as Position }
-		: undefined;
-}
-
-function lineString(value: unknown): LineStringGeometry | undefined {
-	const coordinates = parseCoordinates(node(value)?.coordinates);
-	return coordinates.length >= 2 ? { type: 'LineString', coordinates } : undefined;
-}
-
-function polygon(value: unknown): PolygonGeometry | undefined {
-	const polygonNode = node(value);
-	if (!polygonNode) {
-		return undefined;
-	}
-	const boundaries = [
-		...values(polygonNode.outerBoundaryIs),
-		...values(polygonNode.innerBoundaryIs)
-	];
-	const coordinates = boundaries
-		.map((boundary) => parseCoordinates(node(node(boundary)?.LinearRing)?.coordinates))
-		.filter((ring) => ring.length >= 4);
-	return coordinates.length > 0 ? { type: 'Polygon', coordinates } : undefined;
-}
-
-function geometries(value: unknown): MapGeometry[] {
-	const geometryNode = node(value);
-	if (!geometryNode) {
-		return [];
-	}
-	const result: MapGeometry[] = [];
-	for (const candidate of values(geometryNode.Point)) {
-		const geometry = point(candidate);
-		if (geometry) {
-			result.push(geometry);
-		}
-	}
-	for (const candidate of values(geometryNode.LineString)) {
-		const geometry = lineString(candidate);
-		if (geometry) {
-			result.push(geometry);
-		}
-	}
-	for (const candidate of values(geometryNode.Polygon)) {
-		const geometry = polygon(candidate);
-		if (geometry) {
-			result.push(geometry);
-		}
-	}
-	for (const candidate of values(geometryNode.MultiGeometry)) {
-		const nested = geometries(candidate);
-		if (nested.length > 0) {
-			const collection: GeometryCollection = { type: 'GeometryCollection', geometries: nested };
-			result.push(collection);
-		}
-	}
-	return result;
-}
-
-function extendedData(value: unknown): Record<string, string> {
-	const dataNode = node(value);
-	if (!dataNode) {
-		return {};
-	}
-	const entries = values(dataNode.Data).flatMap((item): [string, string][] => {
-		const itemNode = node(item);
-		const name = text(itemNode?.['@_name']);
-		const content = safeHtml(itemNode?.value);
-		return name ? [[name, content]] : [];
-	});
-	return Object.fromEntries(entries);
-}
 
 function featureId(layerPath: string[], title: string, geometry: MapGeometry): string {
 	return createHash('sha256')
@@ -235,38 +63,6 @@ function sourceStyle(style: MapFeatureStyle): MapSourceStyleLegend {
 	};
 }
 
-function geometryCounts(geometry: MapGeometry): { points: number; lines: number } {
-	if (geometry.type === 'Point') {
-		return { points: 1, lines: 0 };
-	}
-	if (geometry.type === 'LineString') {
-		return { points: 0, lines: 1 };
-	}
-	if (geometry.type === 'GeometryCollection') {
-		return geometry.geometries.reduce(
-			(total, child) => {
-				const counts = geometryCounts(child);
-				return { points: total.points + counts.points, lines: total.lines + counts.lines };
-			},
-			{ points: 0, lines: 0 }
-		);
-	}
-	return { points: 0, lines: 0 };
-}
-
-function positions(geometry: MapGeometry): Position[] {
-	if (geometry.type === 'Point') {
-		return [geometry.coordinates];
-	}
-	if (geometry.type === 'LineString') {
-		return geometry.coordinates;
-	}
-	if (geometry.type === 'Polygon') {
-		return geometry.coordinates.flat();
-	}
-	return geometry.geometries.flatMap(positions);
-}
-
 function placemarkDescription(
 	placemark: Record<string, unknown>,
 	data: Record<string, string>
@@ -291,7 +87,7 @@ function anchorageDetails(
 	let seaBed: string | undefined;
 	let windProtection: string | undefined;
 	for (const line of description.split(/<br\s*\/?\s*>|\r?\n/gi)) {
-		const value = sanitizeHtml(line, { allowedTags: [], allowedAttributes: {} }).trim();
+		const value = plainText(line);
 		if (!value || /^coordinates:\s*/i.test(value)) continue;
 		const seaBedMatch = value.match(/^sea bed:\s*(.+)$/i);
 		if (seaBedMatch) {
@@ -318,14 +114,7 @@ function anchorageDetails(
 }
 
 export function parseKml(kml: string, fetchedAt = new Date().toISOString()): MapSnapshot {
-	if (XMLValidator.validate(kml) !== true) {
-		throw new Error('INVALID_KML');
-	}
-	const root = node(parser.parse(kml));
-	const documentNode = node(node(root?.kml)?.Document);
-	if (!documentNode) {
-		throw new Error('INVALID_KML');
-	}
+	const documentNode = parseKmlDocument(kml);
 
 	const styles = new Map<string, MapFeatureStyle>();
 	for (const styleValue of values(documentNode.Style)) {
