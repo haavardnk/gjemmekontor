@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type Position = [longitude: number, latitude: number];
 
 export type MapMode = 'normal' | 'nautical' | 'satellite';
@@ -192,3 +194,5 @@ export function isCurrentMapSnapshot(value: unknown): value is MapSnapshot {
 		return typeof key === 'string' && sourceStyleKeys.has(key);
 	});
 }
+
+export const mapSnapshotSchema = z.custom<MapSnapshot>(isCurrentMapSnapshot);

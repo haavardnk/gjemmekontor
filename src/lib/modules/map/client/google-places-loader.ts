@@ -130,7 +130,7 @@ function openingHoursPresentation(
 
 const readyCallbackName = '__gjemmekontorGooglePlacesReady';
 
-export function loadGooglePlacesUiKit(apiKey: string): Promise<void> {
+export function loadGooglePlacesLibrary(apiKey: string): Promise<void> {
 	if (loader) {
 		return loadedKey === apiKey ? loader : Promise.reject(new Error('GOOGLE_KEY_CHANGED'));
 	}
@@ -183,7 +183,7 @@ export async function fetchGooglePlacePresentation(
 	placeId: string,
 	apiKey: string
 ): Promise<GooglePlacePresentation> {
-	await loadGooglePlacesUiKit(apiKey);
+	await loadGooglePlacesLibrary(apiKey);
 	const importLibrary = (globalThis as GoogleMapsGlobal).google?.maps?.importLibrary;
 	if (!importLibrary) throw new Error('GOOGLE_PLACES_UNAVAILABLE');
 	const { Place } = (await importLibrary('places')) as GooglePlacesLibrary;

@@ -1,3 +1,4 @@
+export { loadGooglePlacesLibrary } from './client/google-places-loader';
 export type { MapSnapshotRecord, OfflineMapProgress, OfflineMapRecord } from './client/offline';
 export {
 	downloadOfflineMap,

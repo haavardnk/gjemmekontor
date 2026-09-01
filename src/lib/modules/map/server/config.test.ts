@@ -27,7 +27,7 @@ describe('Map runtime configuration', (): void => {
 				{
 					AISSTREAM_API_KEY: 'ais-key',
 					GOOGLE_PLACES_SERVER_API_KEY: 'server-key',
-					GOOGLE_PLACES_UI_KIT_API_KEY: 'ui-key',
+					GOOGLE_PLACES_BROWSER_API_KEY: 'browser-key',
 					TRIPADVISOR_TERRA_API_KEY: 'tripadvisor-key',
 					TRIPADVISOR_TERRA_PHOTOS_ENABLED: 'true',
 					TRIPADVISOR_CACHE_DAYS: '45'
@@ -36,7 +36,7 @@ describe('Map runtime configuration', (): void => {
 			)
 		).toMatchObject({
 			googlePlacesServerApiKey: 'server-key',
-			googlePlacesUiKitApiKey: 'ui-key',
+			googlePlacesBrowserApiKey: 'browser-key',
 			tripadvisorTerraApiKey: 'tripadvisor-key',
 			tripadvisorTerraPhotosEnabled: true,
 			tripadvisorCacheDays: 45

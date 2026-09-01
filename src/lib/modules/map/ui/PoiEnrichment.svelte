@@ -102,7 +102,7 @@
 			{#if enrichment.google.status === 'available'}
 				<GooglePlaceDetails
 					placeId={enrichment.google.placeId}
-					apiKey={enrichment.google.uiKitKey}
+					apiKey={enrichment.google.browserApiKey}
 				/>
 			{/if}
 

@@ -34,7 +34,7 @@ const providerQueryVersion = 3;
 export type PoiEnrichmentServiceDependencies = {
 	db: Database.Database;
 	tripId: string;
-	google?: { adapter: GooglePlacesAdapter; uiKitKey: string };
+	google?: { adapter: GooglePlacesAdapter; browserApiKey: string };
 	tripadvisor?: {
 		adapter: TripadvisorAdapter;
 		photosEnabled: boolean;
@@ -227,7 +227,7 @@ export function createPoiEnrichmentService(
 				}
 				const placeId = stored.id ?? (await configured.adapter.searchId(feature));
 				if (!stored.id) storeMapping(feature.id, 'google', placeId, 'search');
-				return { status: 'available', placeId, uiKitKey: configured.uiKitKey };
+				return { status: 'available', placeId, browserApiKey: configured.browserApiKey };
 			} catch (error) {
 				if (error instanceof ProviderError) {
 					storeFailure(feature.id, 'google', error);

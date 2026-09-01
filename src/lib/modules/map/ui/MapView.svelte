@@ -1,35 +1,38 @@
 <script lang="ts">
 	import { LocateFixed, Maximize, Navigation, Navigation2 } from '@lucide/svelte';
-	import { layers, namedFlavor } from '@protomaps/basemaps';
-	import {
-		Anchor,
-		Binoculars,
-		Coffee,
-		IceCreamBowl,
-		LifeBuoy,
-		Martini,
-		Sailboat,
-		ShoppingBasket,
-		UtensilsCrossed
-	} from 'lucide';
-	import type {
-		GeoJSONSource,
-		Map as MapLibreMap,
-		MapGeoJSONFeature,
-		Source,
-		StyleSpecification
-	} from 'maplibre-gl';
+	import type { Map as MapLibreMap } from 'maplibre-gl';
 	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-	import { FileSource, PMTiles, Protocol, TileType } from 'pmtiles';
+	import { Protocol } from 'pmtiles';
 	import { onMount } from 'svelte';
 
 	import type { ActualRouteFeature } from '$lib/modules/logbook/public';
-	import { openFreeMapRestaurant } from '$lib/modules/map/client/openfreemap-poi';
+	import {
+		loadMapCamera,
+		type MapCamera,
+		mapCameraStorageKey,
+		removeMapCamera,
+		storeMapCamera
+	} from '$lib/modules/map/client/camera';
+	import { mapStyle } from '$lib/modules/map/client/map-style';
+	import { loadMapMarkerImages } from '$lib/modules/map/client/marker-images';
 	import type { AisVesselFeature } from '$lib/modules/map/domain/ais';
 	import type { OpenFreeMapRestaurant } from '$lib/modules/map/domain/openfreemap';
 	import type { OfflineMapRecord } from '$lib/modules/map/public';
 
-	import type { MapFeature, MapMode, MapPointSymbol, MapSnapshot, Position } from '../domain/types';
+	import type { MapFeature, MapMode, MapSnapshot, Position } from '../domain/types';
+	import {
+		addApplicationLayers as buildApplicationLayers,
+		ensureMapMarkerImages,
+		type MapMarkerImages
+	} from './map-application-layers';
+	import { registerMapInteractions } from './map-interactions';
+	import {
+		locationMessage as messageForLocation,
+		type LocationState,
+		MapLocationController
+	} from './map-location';
+	import { aisFeatureCollection, isGeoJsonSource, mapFeatureCollection } from './map-sources';
+	import { focusSelectedPoint } from './selected-point-camera';
 
 	let {
 		snapshot,
@@ -69,28 +72,28 @@
 
 	let container: HTMLDivElement;
 	let map: MapLibreMap | undefined;
-	let locationState = $state<'idle' | 'locating' | 'active' | 'denied' | 'timeout' | 'unavailable'>(
-		'idle'
-	);
+	let locationState = $state<LocationState>('idle');
 	let following = $state(false);
 	let bearing = $state(0);
 	let vesselHeading = $state(0);
 	let vesselSpeedKnots = $state<number>();
 	let cameraChanged = $state(false);
 	let mapReady = $state(false);
-	let watchId: number | undefined;
-	let lastPosition: GeolocationPosition | undefined;
 	let styleRequest = 0;
-	let positionMarkerImage: ImageData | undefined;
-	let positionMarkerImageFlipped: ImageData | undefined;
-	let aisMarkerImage: ImageData | undefined;
-	let aisMarkerImageFlipped: ImageData | undefined;
+	let markerImages: MapMarkerImages = {};
 	let resettingCamera = false;
 	let selectedPoint: Position | undefined;
 	const protocol = new Protocol({ metadata: true });
-	const cameraStorageKey = $derived(`mapCamera:${tripId}`);
-	const minimumMovingSpeedKnots = 0.3;
-	const metersPerSecondToKnots = 1.9438444924406;
+	const locationController = new MapLocationController(
+		() => map,
+		(view) => {
+			locationState = view.state;
+			following = view.following;
+			vesselHeading = view.heading;
+			vesselSpeedKnots = view.speedKnots;
+		}
+	);
+	const cameraStorageKey = $derived(mapCameraStorageKey(tripId));
 	const vesselSpeedLabel = $derived(
 		vesselSpeedKnots?.toLocaleString('nb-NO', {
 			minimumFractionDigits: 1,
@@ -101,246 +104,10 @@
 		`${String(Math.round(vesselHeading) % 360).padStart(3, '0')}°`
 	);
 
-	type MapCamera = {
-		center: Position;
-		zoom: number;
-		bearing: number;
-		pitch: number;
-	};
-
-	function isGeoJsonSource(source: Source | undefined): source is GeoJSONSource {
-		return source !== undefined && 'setData' in source;
-	}
-
-	const markerIcons: Record<MapPointSymbol, typeof Anchor> = {
-		anchorage: Anchor,
-		bar: Martini,
-		'buoy-field': LifeBuoy,
-		cafe: Coffee,
-		dessert: IceCreamBowl,
-		marina: Sailboat,
-		restaurant: UtensilsCrossed,
-		shop: ShoppingBasket,
-		poi: Binoculars
-	};
-
-	function drawMarkerIcon(context: CanvasRenderingContext2D, symbol: MapPointSymbol): void {
-		context.save();
-		context.translate(26, 20);
-		context.scale(1.15, 1.15);
-		context.strokeStyle = '#17343c';
-		context.lineWidth = 2.4;
-		context.lineCap = 'round';
-		context.lineJoin = 'round';
-		for (const [tag, attributes] of markerIcons[symbol] ?? Binoculars) {
-			if (tag === 'path' && typeof attributes.d === 'string') {
-				context.stroke(new Path2D(attributes.d));
-			}
-			if (tag === 'circle') {
-				context.beginPath();
-				context.arc(
-					Number(attributes.cx),
-					Number(attributes.cy),
-					Number(attributes.r),
-					0,
-					Math.PI * 2
-				);
-				context.stroke();
-			}
-		}
-		context.restore();
-	}
-
-	function pinImage(color: string, symbol: MapPointSymbol, selected: boolean): ImageData {
-		const canvas = document.createElement('canvas');
-		canvas.width = 80;
-		canvas.height = 96;
-		const context = canvas.getContext('2d');
-		if (!context) {
-			throw new Error('CANVAS_UNAVAILABLE');
-		}
-		context.beginPath();
-		context.moveTo(40, 90);
-		context.bezierCurveTo(34, 76, 12, 55, 12, 34);
-		context.arc(40, 34, 28, Math.PI, 0);
-		context.bezierCurveTo(68, 55, 46, 76, 40, 90);
-		context.closePath();
-		context.lineJoin = 'round';
-		if (selected) {
-			context.strokeStyle = '#123844';
-			context.lineWidth = 13;
-			context.stroke();
-			context.strokeStyle = '#ffffff';
-			context.lineWidth = 8;
-			context.stroke();
-		}
-		context.fillStyle = color;
-		context.fill();
-		context.strokeStyle = '#ffffff';
-		context.lineWidth = 4;
-		context.stroke();
-		context.beginPath();
-		context.arc(40, 34, 18, 0, Math.PI * 2);
-		context.fillStyle = '#ffffff';
-		context.fill();
-		drawMarkerIcon(context, symbol);
-		return context.getImageData(0, 0, canvas.width, canvas.height);
-	}
-
-	async function loadPositionMarkerImage(): Promise<ImageData> {
-		const response = await fetch('/monsieur-bintang.png');
-		if (!response.ok) {
-			throw new Error('POSITION_MARKER_UNAVAILABLE');
-		}
-		const bitmap = await createImageBitmap(await response.blob());
-		const canvas = document.createElement('canvas');
-		canvas.width = 128;
-		canvas.height = 128;
-		const context = canvas.getContext('2d');
-		if (!context) {
-			bitmap.close();
-			throw new Error('CANVAS_UNAVAILABLE');
-		}
-		const scale = Math.min(112 / bitmap.width, 112 / bitmap.height);
-		const width = bitmap.width * scale;
-		const height = bitmap.height * scale;
-		context.drawImage(bitmap, (128 - width) / 2, (128 - height) / 2, width, height);
-		bitmap.close();
-		return context.getImageData(0, 0, canvas.width, canvas.height);
-	}
-
-	async function loadAisMarkerImage(): Promise<ImageData> {
-		const response = await fetch('/flamingo-vessel.png');
-		if (!response.ok) {
-			throw new Error('AIS_MARKER_UNAVAILABLE');
-		}
-		const bitmap = await createImageBitmap(await response.blob());
-		const canvas = document.createElement('canvas');
-		canvas.width = 256;
-		canvas.height = 256;
-		const context = canvas.getContext('2d');
-		if (!context) {
-			bitmap.close();
-			throw new Error('CANVAS_UNAVAILABLE');
-		}
-		context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-		bitmap.close();
-		return context.getImageData(0, 0, canvas.width, canvas.height);
-	}
-
-	function flipImageHorizontally(image: ImageData): ImageData {
-		const source = document.createElement('canvas');
-		source.width = image.width;
-		source.height = image.height;
-		const sourceContext = source.getContext('2d');
-		const target = document.createElement('canvas');
-		target.width = image.width;
-		target.height = image.height;
-		const targetContext = target.getContext('2d');
-		if (!sourceContext || !targetContext) {
-			throw new Error('CANVAS_UNAVAILABLE');
-		}
-		sourceContext.putImageData(image, 0, 0);
-		targetContext.translate(image.width, 0);
-		targetContext.scale(-1, 1);
-		targetContext.drawImage(source, 0, 0);
-		return targetContext.getImageData(0, 0, image.width, image.height);
-	}
-
-	const locationMessage = $derived(
-		locationState === 'locating'
-			? 'Finner posisjonen din …'
-			: locationState === 'denied'
-				? 'Du har ikke gitt tilgang til posisjonen din.'
-				: locationState === 'timeout'
-					? 'Det tok for lang tid å finne posisjonen.'
-					: locationState === 'unavailable'
-						? 'Posisjonen er ikke tilgjengelig.'
-						: ''
-	);
-
-	function circle(center: Position, radius: number): Position[] {
-		const latitudeRadians = (center[1] * Math.PI) / 180;
-		return Array.from({ length: 65 }, (_value, index): Position => {
-			const angle = (index / 64) * Math.PI * 2;
-			const latitude = center[1] + (radius / 111_320) * Math.sin(angle);
-			const longitude =
-				center[0] + (radius / (111_320 * Math.cos(latitudeRadians))) * Math.cos(angle);
-			return [longitude, latitude];
-		});
-	}
-
-	function updateLocation(position: GeolocationPosition): void {
-		lastPosition = position;
-		locationState = 'active';
-		if (
-			position.coords.heading !== null &&
-			Number.isFinite(position.coords.heading) &&
-			position.coords.heading >= 0 &&
-			position.coords.heading < 360
-		) {
-			vesselHeading = position.coords.heading;
-		}
-		const speedKnots =
-			position.coords.speed !== null &&
-			Number.isFinite(position.coords.speed) &&
-			position.coords.speed >= 0
-				? position.coords.speed * metersPerSecondToKnots
-				: undefined;
-		vesselSpeedKnots =
-			speedKnots !== undefined && speedKnots >= minimumMovingSpeedKnots ? speedKnots : undefined;
-		const coordinates: Position = [position.coords.longitude, position.coords.latitude];
-		const source = map?.getSource('location');
-		if (isGeoJsonSource(source)) {
-			source.setData({
-				type: 'FeatureCollection',
-				features: [
-					{
-						type: 'Feature',
-						properties: { kind: 'accuracy' },
-						geometry: {
-							type: 'Polygon',
-							coordinates: [circle(coordinates, position.coords.accuracy)]
-						}
-					},
-					{
-						type: 'Feature',
-						properties: {
-							kind: 'position',
-							heading: vesselHeading,
-							moving: vesselSpeedKnots !== undefined
-						},
-						geometry: { type: 'Point', coordinates }
-					}
-				]
-			});
-		}
-		if (following) {
-			map?.easeTo({ center: coordinates, zoom: Math.max(map.getZoom(), 14) });
-		}
-	}
-
-	function locationError(error: GeolocationPositionError): void {
-		following = false;
-		locationState = error.code === 1 ? 'denied' : error.code === 3 ? 'timeout' : 'unavailable';
-	}
+	const locationMessage = $derived(messageForLocation(locationState));
 
 	function locate(): void {
-		if (!navigator.geolocation) {
-			locationState = 'unavailable';
-			return;
-		}
-		following = true;
-		if (lastPosition) {
-			updateLocation(lastPosition);
-			return;
-		}
-		locationState = 'locating';
-		watchId = navigator.geolocation.watchPosition(updateLocation, locationError, {
-			enableHighAccuracy: true,
-			timeout: 15_000,
-			maximumAge: 5_000
-		});
+		locationController.locate();
 	}
 
 	function updateBearing(): void {
@@ -349,44 +116,6 @@
 
 	function resetBearing(): void {
 		map?.resetNorth({ duration: 300 });
-	}
-
-	function storedCamera(): MapCamera | undefined {
-		try {
-			const value = JSON.parse(sessionStorage.getItem(cameraStorageKey) ?? 'null') as unknown;
-			if (!value || typeof value !== 'object') {
-				return undefined;
-			}
-			const camera = value as Partial<MapCamera>;
-			const center = camera.center;
-			const zoom = camera.zoom;
-			const cameraBearing = camera.bearing;
-			const pitch = camera.pitch;
-			if (
-				!Array.isArray(center) ||
-				center.length !== 2 ||
-				!center.every(Number.isFinite) ||
-				typeof zoom !== 'number' ||
-				!Number.isFinite(zoom) ||
-				typeof cameraBearing !== 'number' ||
-				!Number.isFinite(cameraBearing) ||
-				typeof pitch !== 'number' ||
-				!Number.isFinite(pitch) ||
-				center[0] < -180 ||
-				center[0] > 180 ||
-				center[1] < -90 ||
-				center[1] > 90 ||
-				zoom < 0 ||
-				zoom > 24 ||
-				pitch < 0 ||
-				pitch > 85
-			) {
-				return undefined;
-			}
-			return { center, zoom, bearing: cameraBearing, pitch };
-		} catch {
-			return undefined;
-		}
 	}
 
 	function saveCamera(): void {
@@ -405,11 +134,7 @@
 			pitch: map.getPitch()
 		};
 		cameraChanged = true;
-		try {
-			sessionStorage.setItem(cameraStorageKey, JSON.stringify(camera));
-		} catch {
-			return;
-		}
+		storeMapCamera(sessionStorage, cameraStorageKey, camera);
 	}
 
 	function resetCamera(): void {
@@ -418,93 +143,21 @@
 		}
 		resettingCamera = true;
 		cameraChanged = false;
-		try {
-			sessionStorage.removeItem(cameraStorageKey);
-		} catch {
-			resettingCamera = true;
-		}
+		removeMapCamera(sessionStorage, cameraStorageKey);
 		map.fitBounds(snapshot.bounds, { padding: 40, duration: 300 });
 	}
 
-	function featureCollection(kind: 'points' | 'lines'): {
-		type: 'FeatureCollection';
-		features: MapFeature[];
-	} {
-		return {
-			type: 'FeatureCollection',
-			features: snapshot.features
-				.filter((feature) => kind !== 'lines' || !hiddenRouteIds.has(feature.id))
-				.filter(
-					(feature) =>
-						feature.id === selectedId ||
-						visibleLayerIds.size === 0 ||
-						visibleLayerIds.has(feature.properties.layerId)
-				)
-				.filter(
-					(feature) =>
-						feature.id === selectedId ||
-						feature.geometry.type !== 'Point' ||
-						feature.properties.sourceStyleKey === undefined ||
-						visibleSourceStyleKeys.size === 0 ||
-						visibleSourceStyleKeys.has(feature.properties.sourceStyleKey)
-				)
-				.filter((feature) =>
-					kind === 'points' ? feature.geometry.type === 'Point' : feature.geometry.type !== 'Point'
-				)
-				.map((feature) => ({
-					...feature,
-					properties: {
-						...feature.properties,
-						featureId: feature.id,
-						sourceStyleKey: feature.properties.sourceStyleKey ?? 'source-style-default',
-						color:
-							feature.properties.style.color ??
-							snapshot.layers.find((layer) => layer.id === feature.properties.layerId)?.color ??
-							'#0f766e',
-						selected: feature.id === selectedId
-					}
-				}))
-		};
+	function featureCollection(kind: 'points' | 'lines') {
+		return mapFeatureCollection(snapshot, kind, {
+			selectedId,
+			visibleLayerIds,
+			visibleSourceStyleKeys,
+			hiddenRouteIds
+		});
 	}
 
-	function aisFeatureCollection(): GeoJSON.FeatureCollection<GeoJSON.Point> {
-		return {
-			type: 'FeatureCollection',
-			features: aisVessels.map((feature) => ({
-				...feature,
-				properties: {
-					...feature.properties,
-					selected: feature.properties.mmsi === selectedAisMmsi
-				}
-			}))
-		};
-	}
-
-	function ensureMarkerImages(): void {
-		if (!map) {
-			return;
-		}
-		if (!map.hasImage('source-style-default')) {
-			map.addImage('source-style-default', pinImage('#5f6b6d', 'poi', false), {
-				pixelRatio: 2
-			});
-			map.addImage('source-style-default-selected', pinImage('#5f6b6d', 'poi', true), {
-				pixelRatio: 2
-			});
-		}
-		for (const sourceStyle of snapshot.sourceStyles) {
-			if (map.hasImage(sourceStyle.key)) {
-				continue;
-			}
-			map.addImage(sourceStyle.key, pinImage(sourceStyle.color, sourceStyle.symbol, false), {
-				pixelRatio: 2
-			});
-			map.addImage(
-				`${sourceStyle.key}-selected`,
-				pinImage(sourceStyle.color, sourceStyle.symbol, true),
-				{ pixelRatio: 2 }
-			);
-		}
+	function selectedAisFeatures() {
+		return aisFeatureCollection(aisVessels, selectedAisMmsi);
 	}
 
 	function collapseAttribution(): void {
@@ -514,358 +167,21 @@
 		container.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
 	}
 
-	function satelliteStyle(): StyleSpecification {
-		return {
-			version: 8,
-			sources: {
-				satellite: {
-					type: 'raster',
-					tiles: [
-						'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-					],
-					tileSize: 256,
-					maxzoom: 18,
-					attribution:
-						'Imagery © <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9">Esri</a>, Vantor, Earthstar Geographics, and the GIS User Community'
-				},
-				satelliteLabels: {
-					type: 'raster',
-					tiles: ['https://tiles.maps.eox.at/wmts/1.0.0/overlay_3857/default/g/{z}/{y}/{x}.png'],
-					tileSize: 256,
-					maxzoom: 14,
-					attribution:
-						'Data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Rendering © EOX'
-				}
-			},
-			layers: [
-				{ id: 'satellite', type: 'raster', source: 'satellite' },
-				{
-					id: 'satellite-labels',
-					type: 'raster',
-					source: 'satelliteLabels',
-					maxzoom: 15
-				}
-			]
-		};
-	}
-
-	async function offlineStyle(record: OfflineMapRecord): Promise<StyleSpecification> {
-		const file = new File([record.data], `${record.id}-${record.version}.pmtiles`, {
-			type: 'application/vnd.pmtiles'
-		});
-		const source = new FileSource(file);
-		const archive = new PMTiles(source);
-		const header = await archive.getHeader();
-		protocol.add(archive);
-		const url = `pmtiles://${source.getKey()}`;
-		if (header.tileType === TileType.Mvt) {
-			return {
-				version: 8,
-				sources: {
-					offlineBase: {
-						type: 'vector',
-						url,
-						attribution:
-							'<a href="https://protomaps.com/">Protomaps</a> · © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-					}
-				},
-				layers: layers('offlineBase', namedFlavor('light')).filter(
-					(layer) => layer.type !== 'symbol'
-				)
-			};
-		}
-		if (
-			header.tileType !== TileType.Png &&
-			header.tileType !== TileType.Jpeg &&
-			header.tileType !== TileType.Webp &&
-			header.tileType !== TileType.Avif
-		) {
-			throw new Error('OFFLINE_MAP_TILE_TYPE_UNSUPPORTED');
-		}
-		return {
-			version: 8,
-			sources: {
-				offlineBase: {
-					type: 'raster',
-					url,
-					tileSize: 256
-				}
-			},
-			layers: [{ id: 'offline-base', type: 'raster', source: 'offlineBase' }]
-		};
-	}
-
-	async function mapStyle(
-		selectedMode: MapMode,
-		storedMap: OfflineMapRecord | undefined
-	): Promise<string | StyleSpecification> {
-		if (storedMap) {
-			return offlineStyle(storedMap);
-		}
-		return selectedMode === 'satellite'
-			? satelliteStyle()
-			: 'https://tiles.openfreemap.org/styles/bright?v=20260820';
-	}
-
 	function addApplicationLayers(): void {
-		if (!map) {
-			return;
-		}
-		ensureMarkerImages();
-		if (positionMarkerImage && !map.hasImage('position-duck')) {
-			map.addImage('position-duck', positionMarkerImage, { pixelRatio: 2 });
-		}
-		if (positionMarkerImageFlipped && !map.hasImage('position-duck-flipped')) {
-			map.addImage('position-duck-flipped', positionMarkerImageFlipped, { pixelRatio: 2 });
-		}
-		if (aisMarkerImage && !map.hasImage('ais-flamingo')) {
-			map.addImage('ais-flamingo', aisMarkerImage, { pixelRatio: 4 });
-		}
-		if (aisMarkerImageFlipped && !map.hasImage('ais-flamingo-flipped')) {
-			map.addImage('ais-flamingo-flipped', aisMarkerImageFlipped, { pixelRatio: 4 });
-		}
-		if (mode === 'nautical' && !offlineMap) {
-			map.addSource('marine-profile', {
-				type: 'raster',
-				tiles: ['/api/map/marine-profile/{z}/{x}/{y}'],
-				tileSize: 256,
-				maxzoom: 18,
-				attribution:
-					'<a href="https://www.openseamap.org/">OpenSeaMap</a> / <a href="https://www.gebco.net/">GEBCO</a>, ODbL'
-			});
-			map.addSource('seamarks', {
-				type: 'raster',
-				tiles: ['https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'],
-				tileSize: 256,
-				attribution:
-					'<a href="https://www.openseamap.org/">OpenSeaMap</a> contributors, ODbL / CC BY-SA 2.0'
-			});
-			if (depthContoursEnabled) {
-				map.addSource('depth-contours', {
-					type: 'raster',
-					tiles: ['/api/map/depth-contours/{z}/{x}/{y}'],
-					tileSize: 256,
-					maxzoom: 18,
-					attribution:
-						'<a href="https://depth.openseamap.org/">OpenSeaMap water depths</a> contributors'
-				});
-			}
-			map.addLayer({
-				id: 'marine-profile',
-				type: 'raster',
-				source: 'marine-profile',
-				paint: { 'raster-opacity': 0.7 }
-			});
-			if (depthContoursEnabled) {
-				map.addLayer({
-					id: 'depth-contours',
-					type: 'raster',
-					source: 'depth-contours',
-					minzoom: 7,
-					paint: { 'raster-opacity': 0.9 }
-				});
-			}
-			map.addLayer({
-				id: 'seamarks',
-				type: 'raster',
-				source: 'seamarks',
-				minzoom: 8,
-				paint: { 'raster-opacity': 0.9 }
-			});
-		}
-		map.addSource('points', {
-			type: 'geojson',
-			data: featureCollection('points'),
-			cluster: true,
-			clusterMaxZoom: 10,
-			clusterRadius: 28
+		if (!map) return;
+		buildApplicationLayers({
+			map,
+			snapshot,
+			mode,
+			offlineMap,
+			depthContoursEnabled,
+			pointFeatures: featureCollection('points'),
+			lineFeatures: featureCollection('lines'),
+			actualRoutes,
+			aisFeatures: selectedAisFeatures(),
+			markerImages
 		});
-		map.addSource('lines', { type: 'geojson', data: featureCollection('lines') });
-		map.addSource('actual-routes', {
-			type: 'geojson',
-			data: { type: 'FeatureCollection', features: actualRoutes }
-		});
-		map.addSource('location', {
-			type: 'geojson',
-			data: { type: 'FeatureCollection', features: [] }
-		});
-		map.addSource('ais-vessels', {
-			type: 'geojson',
-			data: aisFeatureCollection()
-		});
-		map.addLayer({
-			id: 'routes',
-			type: 'line',
-			source: 'lines',
-			paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': 0.85 }
-		});
-		map.addLayer({
-			id: 'actual-route-casing',
-			type: 'line',
-			source: 'actual-routes',
-			paint: { 'line-color': '#ffffff', 'line-width': 4, 'line-opacity': 0.38 }
-		});
-		map.addLayer({
-			id: 'actual-routes',
-			type: 'line',
-			source: 'actual-routes',
-			paint: {
-				'line-color': '#3f7278',
-				'line-width': 2,
-				'line-opacity': 0.72,
-				'line-dasharray': [1.5, 2.5]
-			}
-		});
-		map.addLayer({
-			id: 'clusters',
-			type: 'circle',
-			source: 'points',
-			filter: ['has', 'point_count'],
-			paint: {
-				'circle-color': '#153e4b',
-				'circle-radius': ['step', ['get', 'point_count'], 18, 20, 23, 50, 28],
-				'circle-stroke-color': '#ffffff',
-				'circle-stroke-width': 2
-			}
-		});
-		if (!offlineMap) {
-			map.addLayer({
-				id: 'cluster-count',
-				type: 'symbol',
-				source: 'points',
-				filter: ['has', 'point_count'],
-				layout: {
-					'text-field': ['get', 'point_count_abbreviated'],
-					'text-font': ['Noto Sans Regular'],
-					'text-size': 12
-				},
-				paint: { 'text-color': '#ffffff' }
-			});
-		}
-		map.addLayer({
-			id: 'point-hit-targets',
-			type: 'circle',
-			source: 'points',
-			filter: ['!', ['has', 'point_count']],
-			paint: {
-				'circle-color': '#000000',
-				'circle-opacity': 0.01,
-				'circle-radius': 22,
-				'circle-translate': [0, -18]
-			}
-		});
-		map.addLayer({
-			id: 'points',
-			type: 'symbol',
-			source: 'points',
-			filter: ['!', ['has', 'point_count']],
-			layout: {
-				'icon-image': [
-					'case',
-					['get', 'selected'],
-					['concat', ['get', 'sourceStyleKey'], '-selected'],
-					['get', 'sourceStyleKey']
-				],
-				'icon-anchor': 'bottom',
-				'icon-allow-overlap': true
-			}
-		});
-		map.addLayer({
-			id: 'accuracy',
-			type: 'fill',
-			source: 'location',
-			filter: ['==', ['get', 'kind'], 'accuracy'],
-			paint: { 'fill-color': '#2563a8', 'fill-opacity': 0.14 }
-		});
-		map.addLayer({
-			id: 'position',
-			type: 'symbol',
-			source: 'location',
-			metadata: { marker: 'monsieur-bintang' },
-			filter: ['==', ['get', 'kind'], 'position'],
-			layout: {
-				'icon-image': [
-					'case',
-					[
-						'all',
-						['==', ['get', 'moving'], true],
-						['>=', ['coalesce', ['get', 'heading'], 0], 180],
-						['<', ['coalesce', ['get', 'heading'], 0], 360]
-					],
-					'position-duck-flipped',
-					'position-duck'
-				],
-				'icon-rotate': [
-					'case',
-					['!=', ['get', 'moving'], true],
-					0,
-					['<', ['coalesce', ['get', 'heading'], 0], 180],
-					['-', ['coalesce', ['get', 'heading'], 0], 90],
-					['-', ['coalesce', ['get', 'heading'], 0], 270]
-				],
-				'icon-rotation-alignment': 'map',
-				'icon-allow-overlap': true
-			}
-		});
-		map.addLayer({
-			id: 'ais-selected',
-			type: 'circle',
-			source: 'ais-vessels',
-			filter: ['==', ['get', 'selected'], true],
-			paint: {
-				'circle-color': '#ffffff',
-				'circle-opacity': 0.92,
-				'circle-radius': 17,
-				'circle-stroke-color': '#17343c',
-				'circle-stroke-width': 2
-			}
-		});
-		map.addLayer({
-			id: 'ais-hit-targets',
-			type: 'circle',
-			source: 'ais-vessels',
-			paint: {
-				'circle-color': '#000000',
-				'circle-opacity': 0.01,
-				'circle-radius': 18
-			}
-		});
-		map.addLayer({
-			id: 'ais-vessels',
-			type: 'symbol',
-			source: 'ais-vessels',
-			layout: {
-				'icon-image': [
-					'case',
-					[
-						'all',
-						['>=', ['coalesce', ['get', 'direction'], 0], 180],
-						['<', ['coalesce', ['get', 'direction'], 0], 360]
-					],
-					'ais-flamingo-flipped',
-					'ais-flamingo'
-				],
-				'icon-size': [
-					'interpolate',
-					['linear'],
-					['coalesce', ['get', 'lengthMeters'], 20],
-					0,
-					0.32,
-					20,
-					0.36,
-					100,
-					0.48,
-					300,
-					0.62
-				],
-				'icon-allow-overlap': true,
-				'icon-ignore-placement': false
-			},
-			paint: { 'icon-opacity': 1 }
-		});
-		if (lastPosition) {
-			updateLocation(lastPosition);
-		}
+		locationController.refreshSource();
 		requestAnimationFrame(collapseAttribution);
 		map.once('render', (): void => {
 			mapReady = true;
@@ -879,7 +195,7 @@
 		storedMap: OfflineMapRecord | undefined
 	): Promise<void> {
 		const request = ++styleRequest;
-		const style = await mapStyle(selectedMode, storedMap);
+		const style = await mapStyle(selectedMode, storedMap, protocol);
 		if (request === styleRequest) {
 			mapReady = false;
 			map?.setStyle(style);
@@ -890,7 +206,7 @@
 		const points = featureCollection('points');
 		const lines = featureCollection('lines');
 		const routes = { type: 'FeatureCollection' as const, features: actualRoutes };
-		ensureMarkerImages();
+		if (map) ensureMapMarkerImages(map, snapshot);
 		const pointSource = map?.getSource('points');
 		const lineSource = map?.getSource('lines');
 		const routeSource = map?.getSource('actual-routes');
@@ -905,7 +221,7 @@
 			routeSource.setData(routes);
 		}
 		if (isGeoJsonSource(aisSource)) {
-			aisSource.setData(aisFeatureCollection());
+			aisSource.setData(selectedAisFeatures());
 		}
 	});
 
@@ -914,53 +230,15 @@
 			selectedFeature ?? snapshot.features.find((candidate) => candidate.id === selectedId);
 		if (feature?.geometry.type === 'Point') {
 			if (!map) return;
-			if (window.innerWidth >= 1024) {
-				map.easeTo({ center: feature.geometry.coordinates, zoom: Math.max(map.getZoom(), 13) });
-				return;
-			}
 			const coordinates = feature.geometry.coordinates;
 			const selectionId = feature.id;
 			selectedPoint = coordinates;
-			let frame: number | undefined;
-			let observer: ResizeObserver | undefined;
-			const centerInVisibleBand = (): void => {
-				if (!map || (selectedFeature?.id ?? selectedId) !== selectionId) return;
-				const mapBounds = container.getBoundingClientRect();
-				const controls = document.querySelector<HTMLElement>('[data-map-controls]');
-				const sheet = document.querySelector<HTMLElement>('[data-poi-sheet]');
-				const visibleTop = Math.max(
-					(controls?.getBoundingClientRect().bottom ?? mapBounds.top) - mapBounds.top,
-					0
-				);
-				const sheetTop = sheet?.getBoundingClientRect().top ?? mapBounds.bottom;
-				const visibleBottom = Math.min(sheetTop - mapBounds.top, mapBounds.height);
-				const targetY = visibleTop + Math.max(0, visibleBottom - visibleTop) / 2;
-				map.easeTo({
-					center: coordinates,
-					offset: [0, targetY - mapBounds.height / 2]
-				});
-			};
-			const observeVisibleBand = (): void => {
-				centerInVisibleBand();
-				const controls = document.querySelector<HTMLElement>('[data-map-controls]');
-				const sheet = document.querySelector<HTMLElement>('[data-poi-sheet]');
-				if (!sheet) {
-					frame = requestAnimationFrame(observeVisibleBand);
-					return;
-				}
-				observer = new ResizeObserver((): void => {
-					if (frame !== undefined) cancelAnimationFrame(frame);
-					frame = requestAnimationFrame(centerInVisibleBand);
-				});
-				if (controls) observer.observe(controls);
-				observer.observe(sheet);
-				observer.observe(container);
-			};
-			frame = requestAnimationFrame(observeVisibleBand);
-			return (): void => {
-				if (frame !== undefined) cancelAnimationFrame(frame);
-				observer?.disconnect();
-			};
+			return focusSelectedPoint({
+				map,
+				container,
+				coordinates,
+				isSelected: () => (selectedFeature?.id ?? selectedId) === selectionId
+			});
 		}
 		if (selectedPoint && map) {
 			const point = selectedPoint;
@@ -980,27 +258,23 @@
 	onMount(() => {
 		let disposed = false;
 		void (async (): Promise<void> => {
-			const [maplibre, markerImage, vesselMarkerImage] = await Promise.all([
+			const [maplibre, loadedMarkerImages] = await Promise.all([
 				import('maplibre-gl'),
-				loadPositionMarkerImage(),
-				loadAisMarkerImage()
+				loadMapMarkerImages()
 			]);
 			await import('maplibre-gl/dist/maplibre-gl.css');
 			if (disposed) {
 				return;
 			}
-			positionMarkerImage = markerImage;
-			positionMarkerImageFlipped = flipImageHorizontally(markerImage);
-			aisMarkerImage = vesselMarkerImage;
-			aisMarkerImageFlipped = flipImageHorizontally(vesselMarkerImage);
+			markerImages = loadedMarkerImages;
 			maplibre.setWorkerUrl(maplibreWorkerUrl);
 			maplibre.addProtocol('pmtiles', protocol.tile);
-			const style = await mapStyle(mode, offlineMap);
+			const style = await mapStyle(mode, offlineMap, protocol);
 			if (disposed) {
 				maplibre.removeProtocol('pmtiles');
 				return;
 			}
-			const camera = storedCamera();
+			const camera = loadMapCamera(sessionStorage, cameraStorageKey);
 			cameraChanged = camera !== undefined;
 			bearing = camera?.bearing ?? 0;
 			map = new maplibre.Map({
@@ -1023,86 +297,17 @@
 					saveCamera();
 				});
 			});
-			const selectPoint = (event: { features?: MapGeoJSONFeature[] }): void => {
-				const id = event.features?.[0]?.properties.featureId;
-				if (typeof id === 'string') {
-					onselect(id);
-				}
-			};
-			map.on('click', 'points', selectPoint);
-			map.on('click', 'point-hit-targets', selectPoint);
-			const selectAisVessel = (event: { features?: MapGeoJSONFeature[] }): void => {
-				const mmsi = event.features?.[0]?.properties.mmsi;
-				if (typeof mmsi === 'number') {
-					onselectais(mmsi);
-				}
-			};
-			map.on('click', 'ais-vessels', selectAisVessel);
-			map.on('click', 'ais-hit-targets', selectAisVessel);
-			map.on('click', 'clusters', (event): void => {
-				const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
-				const clusterId = feature?.properties.cluster_id;
-				const source = map?.getSource('points');
-				if (
-					!isGeoJsonSource(source) ||
-					typeof clusterId !== 'number' ||
-					feature?.geometry.type !== 'Point'
-				) {
-					return;
-				}
-				const center: Position = [feature.geometry.coordinates[0], feature.geometry.coordinates[1]];
-				void source
-					.getClusterExpansionZoom(clusterId)
-					.then((zoom) => map?.easeTo({ center, zoom }));
+			registerMapInteractions(map, {
+				onSelectFeature: onselect,
+				onSelectAis: onselectais,
+				onSelectRestaurant: onselectopenfreemap,
+				onUserPan: (): void => locationController.stopFollowing(),
+				onRotate: updateBearing
 			});
-			map.on('click', (event): void => {
-				if (!map) return;
-				const applicationLayers = [
-					'points',
-					'point-hit-targets',
-					'clusters',
-					'ais-vessels',
-					'ais-hit-targets'
-				].filter((id) => map?.getLayer(id) !== undefined);
-				if (
-					applicationLayers.length > 0 &&
-					map.queryRenderedFeatures(event.point, { layers: applicationLayers }).length > 0
-				) {
-					return;
-				}
-				const poiLayers = map
-					.getStyle()
-					.layers.filter((layer) => {
-						if (layer.type !== 'symbol' && layer.type !== 'circle') return false;
-						return (
-							('source-layer' in layer && layer['source-layer'] === 'poi') ||
-							/^poi_r\d+$/.test(layer.id)
-						);
-					})
-					.map((layer) => layer.id);
-				if (poiLayers.length === 0) return;
-				const hitBox: [[number, number], [number, number]] = [
-					[event.point.x - 10, event.point.y - 10],
-					[event.point.x + 10, event.point.y + 10]
-				];
-				for (const feature of map.queryRenderedFeatures(hitBox, { layers: poiLayers })) {
-					const restaurant = openFreeMapRestaurant(feature);
-					if (restaurant) {
-						onselectopenfreemap(restaurant);
-						return;
-					}
-				}
-			});
-			map.on('dragstart', (): void => {
-				following = false;
-			});
-			map.on('rotate', updateBearing);
 		})();
 		return (): void => {
 			disposed = true;
-			if (watchId !== undefined) {
-				navigator.geolocation.clearWatch(watchId);
-			}
+			locationController.dispose();
 			map?.remove();
 			void import('maplibre-gl').then((maplibre) => maplibre.removeProtocol('pmtiles'));
 		};

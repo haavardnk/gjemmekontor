@@ -506,7 +506,7 @@ test('loads and reuses lazy Google and Tripadvisor POI enrichment', async ({ pag
 				google: {
 					status: 'available',
 					placeId: 'ChIJ1234567890_test',
-					uiKitKey: 'browser-test-key'
+					browserApiKey: 'browser-test-key'
 				},
 				tripadvisor: {
 					status: 'available',
@@ -660,7 +660,7 @@ test('opens an OpenFreeMap restaurant in the shared Google and Tripadvisor POI s
 				google: {
 					status: 'available',
 					placeId: 'ChIJ1234567890_openfreemap',
-					uiKitKey: 'browser-test-key'
+					browserApiKey: 'browser-test-key'
 				},
 				tripadvisor: {
 					status: 'available',

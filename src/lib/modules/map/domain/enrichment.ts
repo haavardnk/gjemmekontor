@@ -69,7 +69,7 @@ export const googleEnrichmentSchema = z.discriminatedUnion('status', [
 	z.object({
 		status: z.literal('available'),
 		placeId: z.string().min(10),
-		uiKitKey: z.string().min(1)
+		browserApiKey: z.string().min(1)
 	}),
 	z.object({ status: z.literal('disabled') }),
 	z.object({ status: z.literal('no_match') }),

@@ -26,7 +26,7 @@ export type OfflineMapRecord = {
 	updatedAt: number;
 };
 
-const mapSnapshotKey = 'map:snapshot:current';
+export const mapSnapshotKey = 'map:snapshot:current';
 const offlineMapPrefix = 'map:offline:';
 
 export async function storedMapSnapshot(

@@ -93,7 +93,7 @@ describe('POI enrichment orchestration', (): void => {
 		const service = createPoiEnrichmentService({
 			db,
 			tripId,
-			google: { adapter: google, uiKitKey: 'ui-key' },
+			google: { adapter: google, browserApiKey: 'browser-key' },
 			tripadvisor: { adapter: tripadvisor, photosEnabled: true, cacheDays: 30 },
 			now: () => Date.parse('2026-08-25T10:00:00.000Z')
 		});
@@ -140,12 +140,12 @@ describe('POI enrichment orchestration', (): void => {
 		const first = createPoiEnrichmentService({
 			db,
 			tripId,
-			google: { adapter: google, uiKitKey: 'ui-key' }
+			google: { adapter: google, browserApiKey: 'browser-key' }
 		});
 		const second = createPoiEnrichmentService({
 			db,
 			tripId: secondTripId,
-			google: { adapter: google, uiKitKey: 'ui-key' }
+			google: { adapter: google, browserApiKey: 'browser-key' }
 		});
 
 		expect((await first.enrich(feature, sourceStyles)).google).toMatchObject({
@@ -191,7 +191,7 @@ describe('POI enrichment orchestration', (): void => {
 		const service = createPoiEnrichmentService({
 			db,
 			tripId,
-			google: { adapter: google, uiKitKey: 'ui-key' },
+			google: { adapter: google, browserApiKey: 'browser-key' },
 			tripadvisor: { adapter: tripadvisor, photosEnabled: false, cacheDays: 30 }
 		});
 

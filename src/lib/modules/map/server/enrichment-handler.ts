@@ -34,11 +34,11 @@ function service(
 		configuredService = createPoiEnrichmentService({
 			db,
 			tripId,
-			...(config.googlePlacesServerApiKey && config.googlePlacesUiKitApiKey
+			...(config.googlePlacesServerApiKey && config.googlePlacesBrowserApiKey
 				? {
 						google: {
 							adapter: createGooglePlacesAdapter(config.googlePlacesServerApiKey),
-							uiKitKey: config.googlePlacesUiKitApiKey
+							browserApiKey: config.googlePlacesBrowserApiKey
 						}
 					}
 				: {}),

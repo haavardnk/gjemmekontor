@@ -6,7 +6,7 @@ afterEach((): void => {
 	vi.resetModules();
 });
 
-describe('Google Places UI Kit loader', (): void => {
+describe('Google Places library loader', (): void => {
 	test('waits for the async Google callback before importing Places', async (): Promise<void> => {
 		let appendedScript: { src: string; nonce?: string; async?: boolean } | undefined;
 		const documentStub = {
@@ -20,10 +20,10 @@ describe('Google Places UI Kit loader', (): void => {
 		};
 		vi.stubGlobal('document', documentStub);
 		vi.stubGlobal('google', undefined);
-		const { loadGooglePlacesUiKit } = await import('./google-places-loader');
+		const { loadGooglePlacesLibrary } = await import('./google-places-loader');
 
 		let resolved = false;
-		const loading = loadGooglePlacesUiKit('browser-test-key').then(() => {
+		const loading = loadGooglePlacesLibrary('browser-test-key').then(() => {
 			resolved = true;
 		});
 		await Promise.resolve();

@@ -14,7 +14,7 @@ const mapEnvironmentSchema = z.object({
 	AISSTREAM_API_KEY: optionalString,
 	BUNDLED_OFFLINE_MAP_DIR: optionalString,
 	GOOGLE_PLACES_SERVER_API_KEY: optionalString,
-	GOOGLE_PLACES_UI_KIT_API_KEY: optionalString,
+	GOOGLE_PLACES_BROWSER_API_KEY: optionalString,
 	TRIPADVISOR_TERRA_API_KEY: optionalString,
 	TRIPADVISOR_TERRA_PHOTOS_ENABLED: z.enum(['true', 'false']).optional(),
 	TRIPADVISOR_CACHE_DAYS: z.coerce.number().int().min(1).max(365).optional()
@@ -25,7 +25,7 @@ export type MapRuntimeConfig = {
 	dataDir: string;
 	bundledOfflineMapDir?: string;
 	googlePlacesServerApiKey?: string;
-	googlePlacesUiKitApiKey?: string;
+	googlePlacesBrowserApiKey?: string;
 	tripadvisorTerraApiKey?: string;
 	tripadvisorTerraPhotosEnabled: boolean;
 	tripadvisorCacheDays: number;
@@ -69,8 +69,8 @@ export function parseMapRuntimeConfig(
 		...(result.data.GOOGLE_PLACES_SERVER_API_KEY
 			? { googlePlacesServerApiKey: result.data.GOOGLE_PLACES_SERVER_API_KEY }
 			: {}),
-		...(result.data.GOOGLE_PLACES_UI_KIT_API_KEY
-			? { googlePlacesUiKitApiKey: result.data.GOOGLE_PLACES_UI_KIT_API_KEY }
+		...(result.data.GOOGLE_PLACES_BROWSER_API_KEY
+			? { googlePlacesBrowserApiKey: result.data.GOOGLE_PLACES_BROWSER_API_KEY }
 			: {}),
 		...(result.data.TRIPADVISOR_TERRA_API_KEY
 			? { tripadvisorTerraApiKey: result.data.TRIPADVISOR_TERRA_API_KEY }
