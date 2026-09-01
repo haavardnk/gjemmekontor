@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export const gearAvailabilityValues = ['available', 'need-to-buy'] as const;
 export type GearAvailability = (typeof gearAvailabilityValues)[number];
 
@@ -25,6 +27,32 @@ export type GearPageData = {
 	categories: GearCategory[];
 	items: GearItemView[];
 };
+
+export const gearPageDataSchema = z.object({
+	people: z.array(
+		z.object({ id: z.uuid(), name: z.string(), activeTripMember: z.boolean() }).strict()
+	),
+	categories: z.array(
+		z.object({ id: z.uuid(), name: z.string(), position: z.number().int().nonnegative() }).strict()
+	),
+	items: z.array(
+		z
+			.object({
+				id: z.uuid(),
+				categoryId: z.uuid(),
+				name: z.string(),
+				quantity: z.number().int().positive(),
+				ownerIds: z.array(z.uuid()),
+				availability: z.enum(gearAvailabilityValues),
+				notes: z.string(),
+				selected: z.boolean(),
+				packed: z.boolean(),
+				needsOwnerResolution: z.boolean(),
+				retainedWithoutCurrentOwner: z.boolean()
+			})
+			.strict()
+	)
+});
 export type GearItemSort = 'name' | 'category' | 'owner' | 'availability' | 'unpacked';
 
 const norwegianCollator = new Intl.Collator('nb-NO', { sensitivity: 'base' });

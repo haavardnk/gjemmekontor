@@ -155,3 +155,42 @@ test('plans, filters, reorders, purchases, and packs shared gear', async ({ page
 	}));
 	expect(dimensions.width).toBeLessThanOrEqual(dimensions.viewport);
 });
+
+test('keeps gear edits through an offline reload and synchronizes them on reconnect', async ({
+	context,
+	page
+}) => {
+	const suffix = crypto.randomUUID().slice(0, 8);
+	const categoryName = `Offlinekategori ${suffix}`;
+	const itemName = `Offlineutstyr ${suffix}`;
+
+	await login(page);
+	await page.getByRole('button', { name: 'Mer' }).click();
+	await page.getByRole('dialog').getByRole('link', { name: 'Utstyr' }).click();
+	await expect(page.getByRole('status')).toHaveText('Synkronisert');
+	await expect(page.getByLabel('Tilgjengelig uten nett')).toBeVisible();
+	await context.setOffline(true);
+
+	await page.getByRole('button', { name: 'Kategori', exact: true }).click();
+	let dialog = page.getByRole('dialog', { name: 'Ny kategori' });
+	await dialog.getByRole('textbox', { name: 'Kategorinavn' }).fill(categoryName);
+	await dialog.getByRole('button', { name: 'Lagre' }).click();
+	const category = page.getByRole('group', { name: categoryName });
+	await category.getByRole('button', { name: 'Legg til utstyr' }).click();
+	dialog = page.getByRole('dialog');
+	await dialog.getByRole('textbox', { name: 'Utstyrsnavn' }).fill(itemName);
+	await dialog.getByRole('checkbox', { name: 'Håvard' }).check();
+	await dialog.getByRole('button', { name: 'Lagre' }).click();
+	await expect(page.getByRole('status')).toContainText(/Uten nett · 2 venter/);
+	await expect(category).toContainText(itemName);
+
+	await page.reload();
+	await expect(page.getByRole('group', { name: categoryName })).toContainText(itemName);
+	await expect(page.getByRole('status')).toContainText(/Uten nett · 2 venter/);
+
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect(page.getByRole('status')).toHaveText('Synkronisert', { timeout: 15_000 });
+	await page.reload();
+	await expect(page.getByRole('group', { name: categoryName })).toContainText(itemName);
+});
