@@ -26,7 +26,9 @@ type EntryRow = RecipeRow & {
 };
 
 const saveRecipeSchema = z.object({ recipe: menuArchiveSchema }).strict();
-const activateSchema = z.object({ active: menuActiveSchema }).strict();
+const activateSchema = z
+	.object({ active: menuActiveSchema, entryId: z.uuid().optional() })
+	.strict();
 const updateEntrySchema = z.union([
 	z.object({ active: menuActiveSchema }).strict(),
 	z.object({ useLatest: z.literal(true) }).strict()
@@ -95,8 +97,11 @@ export async function handleCreateRecipe(
 	const parsed = await parseJsonRequest(request, saveRecipeSchema);
 	if (!parsed.success || parsed.data.recipe.tombstone) return apiError('INVALID_RECIPE', 400);
 	const recipe = parsed.data.recipe;
-	if (db.prepare('SELECT 1 FROM recipes WHERE id = ?').get(recipe.id)) {
-		return apiError('RECIPE_EXISTS', 409);
+	const existing = db
+		.prepare('SELECT id FROM recipe_versions WHERE recipe_id = ? ORDER BY version DESC LIMIT 1')
+		.get(recipe.id) as { id: string } | undefined;
+	if (existing) {
+		return apiSuccess({ recipeId: recipe.id, recipeVersionId: existing.id, existing: true });
 	}
 	const timestamp = now().toISOString();
 	const versionId = crypto.randomUUID();
@@ -187,10 +192,19 @@ export async function handleActivateRecipe(
 	if (!latest) return apiError('RECIPE_NOT_FOUND', 404);
 	const timestamp = now().toISOString();
 	const existing = db
-		.prepare('SELECT id, active FROM trip_menu_entries WHERE trip_id = ? AND recipe_id = ?')
-		.get(tripId, active.archiveId) as { id: string; active: number } | undefined;
-	if (existing?.active === 1) return apiError('MENU_ENTRY_EXISTS', 409);
-	const entryId = existing?.id ?? crypto.randomUUID();
+		.prepare('SELECT id, active, value FROM trip_menu_entries WHERE trip_id = ? AND recipe_id = ?')
+		.get(tripId, active.archiveId) as { id: string; active: number; value: string } | undefined;
+	if (existing?.active === 1) {
+		const current = menuActiveSchema.safeParse(JSON.parse(existing.value));
+		if (
+			current.success &&
+			(current.data.cycleId === active.cycleId || existing.id === parsed.data.entryId)
+		) {
+			return apiSuccess({ entryId: existing.id, existing: true });
+		}
+		return apiError('MENU_ENTRY_EXISTS', 409);
+	}
+	const entryId = existing?.id ?? parsed.data.entryId ?? crypto.randomUUID();
 	if (existing) {
 		db.prepare(
 			`UPDATE trip_menu_entries

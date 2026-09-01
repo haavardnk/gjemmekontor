@@ -113,6 +113,7 @@ export type TripMenuDish = {
 	entryId: string;
 	latestRecipeVersion: number;
 };
+export type MenuPageData = { archives: RecipeArchiveView[]; dishes: TripMenuDish[] };
 export type MenuEditorValue = {
 	name: string;
 	sourceUrl?: string;
@@ -125,6 +126,27 @@ export type MenuEditorValue = {
 	ingredients: MenuIngredient[];
 	instructions: MenuInstruction[];
 };
+
+export const recipeArchiveViewSchema = menuArchiveSchema.safeExtend({
+	recipeVersionId: z.string().min(1),
+	recipeVersion: z.number().int().positive()
+});
+
+export const tripMenuDishSchema = z
+	.object({
+		archive: recipeArchiveViewSchema,
+		active: menuActiveSchema,
+		entryId: z.uuid(),
+		latestRecipeVersion: z.number().int().positive()
+	})
+	.strict();
+
+export const menuPageDataSchema = z
+	.object({
+		archives: z.array(recipeArchiveViewSchema),
+		dishes: z.array(tripMenuDishSchema)
+	})
+	.strict();
 
 const norwegianCollator = new Intl.Collator('nb-NO', { sensitivity: 'base' });
 

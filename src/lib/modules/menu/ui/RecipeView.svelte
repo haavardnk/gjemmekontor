@@ -19,6 +19,8 @@
 	import type { MenuArchive } from '$lib/modules/menu/domain/menu';
 	import { scaledIngredientQuantityText } from '$lib/modules/menu/domain/quantities';
 
+	import { CookingBrowserSession, cookingGesture, type PointerPosition } from './cooking-session';
+
 	let {
 		archive,
 		plannedServings,
@@ -29,11 +31,14 @@
 	let currentStep = $state(0);
 	let checkedIngredientIds = $state<string[]>([]);
 	let measurementMode = $state<IngredientMeasurementMode>('original');
-	let gestureStart = $state<{ x: number; y: number }>();
-	let wakeLock: WakeLockSentinel | undefined;
+	let gestureStart = $state<PointerPosition>();
 	let wakeLockActive = $state(false);
 	let wakeLockSupported = $state(true);
 	let imageFailed = $state(false);
+	const cookingSession = new CookingBrowserSession((state) => {
+		wakeLockActive = state.active;
+		wakeLockSupported = state.supported;
+	});
 	const measurementOptions: Array<{ value: IngredientMeasurementMode; label: string }> = [
 		{ value: 'original', label: 'Original' },
 		{ value: 'mass', label: 'Vekt' },
@@ -64,17 +69,15 @@
 
 	function endGesture(event: PointerEvent): void {
 		if (!gestureStart) return;
-		const deltaX = event.clientX - gestureStart.x;
-		const deltaY = event.clientY - gestureStart.y;
+		const action = cookingGesture(
+			gestureStart,
+			{ x: event.clientX, y: event.clientY },
+			showCookingIngredients
+		);
 		gestureStart = undefined;
-		const horizontal = Math.abs(deltaX) > 56 && Math.abs(deltaX) > Math.abs(deltaY) * 1.15;
-		if (horizontal) {
-			showCookingIngredients = !showCookingIngredients;
-			return;
-		}
-		if (showCookingIngredients || Math.abs(deltaY) <= 56) return;
-		if (deltaY < 0) nextStep();
-		else previousStep();
+		if (action === 'ingredients') showCookingIngredients = !showCookingIngredients;
+		else if (action === 'next') nextStep();
+		else if (action === 'previous') previousStep();
 	}
 
 	function handleCookingKeydown(event: KeyboardEvent): void {
@@ -88,78 +91,22 @@
 		event.preventDefault();
 	}
 
-	async function requestWakeLock(): Promise<void> {
-		if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') {
-			wakeLockSupported = false;
-			return;
-		}
-		try {
-			wakeLock = await navigator.wakeLock.request('screen');
-			wakeLockActive = true;
-			wakeLock.addEventListener('release', () => {
-				wakeLockActive = false;
-			});
-		} catch {
-			wakeLockActive = false;
-		}
-	}
-
 	async function startCooking(): Promise<void> {
 		cooking = true;
 		currentStep = 0;
 		showCookingIngredients = false;
 		checkedIngredientIds = [];
 		measurementMode = 'original';
-		await requestWakeLock();
+		await cookingSession.start();
 	}
 
 	async function stopCooking(): Promise<void> {
 		cooking = false;
 		showCookingIngredients = false;
-		await wakeLock?.release();
-		wakeLock = undefined;
-		wakeLockActive = false;
+		await cookingSession.stop();
 	}
 
-	$effect(() => {
-		if (!cooking) return;
-		const scrollX = window.scrollX;
-		const scrollY = window.scrollY;
-		const rootOverflow = document.documentElement.style.overflow;
-		const bodyStyles = {
-			position: document.body.style.position,
-			top: document.body.style.top,
-			left: document.body.style.left,
-			width: document.body.style.width,
-			overflow: document.body.style.overflow
-		};
-		document.documentElement.style.overflow = 'hidden';
-		document.body.style.position = 'fixed';
-		document.body.style.top = `${-scrollY}px`;
-		document.body.style.left = `${-scrollX}px`;
-		document.body.style.width = '100%';
-		document.body.style.overflow = 'hidden';
-
-		return (): void => {
-			document.documentElement.style.overflow = rootOverflow;
-			Object.assign(document.body.style, bodyStyles);
-			window.scrollTo(scrollX, scrollY);
-		};
-	});
-
-	onMount(() => {
-		wakeLockSupported = 'wakeLock' in navigator;
-		const onVisibility = (): void => {
-			if (cooking && document.visibilityState === 'visible' && !wakeLockActive) {
-				void requestWakeLock();
-			}
-		};
-		document.addEventListener('visibilitychange', onVisibility);
-		return (): void => {
-			document.removeEventListener('visibilitychange', onVisibility);
-			void wakeLock?.release();
-		};
-	});
+	onMount(() => cookingSession.mount());
 </script>
 
 <svelte:window onkeydown={handleCookingKeydown} />

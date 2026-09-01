@@ -309,6 +309,36 @@ test('creates and reads an offline recipe with compact responsive controls', asy
 	await expect(page.getByRole('dialog').getByText('Kok alt rolig i ti minutter.')).toBeVisible();
 });
 
+test('creates a menu dish offline, survives reload, and publishes it on reconnect', async ({
+	context,
+	page
+}) => {
+	const dishName = `Offlinegryte ${crypto.randomUUID().slice(0, 8)}`;
+	await login(page);
+	await openMenu(page);
+	await expect(page.getByRole('status')).toHaveText('Synkronisert');
+	await expect(page.getByLabel('Tilgjengelig uten nett')).toBeVisible();
+	await context.setOffline(true);
+
+	await page.getByRole('button', { name: 'Ny rett' }).click();
+	const form = dishEditor(page);
+	await form.getByRole('textbox', { name: 'Navn' }).fill(dishName);
+	await form.getByRole('button', { name: 'Lagre' }).click();
+	await page.getByRole('tab', { name: 'Middag', exact: true }).click();
+	await expect(page.getByText(dishName, { exact: true }).first()).toBeVisible();
+	await expect(page.getByRole('status')).toContainText(/Uten nett · 2 venter/);
+
+	await page.reload();
+	await page.getByRole('tab', { name: 'Middag', exact: true }).click();
+	await expect(page.getByText(dishName, { exact: true }).first()).toBeVisible();
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect(page.getByRole('status')).toHaveText('Synkronisert', { timeout: 15_000 });
+	await page.reload();
+	await page.getByRole('tab', { name: 'Middag', exact: true }).click();
+	await expect(page.getByText(dishName, { exact: true }).first()).toBeVisible();
+});
+
 test('can replace one or all shopping descriptions from the phone preview', async ({ page }) => {
 	const dishName = `Kremet tagliatelle med scampi og grønnsaker ${crypto.randomUUID().slice(0, 8)}`;
 	await page.route('**/api/menu/shopping/preview', async (route) => {
