@@ -16,7 +16,8 @@ describe('module activation', (): void => {
 			'itinerary',
 			'menu',
 			'gear',
-			'rule-book'
+			'rule-book',
+			'next-trip'
 		]);
 	});
 

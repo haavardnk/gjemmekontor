@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 export type DatabaseSchema = {
 	version: number;
 	create: (db: Database.Database) => void;
+	migrate?: (db: Database.Database, fromVersion: number) => void;
 };
 
 export function createCoreSchema(db: Database.Database): void {
@@ -32,12 +33,13 @@ function ensureSchema(db: Database.Database, schema: DatabaseSchema): void {
 	if (currentVersion > schema.version) {
 		throw new Error('DATABASE_VERSION_TOO_NEW');
 	}
-	if (currentVersion !== 0 && currentVersion !== schema.version) {
+	if (currentVersion !== 0 && !schema.migrate) {
 		throw new Error('DATABASE_VERSION_UNSUPPORTED');
 	}
 	if (currentVersion === schema.version) return;
 	db.transaction((): void => {
-		schema.create(db);
+		if (currentVersion === 0) schema.create(db);
+		else schema.migrate?.(db, currentVersion);
 		db.pragma(`user_version = ${schema.version}`);
 	})();
 }

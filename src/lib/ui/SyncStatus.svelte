@@ -19,7 +19,7 @@
 						? `Uten nett · ${status.pending} venter`
 						: 'Uten nett'
 					: status.phase === 'conflict'
-						? 'Endring krever gjennomgang'
+						? 'Kunne ikke lagre endringen'
 						: status.phase === 'error'
 							? 'Kunne ikke synkronisere'
 							: 'Kobler til …'

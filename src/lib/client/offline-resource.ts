@@ -57,6 +57,8 @@ export function createOfflineResource<T, TCurrent extends T | undefined = T>(
 	let lifecycleRevision = 0;
 	let mutationRevision = 0;
 	let refreshPromise: Promise<boolean> | undefined;
+	let refreshQueued = false;
+	let queuedRefreshOptions: OfflineResourceRefreshOptions = {};
 	const isActive = (lifecycle: number): boolean => active && lifecycle === lifecycleRevision;
 	const isCurrent = (lifecycle: number, revision: number): boolean =>
 		isActive(lifecycle) && revision === mutationRevision;
@@ -92,8 +94,23 @@ export function createOfflineResource<T, TCurrent extends T | undefined = T>(
 		}
 	};
 
+	const runRefresh = async (refreshOptions: OfflineResourceRefreshOptions): Promise<boolean> => {
+		let refreshed = await performRefresh(refreshOptions);
+		while (refreshQueued) {
+			refreshQueued = false;
+			const nextOptions = queuedRefreshOptions;
+			queuedRefreshOptions = {};
+			refreshed = await performRefresh(nextOptions);
+		}
+		return refreshed;
+	};
 	const refresh = (refreshOptions: OfflineResourceRefreshOptions = {}): Promise<boolean> => {
-		refreshPromise ??= performRefresh(refreshOptions).finally(() => (refreshPromise = undefined));
+		if (refreshPromise) {
+			refreshQueued = true;
+			queuedRefreshOptions = refreshOptions;
+			return refreshPromise;
+		}
+		refreshPromise = runRefresh(refreshOptions).finally(() => (refreshPromise = undefined));
 		return refreshPromise;
 	};
 	const commit = async (next: T, requests: readonly OfflineResourceRequest[]): Promise<void> => {

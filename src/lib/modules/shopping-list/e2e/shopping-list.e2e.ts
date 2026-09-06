@@ -259,11 +259,28 @@ test('syncs remote changes on focus and while open without overwriting local wri
 		});
 	});
 	await login(page);
+	const initialRefresh = page.waitForResponse(
+		(response) =>
+			response.request().method() === 'GET' &&
+			new URL(response.url()).pathname === '/api/shopping-list'
+	);
 	await page.goto('/shopping-list');
 	await expect(page.getByText('Olivenolje', { exact: true })).toBeVisible();
+	await initialRefresh;
 
 	items = [{ sourceName: 'Brot', name: 'Brød', specification: '' }, ...items];
+	const focusRefresh = page.waitForResponse(async (response) => {
+		if (
+			response.request().method() !== 'GET' ||
+			new URL(response.url()).pathname !== '/api/shopping-list'
+		) {
+			return false;
+		}
+		const body = (await response.json()) as { items?: Item[] };
+		return body.items?.some((item) => item.name === 'Brød') ?? false;
+	});
 	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await focusRefresh;
 	await expect(page.getByText('Brød', { exact: true })).toBeVisible();
 
 	holdNextGet = true;

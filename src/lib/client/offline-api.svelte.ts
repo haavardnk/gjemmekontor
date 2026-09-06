@@ -31,6 +31,10 @@ function responseCode(response: Response, body: unknown): string {
 	return `HTTP_${response.status}`;
 }
 
+function isRetryableResponse(status: number, code: string): boolean {
+	return [401, 408, 425, 429].includes(status) || code === 'MODULE_DISABLED';
+}
+
 function cloneForStorage<T>(value: T): T {
 	return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -161,6 +165,37 @@ export class OfflineApi {
 		return (await this.counts(moduleId)).pending > 0;
 	}
 
+	async retryConflicts(moduleId: string): Promise<void> {
+		const activeSync = this.syncing.get(moduleId);
+		const db = await this.database();
+		const transaction = db.transaction(['pendingApiCommands', 'apiCommandConflicts'], 'readwrite', {
+			durability: 'strict'
+		});
+		const conflictStore = transaction.objectStore('apiCommandConflicts');
+		const pendingStore = transaction.objectStore('pendingApiCommands');
+		const conflicts = (await conflictStore.getAll()).filter(
+			(conflict) => conflict.moduleId === moduleId
+		);
+		for (const conflict of conflicts) {
+			await pendingStore.put({
+				id: conflict.id,
+				moduleId: conflict.moduleId,
+				path: conflict.path,
+				method: conflict.method,
+				...(conflict.body === undefined ? {} : { body: conflict.body }),
+				createdAt: conflict.createdAt,
+				sequence: conflict.sequence
+			});
+			await conflictStore.delete(conflict.id);
+		}
+		await transaction.done;
+		await this.updateStatus(moduleId);
+		if (conflicts.length && this.isOnline()) {
+			if (activeSync) await activeSync;
+			await this.sync(moduleId);
+		}
+	}
+
 	async sync(moduleId?: string): Promise<void> {
 		if (moduleId) {
 			await this.syncModule(moduleId);
@@ -207,7 +242,12 @@ export class OfflineApi {
 				} catch {
 					body = undefined;
 				}
-				if (response.status >= 400 && response.status < 500 && response.status !== 408) {
+				const code = responseCode(response, body);
+				if (
+					response.status >= 400 &&
+					response.status < 500 &&
+					!isRetryableResponse(response.status, code)
+				) {
 					const transaction = db.transaction(
 						['pendingApiCommands', 'apiCommandConflicts'],
 						'readwrite',
@@ -216,14 +256,14 @@ export class OfflineApi {
 					await transaction.objectStore('apiCommandConflicts').put({
 						...command,
 						status: response.status,
-						code: responseCode(response, body),
+						code,
 						failedAt: Date.now()
 					});
 					await transaction.objectStore('pendingApiCommands').delete(command.id);
 					await transaction.done;
 					continue;
 				}
-				throw new Error(responseCode(response, body));
+				throw new Error(code);
 			}
 			await this.updateStatus(moduleId);
 			const count = await this.counts(moduleId);

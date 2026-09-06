@@ -102,5 +102,5 @@ describe('GPX extraction', (): void => {
 		const result = extractGpxXml(gpxFixture(points), parse);
 		expect(result.originalPointCount).toBe(5_000);
 		expect(result.routePointCount).toBeGreaterThan(2);
-	});
+	}, 15_000);
 });

@@ -81,5 +81,41 @@ describe('offline API outbox', () => {
 			expect.objectContaining({ moduleId: 'gear', code: 'CATEGORY_ORDER_STALE', status: 409 })
 		]);
 		db.close();
+
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => Response.json({ categories: [] }))
+		);
+		await store.retryConflicts('gear');
+
+		expect(store.status('gear')).toMatchObject({ phase: 'synced', pending: 0, conflicts: 0 });
+	});
+
+	test('keeps authorization failures pending for retry', async () => {
+		const id = tripId();
+		vi.stubGlobal('navigator', { onLine: false });
+		const store = new OfflineApi();
+		stores.push(store);
+		await store.start(id, ['gear']);
+		await store.commit('gear', 'gear:snapshot:current', { categories: [] }, [
+			{
+				path: '/api/gear/categories',
+				method: 'PATCH',
+				body: { categoryIds: [] }
+			}
+		]);
+
+		vi.stubGlobal('navigator', { onLine: true });
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => Response.json({ error: 'UNAUTHENTICATED' }, { status: 401 }))
+		);
+		await store.sync('gear');
+
+		expect(store.status('gear')).toMatchObject({ phase: 'error', pending: 1, conflicts: 0 });
+		const db = await openTripClientDatabase(id);
+		expect(await db.count('pendingApiCommands')).toBe(1);
+		expect(await db.count('apiCommandConflicts')).toBe(0);
+		db.close();
 	});
 });

@@ -2,6 +2,7 @@ export type ModuleIconName =
 	| 'backpack'
 	| 'book-open'
 	| 'map'
+	| 'map-pin'
 	| 'route'
 	| 'scroll-text'
 	| 'shopping-basket'

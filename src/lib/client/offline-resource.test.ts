@@ -168,6 +168,36 @@ describe('offline resource', () => {
 		});
 	});
 
+	test('runs a trailing refresh when requested during an in-flight refresh', async () => {
+		let resolveFirst: (value: Snapshot) => void = () => undefined;
+		const firstRemote = new Promise<Snapshot>((resolve) => (resolveFirst = resolve));
+		let current: Snapshot = { items: ['initial'] };
+		const deps = dependencies({ cached: current });
+		deps.requestMock
+			.mockImplementationOnce(async () => firstRemote)
+			.mockResolvedValueOnce({ items: ['fresh'] });
+		const resource = createOfflineResource(
+			{
+				moduleId: 'test',
+				snapshotKey: 'test:snapshot',
+				endpoint: '/api/test',
+				schema,
+				read: () => current,
+				write: (value) => (current = value)
+			},
+			deps
+		);
+
+		resource.start();
+		await vi.waitFor(() => expect(deps.requestMock).toHaveBeenCalledOnce());
+		const trailingRefresh = resource.refresh();
+		resolveFirst({ items: ['stale'] });
+		await trailingRefresh;
+
+		expect(deps.requestMock).toHaveBeenCalledTimes(2);
+		expect(current).toEqual({ items: ['fresh'] });
+	});
+
 	test('supports optional state, custom response selection, and lifecycle hooks', async () => {
 		let current: Snapshot | undefined;
 		const deps = dependencies({});

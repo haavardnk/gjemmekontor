@@ -43,7 +43,8 @@ export default function globalSetup(): void {
 						'itinerary',
 						'menu',
 						'gear',
-						'rule-book'
+						'rule-book',
+						'next-trip'
 					],
 					enabled: [
 						'map',
@@ -53,7 +54,8 @@ export default function globalSetup(): void {
 						'shopping-list',
 						'menu',
 						'gear',
-						'rule-book'
+						'rule-book',
+						'next-trip'
 					],
 					mapGoogleMyMapsId: 'e2e-map',
 					mapDefaultMode: 'normal',
