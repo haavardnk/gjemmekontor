@@ -326,6 +326,7 @@
 
 	async function saveItem(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
+		if (!online) return;
 		if (saving) return;
 		saving = true;
 		formError = '';
@@ -451,7 +452,7 @@
 				<div class="modal-action">
 					<button class="btn btn-ghost" type="button" onclick={() => (editorOpen = false)}
 						>Avbryt</button
-					><button class="btn btn-primary" type="submit" disabled={saving}
+					><button class="btn btn-primary" type="submit" disabled={!online || saving}
 						>{saving ? 'Lagrer …' : 'Lagre'}</button
 					>
 				</div>

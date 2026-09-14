@@ -14,6 +14,7 @@
 
 	let {
 		archives,
+		writable,
 		dishById,
 		query = $bindable(),
 		onrecipe,
@@ -22,6 +23,7 @@
 		onarchive
 	}: {
 		archives: RecipeArchiveView[];
+		writable: boolean;
 		dishById: Map<string, TripMenuDish>;
 		query: string;
 		onrecipe: (archive: RecipeArchiveView, activeDish?: TripMenuDish) => void;
@@ -87,6 +89,7 @@
 				{#if !active}<button
 						class="btn min-h-10 flex-1 btn-outline btn-sm"
 						type="button"
+						disabled={!writable}
 						onclick={() => onactivate(archive)}><Plus size={17} /> Til meny</button
 					>{/if}
 				<details class="dropdown dropdown-end">
@@ -100,6 +103,7 @@
 						<li>
 							<button
 								type="button"
+								disabled={!writable}
 								onclick={() => onedit(archive, activeDish)}
 								aria-label={`Rediger ${archive.name}`}><Edit3 size={17} /> Rediger</button
 							>
@@ -108,6 +112,7 @@
 							<button
 								class="text-error"
 								type="button"
+								disabled={!writable}
 								onclick={() => onarchive(archive)}
 								aria-label={`Arkiver ${archive.name}`}><Archive size={17} /> Arkiver</button
 							>

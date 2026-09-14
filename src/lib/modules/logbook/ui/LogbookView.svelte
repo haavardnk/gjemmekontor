@@ -4,6 +4,7 @@
 
 	import { page } from '$app/state';
 	import { apiRequest } from '$lib/client/api';
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		type MapApiResponse,
@@ -94,6 +95,7 @@
 	}
 
 	function saveText(key: string, event: Event): void {
+		if (!connectivity.online) return;
 		const input = event.currentTarget;
 		if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
 			void sharedState.set(key, input.value.trim());
@@ -118,15 +120,18 @@
 	}
 
 	function saveDestination(value: string): void {
+		if (!connectivity.online) return;
 		void sharedState.set(destinationKey, serializeLocation(locationForName(value) ?? null));
 	}
 
 	function openLeg(): void {
+		if (!connectivity.online) return;
 		addingLeg = true;
 		draft = newLogbookLegDraft(legs.at(-1)?.to.name ?? destination?.name ?? '');
 	}
 
 	function editLeg(key: string, leg: LogbookLeg): void {
+		if (!connectivity.online) return;
 		addingLeg = true;
 		draft = editLogbookLegDraft(key, leg);
 	}
@@ -196,6 +201,7 @@
 	}
 
 	async function addLeg(): Promise<void> {
+		if (!connectivity.online) return;
 		const fromLocation = locationForName(draft.from);
 		const toLocation = locationForName(draft.to);
 		if (!fromLocation || !toLocation) {
@@ -261,10 +267,12 @@
 	}
 
 	function deleteLeg(key: string, leg: LogbookLeg): void {
+		if (!connectivity.online) return;
 		void sharedState.set(key, serializeLogbookLeg({ ...leg, tombstone: true }));
 	}
 
 	function useLatestDestination(): void {
+		if (!connectivity.online) return;
 		const latest = legs.at(-1)?.to;
 		if (latest) void sharedState.set(destinationKey, serializeLocation(latest));
 	}
@@ -318,6 +326,7 @@
 						value={destination?.name ?? ''}
 						suggestions={locationSuggestions}
 						placeholder="Velg kartpunkt eller skriv et sted"
+						disabled={!connectivity.online}
 						oncommit={saveDestination}
 					/>
 				{/key}
@@ -334,6 +343,7 @@
 				class="input w-full bg-base-100"
 				placeholder="Sol, 6 m/s fra nordvest"
 				value={textValue(weatherKey)}
+				disabled={!connectivity.online}
 				onchange={(event) => saveText(weatherKey, event)}
 			/>
 		</label>
@@ -343,6 +353,7 @@
 				class="textarea min-h-24 w-full bg-base-100"
 				placeholder="Dagens små og store hendelser"
 				value={textValue(notesKey)}
+				disabled={!connectivity.online}
 				onchange={(event) => saveText(notesKey, event)}></textarea>
 		</label>
 	</section>
@@ -356,7 +367,7 @@
 			<button
 				class="btn btn-primary btn-sm"
 				type="button"
-				disabled={!sharedState.ready}
+				disabled={!sharedState.ready || !connectivity.online}
 				onclick={openLeg}><CirclePlus size={17} />Ny etappe</button
 			>
 		</div>
@@ -381,8 +392,11 @@
 				</div>
 			</div>
 			{#if destination?.name !== legs.at(-1)?.to.name}
-				<button class="btn mb-3 w-full btn-sm" type="button" onclick={useLatestDestination}
-					>Bruk {legs.at(-1)?.to.name} som dagens destinasjon</button
+				<button
+					class="btn mb-3 w-full btn-sm"
+					type="button"
+					disabled={!connectivity.online}
+					onclick={useLatestDestination}>Bruk {legs.at(-1)?.to.name} som dagens destinasjon</button
 				>
 			{/if}
 		{/if}
@@ -402,6 +416,7 @@
 							<button
 								class="btn btn-square btn-ghost btn-sm"
 								type="button"
+								disabled={!connectivity.online}
 								onclick={() => editLeg(leg.key, leg)}
 								aria-label="Rediger etappe"
 								title="Rediger etappe"><Pencil size={17} /></button
@@ -409,6 +424,7 @@
 							<button
 								class="btn btn-square btn-ghost btn-sm"
 								type="button"
+								disabled={!connectivity.online}
 								onclick={() => deleteLeg(leg.key, leg)}
 								aria-label="Slett etappe"
 								title="Slett etappe"><Trash2 size={17} /></button

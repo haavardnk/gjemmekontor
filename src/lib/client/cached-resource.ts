@@ -1,33 +1,45 @@
 import type { ZodType } from 'zod';
 
 import { apiRequest } from './api';
-import { type OfflineApi, offlineApi, type OfflineApiRequest } from './offline-api.svelte';
+import {
+	type CachedResourceRequest,
+	type CachedResources,
+	cachedResources
+} from './cached-resources.svelte';
+import { connectivity } from './connectivity.svelte';
 
-export type OfflineResourceRequest = OfflineApiRequest;
+export type { CachedResourceRequest } from './cached-resources.svelte';
 
-export type OfflineResourceMutation<T> = {
+export type CachedResourceMutation<T> = {
 	next: T;
-	requests: readonly OfflineResourceRequest[];
+	requests: readonly CachedResourceRequest[];
 };
 
-export type OfflineResourceRefreshOptions = {
+export type CachedResourceRefreshOptions = {
 	load?: () => Promise<unknown>;
 };
 
-export class InvalidOfflineResourceSnapshotError extends Error {
+export type CachedResourceDescriptor<T> = {
+	moduleId: string;
+	snapshotKey: string;
+	endpoint: string;
+	select?: (response: unknown) => unknown;
+	schema: ZodType<T>;
+};
+
+export class InvalidCachedResourceSnapshotError extends Error {
 	constructor() {
-		super('INVALID_OFFLINE_RESOURCE_SNAPSHOT');
-		this.name = 'InvalidOfflineResourceSnapshotError';
+		super('INVALID_CACHED_RESOURCE_SNAPSHOT');
+		this.name = 'InvalidCachedResourceSnapshotError';
 	}
 }
 
-type OfflineResourceOptions<T, TCurrent extends T | undefined> = {
-	moduleId: string;
-	snapshotKey: string;
+type CachedResourceOptions<T, TCurrent extends T | undefined> = Omit<
+	CachedResourceDescriptor<T>,
+	'endpoint'
+> & {
 	endpoint?: string;
 	load?: () => Promise<unknown>;
-	select?: (response: unknown) => unknown;
-	schema: ZodType<T>;
 	read: () => TCurrent;
 	write: (value: T) => void;
 	canRefresh?: () => boolean | Promise<boolean>;
@@ -39,17 +51,15 @@ type OfflineResourceOptions<T, TCurrent extends T | undefined> = {
 	registerRefresher?: boolean;
 };
 
-export type OfflineResourceDependencies = {
-	store: Pick<
-		OfflineApi,
-		'commit' | 'hasPending' | 'loadSnapshot' | 'registerRefresher' | 'storeSnapshot'
-	>;
+export type CachedResourceDependencies = {
+	store: Pick<CachedResources, 'loadSnapshot' | 'mutate' | 'registerRefresher' | 'storeSnapshot'> &
+		Partial<Pick<CachedResources, 'markRefreshed'>>;
 	request: typeof apiRequest;
 };
 
-export function createOfflineResource<T, TCurrent extends T | undefined = T>(
-	options: OfflineResourceOptions<T, TCurrent>,
-	dependencies: OfflineResourceDependencies = { store: offlineApi, request: apiRequest }
+export function createCachedResource<T, TCurrent extends T | undefined = T>(
+	options: CachedResourceOptions<T, TCurrent>,
+	dependencies: CachedResourceDependencies = { store: cachedResources, request: apiRequest }
 ) {
 	const { moduleId, snapshotKey, schema, read, write } = options;
 	const { store, request } = dependencies;
@@ -58,7 +68,8 @@ export function createOfflineResource<T, TCurrent extends T | undefined = T>(
 	let mutationRevision = 0;
 	let refreshPromise: Promise<boolean> | undefined;
 	let refreshQueued = false;
-	let queuedRefreshOptions: OfflineResourceRefreshOptions = {};
+	let queuedRefreshOptions: CachedResourceRefreshOptions = {};
+	let startupCache: T | undefined;
 	const isActive = (lifecycle: number): boolean => active && lifecycle === lifecycleRevision;
 	const isCurrent = (lifecycle: number, revision: number): boolean =>
 		isActive(lifecycle) && revision === mutationRevision;
@@ -66,35 +77,42 @@ export function createOfflineResource<T, TCurrent extends T | undefined = T>(
 	const loadRemote = (): Promise<unknown> => {
 		if (options.load) return options.load();
 		if (options.endpoint) return request(options.endpoint);
-		throw new Error('OFFLINE_RESOURCE_LOADER_REQUIRED');
+		throw new Error('CACHED_RESOURCE_LOADER_REQUIRED');
 	};
 
-	const performRefresh = async (
-		refreshOptions: OfflineResourceRefreshOptions
-	): Promise<boolean> => {
+	const performRefresh = async (refreshOptions: CachedResourceRefreshOptions): Promise<boolean> => {
 		if (options.canRefresh && !(await options.canRefresh())) return false;
-		if (await store.hasPending(moduleId)) return false;
+		if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
 		const lifecycle = lifecycleRevision;
 		const revision = mutationRevision;
 		try {
 			const response = await (refreshOptions.load ?? loadRemote)();
 			const parsed = schema.safeParse(options.select ? options.select(response) : response);
-			if (!parsed.success) throw new InvalidOfflineResourceSnapshotError();
-			if (!isCurrent(lifecycle, revision) || (await store.hasPending(moduleId))) {
-				return false;
-			}
+			if (!parsed.success) throw new InvalidCachedResourceSnapshotError();
+			if (!isCurrent(lifecycle, revision)) return false;
 			const next = parsed.data;
+			connectivity.reportNetworkSuccess();
 			write(next);
 			await store.storeSnapshot(snapshotKey, next);
 			await options.onRefreshSuccess?.(next, response);
+			store.markRefreshed?.(moduleId, true);
 			return true;
 		} catch (error) {
-			if (isCurrent(lifecycle, revision)) await options.onRefreshError?.(error);
+			connectivity.reportNetworkFailure(error);
+			if (isCurrent(lifecycle, revision)) {
+				if (!connectivity.online) {
+					const cached = startupCache ?? (await store.loadSnapshot<T>(snapshotKey));
+					const cachedResult = schema.safeParse(cached);
+					if (cachedResult.success) write(cachedResult.data);
+				}
+				await options.onRefreshError?.(error);
+				store.markRefreshed?.(moduleId, false);
+			}
 			return false;
 		}
 	};
 
-	const runRefresh = async (refreshOptions: OfflineResourceRefreshOptions): Promise<boolean> => {
+	const runRefresh = async (refreshOptions: CachedResourceRefreshOptions): Promise<boolean> => {
 		let refreshed = await performRefresh(refreshOptions);
 		while (refreshQueued) {
 			refreshQueued = false;
@@ -104,7 +122,7 @@ export function createOfflineResource<T, TCurrent extends T | undefined = T>(
 		}
 		return refreshed;
 	};
-	const refresh = (refreshOptions: OfflineResourceRefreshOptions = {}): Promise<boolean> => {
+	const refresh = (refreshOptions: CachedResourceRefreshOptions = {}): Promise<boolean> => {
 		if (refreshPromise) {
 			refreshQueued = true;
 			queuedRefreshOptions = refreshOptions;
@@ -113,16 +131,15 @@ export function createOfflineResource<T, TCurrent extends T | undefined = T>(
 		refreshPromise = runRefresh(refreshOptions).finally(() => (refreshPromise = undefined));
 		return refreshPromise;
 	};
-	const commit = async (next: T, requests: readonly OfflineResourceRequest[]): Promise<void> => {
+	const commit = async (_next: T, requests: readonly CachedResourceRequest[]): Promise<void> => {
 		mutationRevision += 1;
-		await store.commit(moduleId, snapshotKey, next, requests);
-		write(next);
+		await store.mutate(moduleId, requests);
 	};
 
 	return {
 		current: read,
 		commit,
-		async commitMutation(mutation: OfflineResourceMutation<T>): Promise<void> {
+		async commitMutation(mutation: CachedResourceMutation<T>): Promise<void> {
 			await commit(mutation.next, mutation.requests);
 		},
 		refresh,
@@ -130,17 +147,19 @@ export function createOfflineResource<T, TCurrent extends T | undefined = T>(
 			active = true;
 			lifecycleRevision += 1;
 			const lifecycle = lifecycleRevision;
-			const revision = mutationRevision;
 			const initial = read();
-			void store.loadSnapshot<T>(snapshotKey).then(async (cached) => {
-				if (!isActive(lifecycle)) return;
-				if (revision === mutationRevision) {
-					const cachedResult = schema.safeParse(cached);
+			void (async (): Promise<void> => {
+				const cached = await store.loadSnapshot<T>(snapshotKey);
+				const cachedResult = schema.safeParse(cached);
+				startupCache = cachedResult.success ? cachedResult.data : undefined;
+				const initialResult = schema.safeParse(initial);
+				if (initialResult.success) {
+					await store.storeSnapshot(snapshotKey, initialResult.data);
+				} else {
+					if (!isActive(lifecycle)) return;
 					if (cachedResult.success) {
 						write(cachedResult.data);
 						await options.onCached?.(cachedResult.data);
-					} else if (initial !== undefined) {
-						await store.storeSnapshot(snapshotKey, initial);
 					}
 				}
 				if (!isActive(lifecycle)) return;
@@ -151,7 +170,7 @@ export function createOfflineResource<T, TCurrent extends T | undefined = T>(
 				) {
 					await refresh();
 				}
-			});
+			})();
 			const unregister =
 				options.registerRefresher === false
 					? (): void => undefined

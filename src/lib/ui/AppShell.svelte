@@ -21,9 +21,11 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { moduleCatalog, type ModuleId, pathMatchesPrefix } from '$lib/app/modules/catalog';
-	import { offlineApi } from '$lib/client/offline-api.svelte';
-	import { watchOnlineStatus } from '$lib/client/online';
-	import { warmAppShell } from '$lib/client/pwa';
+	import { warmEnabledSnapshots } from '$lib/app/modules/snapshot-cache';
+	import { cachedResources } from '$lib/client/cached-resources.svelte';
+	import { connectivity } from '$lib/client/connectivity.svelte';
+	import { LiveSync } from '$lib/client/live-sync';
+	import { startAppVersionChecks, warmAppShell } from '$lib/client/pwa';
 	import { sharedState } from '$lib/client/state.svelte';
 	import { tripDayState } from '$lib/trip/day.svelte';
 
@@ -33,11 +35,14 @@
 
 	let { children }: { children: Snippet } = $props();
 	let mounted = $state(false);
-	let online = $state(true);
 	let offlineReady = $state(false);
 	let signingOut = $state(false);
 	let moreOpen = $state(false);
 	let moreDialog = $state<HTMLDialogElement>(undefined!);
+	const liveSync = new LiveSync({
+		refreshModules: (moduleId) => cachedResources.refresh(moduleId),
+		refreshState: () => sharedState.sync()
+	});
 
 	async function signOut(): Promise<void> {
 		signingOut = true;
@@ -81,7 +86,7 @@
 	);
 	const homePath = $derived(enabledModules[0]?.primaryPath ?? '/');
 	if (typeof window !== 'undefined' && page.data.tripId) {
-		offlineApi.prepare(
+		cachedResources.prepare(
 			page.data.tripId,
 			untrack(() => enabledModuleIds)
 		);
@@ -103,12 +108,15 @@
 
 	onMount(() => {
 		mounted = true;
-		const stopOnline = watchOnlineStatus((value) => (online = value));
+		connectivity.start();
 		if (!page.data.tripId) {
-			return stopOnline;
+			return (): void => connectivity.stop();
 		}
-		void sharedState.start(page.data.tripId, enabledModuleIds);
-		void offlineApi.start(page.data.tripId, enabledModuleIds);
+		void sharedState.start(page.data.tripId);
+		void cachedResources.start(page.data.tripId, enabledModuleIds);
+		void warmEnabledSnapshots(enabledModuleIds);
+		liveSync.start(page.data.tripId, page.data.appVersion);
+		const stopVersionChecks = startAppVersionChecks(page.data.appVersion);
 		void tripDayState.start(
 			page.data.tripId,
 			page.data.tripDays ?? [],
@@ -119,9 +127,11 @@
 			page.data.tripId
 		).then((ready) => (offlineReady = ready));
 		return (): void => {
-			stopOnline();
+			connectivity.stop();
 			sharedState.stop();
-			offlineApi.stop();
+			cachedResources.stop();
+			liveSync.stop();
+			stopVersionChecks();
 			tripDayState.stop();
 		};
 	});
@@ -133,7 +143,7 @@
 	<a
 		class="text-primary"
 		href={resolve(homePath)}
-		data-sveltekit-reload={online ? undefined : true}
+		data-sveltekit-reload={connectivity.online ? undefined : true}
 		aria-label="Gjemmekontor"
 		title="Gjemmekontor"
 	>
@@ -197,7 +207,7 @@
 			class:flex={quickLinks.includes(link)}
 			class:hidden={moreLinks.includes(link)}
 			href={link.href}
-			data-sveltekit-reload={online ? undefined : true}
+			data-sveltekit-reload={connectivity.online ? undefined : true}
 			aria-current={isCurrent(link.path) ? 'page' : undefined}
 		>
 			<link.icon size={21} />
@@ -236,7 +246,7 @@
 			<a
 				class="flex min-h-24 flex-col items-center justify-center gap-2 rounded-box border border-base-300 bg-base-200/55 p-3 font-semibold text-base-content/70 aria-[current=page]:border-primary/35 aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
 				href={link.href}
-				data-sveltekit-reload={online ? undefined : true}
+				data-sveltekit-reload={connectivity.online ? undefined : true}
 				onclick={closeMore}
 				aria-current={isCurrent(link.path) ? 'page' : undefined}
 			>

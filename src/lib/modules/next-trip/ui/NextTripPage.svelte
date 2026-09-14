@@ -2,14 +2,14 @@
 	import { MapPin, Plus, Star, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
-	import { offlineApi } from '$lib/client/offline-api.svelte';
-	import { createOfflineResource } from '$lib/client/offline-resource';
+	import { createCachedResource } from '$lib/client/cached-resource';
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import ModalDialog from '$lib/ui/ModalDialog.svelte';
 	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
+	import { nextTripCache } from '../client/cache';
 	import {
 		type NextTripPageData,
-		nextTripPageDataSchema,
 		type NextTripSort,
 		sortNextTripSuggestions,
 		suggestionRatingSummary
@@ -31,11 +31,8 @@
 	let saving = $state(false);
 	let addDialog = $state<HTMLDialogElement>(undefined!);
 
-	const resource = createOfflineResource({
-		moduleId: 'next-trip',
-		snapshotKey: 'next-trip:snapshot:current',
-		endpoint: '/api/next-trip',
-		schema: nextTripPageDataSchema,
+	const resource = createCachedResource({
+		...nextTripCache,
 		read: () => ({ people, suggestions }),
 		write: (value) => {
 			people = value.people;
@@ -53,14 +50,12 @@
 	});
 
 	onMount(() => {
-		const stop = resource.start();
-		void offlineApi.retryConflicts('next-trip').catch(() => undefined);
-		return stop;
+		return resource.start();
 	});
 
 	async function addSuggestion(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		if (saving) return;
+		if (!connectivity.online || saving) return;
 		saving = true;
 		addErrorMessage = '';
 		try {
@@ -87,7 +82,7 @@
 	}
 
 	async function rate(suggestionId: string, score: number): Promise<void> {
-		if (!selectedPerson) return;
+		if (!connectivity.online || !selectedPerson) return;
 		actionErrorMessage = '';
 		try {
 			await resource.commitMutation(
@@ -99,6 +94,7 @@
 	}
 
 	async function deleteSuggestion(suggestionId: string, destination: string): Promise<void> {
+		if (!connectivity.online) return;
 		if (!window.confirm(`Slette «${destination}»?`)) return;
 		actionErrorMessage = '';
 		try {
@@ -141,7 +137,7 @@
 			<button
 				class="btn shrink-0 btn-primary btn-sm"
 				type="button"
-				disabled={!selectedPersonId}
+				disabled={!connectivity.online || !selectedPersonId}
 				onclick={() => addDialog.showModal()}
 			>
 				<Plus size={18} aria-hidden="true" />
@@ -172,8 +168,10 @@
 					<span class="label-text">Lenke</span>
 					<input class="input-bordered input" type="url" bind:value={url} placeholder="https://" />
 				</label>
-				<button class="btn w-full btn-primary" type="submit" disabled={saving || !selectedPersonId}
-					>Legg til forslag</button
+				<button
+					class="btn w-full btn-primary"
+					type="submit"
+					disabled={!connectivity.online || saving || !selectedPersonId}>Legg til forslag</button
 				>
 			</form>
 			{#if addErrorMessage}<p class="text-sm text-error" role="alert">{addErrorMessage}</p>{/if}
@@ -238,6 +236,7 @@
 										<button
 											class="btn btn-square btn-ghost btn-sm"
 											type="button"
+											disabled={!connectivity.online}
 											aria-label={`${score} stjerner`}
 											aria-pressed={score === currentRating(suggestion)}
 											onclick={() => rate(suggestion.id, score)}
@@ -253,6 +252,7 @@
 							<button
 								class="btn ml-auto btn-square btn-ghost text-error btn-sm"
 								type="button"
+								disabled={!connectivity.online}
 								aria-label={`Slett ${suggestion.destination}`}
 								title="Slett forslag"
 								onclick={() => deleteSuggestion(suggestion.id, suggestion.destination)}

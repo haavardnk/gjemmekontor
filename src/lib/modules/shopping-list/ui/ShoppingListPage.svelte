@@ -11,19 +11,17 @@
 
 	import { page } from '$app/state';
 	import { ApiError, apiRequest } from '$lib/client/api';
-	import { offlineApi } from '$lib/client/offline-api.svelte';
 	import {
-		createOfflineResource,
-		InvalidOfflineResourceSnapshotError,
-		type OfflineResourceRequest
-	} from '$lib/client/offline-resource';
-	import { watchOnlineStatus } from '$lib/client/online';
-	import { shoppingListSnapshotKey } from '$lib/modules/shopping-list/client/cache';
+		type CachedResourceRequest,
+		createCachedResource,
+		InvalidCachedResourceSnapshotError
+	} from '$lib/client/cached-resource';
+	import { connectivity } from '$lib/client/connectivity.svelte';
+	import { shoppingListCache } from '$lib/modules/shopping-list/client/cache';
 	import {
 		sanitizeShoppingListText,
 		type ShoppingListItem,
-		type ShoppingListSnapshot,
-		shoppingListSnapshotSchema
+		type ShoppingListSnapshot
 	} from '$lib/modules/shopping-list/domain/shopping-list';
 	import ShoppingListItems from '$lib/modules/shopping-list/ui/ShoppingListItems.svelte';
 	import { shoppingListErrorMessage } from '$lib/ui/copy';
@@ -33,7 +31,7 @@
 	let snapshot = $state<ShoppingListSnapshot>();
 	let loading = $state(true);
 	let refreshing = $state(false);
-	let online = $state(true);
+	const online = $derived(connectivity.online);
 	let serviceAvailable = $state(true);
 	let errorMessage = $state('');
 	let name = $state('');
@@ -48,14 +46,12 @@
 	let editing = $state(false);
 	const refreshIntervalMs = 5_000;
 	let resourceReady = false;
-	const resource = createOfflineResource({
-		moduleId: 'shopping-list',
-		snapshotKey: shoppingListSnapshotKey,
+	const resource = createCachedResource({
+		...shoppingListCache,
 		load: () => apiRequest('/api/shopping-list', { signal: AbortSignal.timeout(15_000) }),
-		schema: shoppingListSnapshotSchema,
 		read: () => snapshot,
 		write: (value) => (snapshot = value),
-		canRefresh: () => online && !adding && !busyItem && !editing && !editingItem,
+		canRefresh: () => online,
 		onReady: () => {
 			loading = false;
 			resourceReady = true;
@@ -78,7 +74,7 @@
 		) ?? []
 	);
 	const writeAvailable = $derived(Boolean(snapshot));
-	const canMutate = $derived(writeAvailable && !adding && !busyItem && !refreshing);
+	const canMutate = $derived(online && writeAvailable && !adding && !busyItem && !refreshing);
 	const updatedLabel = $derived(
 		snapshot
 			? new Intl.DateTimeFormat('nb-NO', {
@@ -100,7 +96,7 @@
 		const code =
 			error instanceof ApiError
 				? error.code
-				: error instanceof InvalidOfflineResourceSnapshotError
+				: error instanceof InvalidCachedResourceSnapshotError
 					? undefined
 					: 'BRING_UNAVAILABLE';
 		serviceAvailable = code === 'INVALID_REQUEST';
@@ -116,7 +112,7 @@
 
 	async function commitSnapshot(
 		next: ShoppingListSnapshot,
-		request: OfflineResourceRequest
+		request: CachedResourceRequest
 	): Promise<void> {
 		await resource.commit(next, [request]);
 		errorMessage = '';
@@ -275,18 +271,7 @@
 	}
 
 	onMount(() => {
-		let initialized = false;
-		const stopOnline = watchOnlineStatus((value) => {
-			online = value;
-			if (!initialized) {
-				serviceAvailable = online;
-			} else if (online && resourceReady) {
-				void refresh();
-			} else {
-				serviceAvailable = false;
-			}
-			initialized = true;
-		});
+		serviceAvailable = online;
 		const refreshWhenActive = (): void => {
 			if (resourceReady && document.visibilityState === 'visible') {
 				void refresh(false);
@@ -299,7 +284,6 @@
 		return (): void => {
 			window.clearInterval(refreshInterval);
 			stopResource();
-			stopOnline();
 			window.removeEventListener('focus', refreshWhenActive);
 			document.removeEventListener('visibilitychange', refreshWhenActive);
 		};
@@ -318,9 +302,7 @@
 				Bring
 			</p>
 			<div class="flex min-w-0 items-center justify-end gap-1">
-				{#if offlineApi.status('shopping-list').pending > 0 || offlineApi.status('shopping-list').conflicts > 0}
-					<SyncStatus moduleId="shopping-list" />
-				{:else if online && !serviceAvailable}
+				{#if online && !serviceAvailable}
 					<div
 						class="flex min-w-0 items-center justify-end gap-1.5 text-[0.68rem] font-semibold text-base-content/55"
 						role="status"
@@ -378,7 +360,7 @@
 				maxlength="100"
 				value={name}
 				oninput={(event) => (name = safeInputValue(event.currentTarget))}
-				disabled={!writeAvailable}
+				disabled={!online || !writeAvailable}
 			/>
 		</label>
 		<label class="input flex w-full items-center bg-base-100">
@@ -390,7 +372,7 @@
 				maxlength="120"
 				value={specification}
 				oninput={(event) => (specification = safeInputValue(event.currentTarget))}
-				disabled={!writeAvailable}
+				disabled={!online || !writeAvailable}
 			/>
 		</label>
 		<button
@@ -455,14 +437,14 @@
 					maxlength="120"
 					value={editSpecification}
 					oninput={(event) => (editSpecification = safeInputValue(event.currentTarget))}
-					disabled={editing}
+					disabled={!online || editing}
 				/>
 			</label>
 			<div class="mt-6 grid grid-cols-2 gap-2">
 				<button class="btn btn-ghost" type="button" onclick={closeEdit} disabled={editing}
 					>Avbryt</button
 				>
-				<button class="btn btn-primary" type="submit" disabled={editing}>
+				<button class="btn btn-primary" type="submit" disabled={!online || editing}>
 					{#if editing}<LoaderCircle class="animate-spin" size={17} />{/if}
 					Lagre
 				</button>

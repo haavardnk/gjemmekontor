@@ -28,10 +28,9 @@
 		WifiOff,
 		X
 	} from '@lucide/svelte';
-	import { onMount } from 'svelte';
 
 	import { page } from '$app/state';
-	import { watchOnlineStatus } from '$lib/client/online';
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import { sharedState } from '$lib/client/state.svelte';
 	import type { ItineraryMember } from '$lib/modules/itinerary/server/members';
 	import ModalDialog from '$lib/ui/ModalDialog.svelte';
@@ -56,7 +55,6 @@
 		members,
 		googlePlacesApiKey = ''
 	}: { members: ItineraryMember[]; googlePlacesApiKey?: string } = $props();
-	let online = $state(true);
 	const timeZone = $derived(page.data.tripTimezone ?? 'Europe/Oslo');
 	const tripDays = $derived(page.data.tripDays ?? []);
 	const defaultDate = $derived(tripDays[0]?.date ?? new Date().toISOString().slice(0, 10));
@@ -170,6 +168,7 @@
 	}
 
 	async function deleteItem(item: KeyedItineraryItem): Promise<void> {
+		if (!connectivity.online) return;
 		if (!window.confirm(`Fjerne «${item.title}» fra reiseplanen?`)) return;
 		await sharedState.set(
 			item.key,
@@ -235,8 +234,6 @@
 		if (event.kind === 'note') return Bell;
 		return Route;
 	}
-
-	onMount(() => watchOnlineStatus((value) => (online = value)));
 </script>
 
 <svelte:head><title>Reiseplan · {page.data.tripName} · Gjemmekontor</title></svelte:head>
@@ -248,10 +245,9 @@
 			<SyncStatus />
 		</div>
 		<h1 class="font-display mt-1 text-3xl font-bold text-neutral">Reiseplan</h1>
-		{#if !online}
+		{#if !connectivity.online}
 			<p class="mt-2 flex items-center gap-1.5 text-xs text-base-content/60" role="status">
-				<WifiOff size={14} /> Planlegging og manuell redigering virker uten nett. Flydata og stedsforslag
-				krever nett.
+				<WifiOff size={14} /> Frakoblet · reiseplanen er skrivebeskyttet.
 			</p>
 		{/if}
 	</header>
@@ -272,7 +268,7 @@
 		<button
 			class="btn shrink-0 btn-primary"
 			type="button"
-			disabled={!sharedState.ready}
+			disabled={!sharedState.ready || !connectivity.online}
 			onclick={() => addDialog.showModal()}><Plus size={17} /> Legg til</button
 		>
 	</div>
@@ -295,8 +291,11 @@
 			<p class="mx-auto mt-2 max-w-sm text-sm text-base-content/60">
 				Legg til fly, transport, overnatting eller andre planer.
 			</p>
-			<button class="btn mt-5 btn-primary" type="button" onclick={() => addDialog.showModal()}
-				><Plus size={18} /> Legg til plan</button
+			<button
+				class="btn mt-5 btn-primary"
+				type="button"
+				disabled={!connectivity.online}
+				onclick={() => addDialog.showModal()}><Plus size={18} /> Legg til plan</button
 			>
 		</div>
 	{:else}
@@ -308,7 +307,7 @@
 			{#each groupedEvents as group, groupIndex (group.date)}
 				<section class:mt-8={groupIndex > 0} class="relative">
 					<span
-						class="absolute top-3 -left-[1.55rem] size-2 rounded-full bg-primary/60"
+						class="absolute top-3 left-[-1.55rem] size-2 rounded-full bg-primary/60"
 						aria-hidden="true"
 					></span>
 					<h2
@@ -322,7 +321,7 @@
 						{@const EventIcon = iconForEvent(event, item)}
 						<article class="relative pb-4">
 							<span
-								class="absolute top-5 -left-[2.15rem] grid size-7 place-items-center rounded-full border-2 border-base-200 bg-primary text-primary-content"
+								class="absolute top-5 left-[-2.15rem] grid size-7 place-items-center rounded-full border-2 border-base-200 bg-primary text-primary-content"
 								><EventIcon size={14} /></span
 							>
 							<div
@@ -349,11 +348,13 @@
 											<button
 												class="btn btn-square btn-ghost btn-xs"
 												type="button"
+												disabled={!connectivity.online}
 												onclick={() => openEdit(item)}
 												aria-label={`Rediger ${item.title}`}><Pencil size={15} /></button
 											><button
 												class="btn btn-square btn-ghost text-error btn-xs"
 												type="button"
+												disabled={!connectivity.online}
 												onclick={() => deleteItem(item)}
 												aria-label={`Fjern ${item.title}`}><Trash2 size={15} /></button
 											>
@@ -451,6 +452,7 @@
 											>{/if}{#if item.kind === 'journey' && entryTypeForItem(item) === 'flight' && item.direction !== 'return' && !hasReturnJourney(item) && event.legIndex === 0}<button
 												class="btn ml-auto btn-ghost btn-xs"
 												type="button"
+												disabled={!connectivity.online}
 												onclick={() => openReturn(item)}
 												><ArrowLeftRight size={13} /> Legg til retur</button
 											>{/if}
@@ -526,7 +528,7 @@
 <ItineraryEditor
 	{members}
 	{googlePlacesApiKey}
-	{online}
+	online={connectivity.online}
 	{defaultDate}
 	{finalDate}
 	{timeZone}

@@ -1,16 +1,13 @@
 import type { IDBPDatabase } from 'idb';
-import { SvelteDate, SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+import { SvelteURLSearchParams } from 'svelte/reactivity';
 import { z } from 'zod';
 
-import { moduleForStateKey } from '$lib/app/modules/catalog';
-
+import { connectivity } from './connectivity.svelte';
 import {
 	getClientId,
 	type GjemmekontorDatabase,
 	type JsonValue,
 	openClientDatabase,
-	type PendingMutation,
-	type PendingUpload,
 	tripClientDatabaseName
 } from './database';
 import { startSyncTriggers } from './sync-triggers';
@@ -54,6 +51,39 @@ export type SharedStateWrite = {
 	value: JsonValue;
 };
 
+export type SharedStateUpload = {
+	id: string;
+	moduleId: string;
+	relatedStateKey: string;
+	path: string;
+	query: Record<string, string>;
+	contentType: string;
+	data: Blob;
+	createdAt: number;
+	expectedResponse: JsonValue;
+};
+
+function containsExpectedValue(actual: JsonValue, expected: JsonValue): boolean {
+	if (Array.isArray(expected)) {
+		return (
+			Array.isArray(actual) &&
+			actual.length === expected.length &&
+			expected.every((value, index) => containsExpectedValue(actual[index], value))
+		);
+	}
+	if (expected !== null && typeof expected === 'object') {
+		return (
+			actual !== null &&
+			typeof actual === 'object' &&
+			!Array.isArray(actual) &&
+			Object.entries(expected).every(
+				([key, value]) => key in actual && containsExpectedValue(actual[key], value)
+			)
+		);
+	}
+	return Object.is(actual, expected);
+}
+
 export class SharedState {
 	values = $state<Record<string, JsonValue>>({});
 	status = $state<SyncStatus>({ phase: 'idle', pending: 0 });
@@ -67,11 +97,12 @@ export class SharedState {
 	private databasePromise: Promise<IDBPDatabase<GjemmekontorDatabase>> | undefined;
 	private initializePromise: Promise<void> | undefined;
 	private syncPromise: Promise<void> | undefined;
-	private syncRequested = false;
+	private pullRequested = false;
+	private writeTail: Promise<void> = Promise.resolve();
+	private activeWrites = 0;
 	private stopSyncTriggers: (() => void) | undefined;
 	private started = false;
 	private closing = false;
-	private enabledModuleIds: Set<string> | undefined;
 	private tripId: string | undefined;
 
 	constructor(options: SharedStateOptions = {}) {
@@ -130,10 +161,8 @@ export class SharedState {
 	private async performInitialize(): Promise<void> {
 		const db = await this.database();
 		const entries = await db.getAll('state');
-		const pending = await db.count('mutations');
-		this.pendingUploadIds = (await db.getAllKeys('pendingUploads')).map(String);
 		this.values = Object.fromEntries(entries.map((entry) => [entry.key, entry.value]));
-		this.status = { phase: this.isOnline() ? 'idle' : 'offline', pending };
+		this.status = { phase: this.isOnline() ? 'idle' : 'offline', pending: 0 };
 		this.ready = true;
 	}
 
@@ -153,217 +182,139 @@ export class SharedState {
 		if (keys.some((key) => !key) || keys.some((key, index) => keys.indexOf(key) !== index)) {
 			throw new Error('INVALID_STATE_WRITES');
 		}
-		await this.initialize();
-		const db = await this.database();
-		const clientId = await getClientId(db);
-		const clientTimestamp = this.now();
-		const transaction = db.transaction(['state', 'mutations', 'meta'], 'readwrite', {
-			durability: 'strict'
-		});
-		const sequenceRecord = await transaction.objectStore('meta').get('mutationSequence');
-		const previousSequence = typeof sequenceRecord?.value === 'number' ? sequenceRecord.value : 0;
-		this.status = { phase: 'saving', pending: this.status.pending + writes.length };
-		for (const [index, write] of writes.entries()) {
-			const mutation: PendingMutation = {
-				mutationId: this.randomId(),
-				clientId,
-				key: write.key,
-				value: write.value,
-				clientTimestamp,
-				sequence: previousSequence + index + 1
-			};
-			const existing = await transaction.objectStore('state').get(write.key);
-			await transaction.objectStore('state').put({
-				key: write.key,
-				value: write.value,
-				revision: existing?.revision ?? 0,
-				clientId,
-				mutationId: mutation.mutationId,
-				updatedAt: new SvelteDate(clientTimestamp).toISOString()
-			});
-			await transaction.objectStore('mutations').put(mutation);
-		}
-		await transaction.objectStore('meta').put({
-			key: 'mutationSequence',
-			value: previousSequence + writes.length
-		});
-		await transaction.done;
-		this.values = {
-			...this.values,
-			...Object.fromEntries(writes.map((write) => [write.key, write.value]))
-		};
-		this.status = {
-			phase: this.isOnline() ? 'saving' : 'offline',
-			pending: await db.count('mutations')
-		};
-		if (this.isOnline()) {
-			void this.sync();
-		}
+		await this.enqueueWrite(writes);
 	}
 
-	async setWithUpload(
-		key: string,
-		value: JsonValue,
-		upload: Omit<PendingUpload, 'clientId'>
-	): Promise<void> {
-		await this.initialize();
-		const db = await this.database();
-		const clientId = await getClientId(db);
-		const clientTimestamp = this.now();
-		const transaction = db.transaction(
-			['state', 'mutations', 'pendingUploads', 'meta'],
-			'readwrite',
-			{ durability: 'strict' }
-		);
-		const sequenceRecord = await transaction.objectStore('meta').get('mutationSequence');
-		const sequence = (typeof sequenceRecord?.value === 'number' ? sequenceRecord.value : 0) + 1;
-		const mutation: PendingMutation = {
-			mutationId: this.randomId(),
-			clientId,
-			key,
-			value,
-			clientTimestamp,
-			sequence
-		};
-		this.status = { phase: 'saving', pending: this.status.pending + 1 };
-		const existing = await transaction.objectStore('state').get(key);
-		await transaction.objectStore('state').put({
-			key,
-			value,
-			revision: existing?.revision ?? 0,
-			clientId,
-			mutationId: mutation.mutationId,
-			updatedAt: new SvelteDate(mutation.clientTimestamp).toISOString()
-		});
-		await transaction.objectStore('mutations').put(mutation);
-		await transaction.objectStore('pendingUploads').put({ ...upload, clientId });
-		await transaction.objectStore('meta').put({ key: 'mutationSequence', value: sequence });
-		await transaction.done;
-		this.values = { ...this.values, [key]: value };
-		if (!this.pendingUploadIds.includes(upload.id)) {
-			this.pendingUploadIds = [...this.pendingUploadIds, upload.id];
-		}
-		this.status = {
-			phase: this.isOnline() ? 'saving' : 'offline',
-			pending: await db.count('mutations')
-		};
-		if (this.isOnline()) {
-			void this.sync();
-		}
+	async setWithUpload(key: string, value: JsonValue, upload: SharedStateUpload): Promise<void> {
+		await this.enqueueWrite([{ key, value }], upload);
 	}
 
 	isUploadPending(id: string): boolean {
 		return this.pendingUploadIds.includes(id);
 	}
 
+	private async enqueueWrite(
+		writes: readonly SharedStateWrite[],
+		upload?: SharedStateUpload
+	): Promise<void> {
+		if (!this.isOnline()) {
+			this.status = { phase: 'offline', pending: 0 };
+			throw new Error('OFFLINE');
+		}
+		await this.initialize();
+		this.activeWrites += writes.length;
+		this.status = { phase: 'saving', pending: this.activeWrites };
+		const operation = this.writeTail
+			.catch(() => undefined)
+			.then(() => this.performWrite(writes, upload));
+		this.writeTail = operation.catch(() => undefined);
+		try {
+			await operation;
+		} finally {
+			this.activeWrites -= writes.length;
+			if (this.status.phase === 'saving') {
+				this.status = {
+					phase: this.activeWrites > 0 ? 'saving' : 'synced',
+					pending: this.activeWrites
+				};
+			} else {
+				this.status = { ...this.status, pending: this.activeWrites };
+			}
+		}
+	}
+
+	private async performWrite(
+		writes: readonly SharedStateWrite[],
+		upload?: SharedStateUpload
+	): Promise<void> {
+		if (!this.isOnline()) throw new Error('OFFLINE');
+		const clientId = await this.clientId();
+		try {
+			if (upload) {
+				this.pendingUploadIds = [...this.pendingUploadIds, upload.id];
+				const params = new SvelteURLSearchParams({ ...upload.query, clientId });
+				const response = await this.fetcher(`${upload.path}?${params}`, {
+					method: 'PUT',
+					headers: { 'content-type': upload.contentType },
+					body: upload.data
+				});
+				if (!response.ok) throw new Error('GPX_UPLOAD_FAILED');
+				const body = z.json().parse(await response.json());
+				if (!containsExpectedValue(body, upload.expectedResponse)) {
+					throw new Error('UPLOAD_RESPONSE_MISMATCH');
+				}
+			}
+			const mutationIds = writes.map(() => this.randomId());
+			const response = await this.fetcher(this.stateApiPath('/sync'), {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					mutations: writes.map((write, index) => ({
+						mutationId: mutationIds[index],
+						clientId,
+						key: write.key,
+						value: write.value,
+						clientTimestamp: this.now()
+					}))
+				})
+			});
+			if (!response.ok) throw new Error('SYNC_PUSH_FAILED');
+			connectivity.reportNetworkSuccess();
+			const pushed = syncResponseSchema.parse(await response.json());
+			if (mutationIds.some((id) => !pushed.acknowledgedMutationIds.includes(id))) {
+				throw new Error('SYNC_ACK_MISMATCH');
+			}
+			await this.sync();
+		} catch (error) {
+			connectivity.reportNetworkFailure(error);
+			this.status = {
+				phase: !this.isOnline() || error instanceof TypeError ? 'offline' : 'error',
+				pending: this.activeWrites
+			};
+			throw error;
+		} finally {
+			if (upload) {
+				this.pendingUploadIds = this.pendingUploadIds.filter((id) => id !== upload.id);
+			}
+		}
+	}
+
 	async sync(): Promise<void> {
 		if (this.syncPromise) {
-			this.syncRequested = true;
+			this.pullRequested = true;
 			return this.syncPromise;
 		}
 		if (!this.isOnline()) {
-			const db = await this.database();
-			this.status = { phase: 'offline', pending: await db.count('mutations') };
+			this.status = { phase: 'offline', pending: this.activeWrites };
 			return;
 		}
 
 		this.syncPromise = (async (): Promise<void> => {
 			do {
-				this.syncRequested = false;
-				await this.performSync();
-			} while (this.syncRequested && !this.closing);
+				this.pullRequested = false;
+				await this.performPull();
+			} while (this.pullRequested && !this.closing);
 		})().finally((): void => {
 			this.syncPromise = undefined;
 		});
 		return this.syncPromise;
 	}
 
-	private async performSync(): Promise<void> {
+	private async performPull(): Promise<void> {
 		const db = await this.database();
 		try {
-			const uploads = (await db.getAll('pendingUploads'))
-				.filter((upload) => !this.enabledModuleIds || this.enabledModuleIds.has(upload.moduleId))
-				.sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
-			for (const upload of uploads) {
-				const params = new SvelteURLSearchParams({ ...upload.query, clientId: upload.clientId });
-				const uploadResponse = await this.fetcher(`${upload.path}?${params}`, {
-					method: 'PUT',
-					headers: { 'content-type': upload.contentType },
-					body: upload.data
-				});
-				if (!uploadResponse.ok) {
-					throw new Error('GPX_UPLOAD_FAILED');
-				}
-				const body = z.json().parse(await uploadResponse.json());
-				if (JSON.stringify(body) !== JSON.stringify(upload.expectedResponse)) {
-					throw new Error('UPLOAD_RESPONSE_MISMATCH');
-				}
-				await db.delete('pendingUploads', upload.id);
-				this.pendingUploadIds = this.pendingUploadIds.filter((id) => id !== upload.id);
-			}
-			const queueTransaction = db.transaction(['mutations', 'pendingUploads'], 'readonly');
-			const [queuedMutations, queuedUploads] = await Promise.all([
-				queueTransaction.objectStore('mutations').getAll(),
-				queueTransaction.objectStore('pendingUploads').getAll()
-			]);
-			await queueTransaction.done;
-			const blockedStateKeys = new SvelteSet(queuedUploads.map((upload) => upload.relatedStateKey));
-			const pending = queuedMutations
-				.filter((mutation) => !blockedStateKeys.has(mutation.key))
-				.filter((mutation) => {
-					const module = moduleForStateKey(mutation.key);
-					return Boolean(
-						module && (!this.enabledModuleIds || this.enabledModuleIds.has(module.id))
-					);
-				})
-				.sort(
-					(left, right) =>
-						(left.sequence ?? left.clientTimestamp) - (right.sequence ?? right.clientTimestamp) ||
-						left.clientTimestamp - right.clientTimestamp ||
-						left.mutationId.localeCompare(right.mutationId)
-				);
-			if (pending.length > 0) {
-				this.status = { phase: 'saving', pending: pending.length };
-				const pushResponse = await this.fetcher(this.stateApiPath('/sync'), {
-					method: 'POST',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({
-						mutations: pending.map((mutation) => ({
-							mutationId: mutation.mutationId,
-							clientId: mutation.clientId,
-							key: mutation.key,
-							value: mutation.value,
-							clientTimestamp: mutation.clientTimestamp
-						}))
-					})
-				});
-				if (!pushResponse.ok) {
-					throw new Error('SYNC_PUSH_FAILED');
-				}
-				const pushed = syncResponseSchema.parse(await pushResponse.json());
-				const transaction = db.transaction('mutations', 'readwrite');
-				await Promise.all(
-					pushed.acknowledgedMutationIds.map((mutationId) =>
-						transaction.objectStore('mutations').delete(mutationId)
-					)
-				);
-				await transaction.done;
-			}
-
 			const revisionRecord = await db.get('meta', 'serverRevision');
 			const revision = typeof revisionRecord?.value === 'number' ? revisionRecord.value : 0;
 			const pullResponse = await this.fetcher(`${this.stateApiPath()}?since=${revision}`);
 			if (!pullResponse.ok) {
 				throw new Error('SYNC_PULL_FAILED');
 			}
+			connectivity.reportNetworkSuccess();
 			const pulled = stateResponseSchema.parse(await pullResponse.json());
-			const remaining = await db.getAll('mutations');
-			const pendingKeys = new SvelteSet(remaining.map((mutation) => mutation.key));
 			const transaction = db.transaction(['state', 'meta'], 'readwrite');
+			if (revision === 0) await transaction.objectStore('state').clear();
 			for (const entry of pulled.entries) {
-				if (!pendingKeys.has(entry.key)) {
-					await transaction.objectStore('state').put(entry);
-				}
+				await transaction.objectStore('state').put(entry);
 			}
 			await transaction.objectStore('meta').put({
 				key: 'serverRevision',
@@ -373,23 +324,23 @@ export class SharedState {
 			const entries = await db.getAll('state');
 			this.values = Object.fromEntries(entries.map((entry) => [entry.key, entry.value]));
 			this.status = {
-				phase: remaining.length > 0 ? 'saving' : 'synced',
-				pending: remaining.length
+				phase: this.activeWrites > 0 ? 'saving' : 'synced',
+				pending: this.activeWrites
 			};
 		} catch (error) {
+			connectivity.reportNetworkFailure(error);
 			if (this.closing) {
 				return;
 			}
 			this.status = {
 				phase: !this.isOnline() || error instanceof TypeError ? 'offline' : 'error',
-				pending: await db.count('mutations')
+				pending: this.activeWrites
 			};
 		}
 	}
 
-	async start(tripId: string, enabledModuleIds?: readonly string[]): Promise<void> {
+	async start(tripId: string): Promise<void> {
 		if (this.started && this.tripId === tripId) {
-			this.enabledModuleIds = enabledModuleIds ? new SvelteSet(enabledModuleIds) : undefined;
 			return;
 		}
 		if (this.tripId && this.tripId !== tripId) {
@@ -397,7 +348,6 @@ export class SharedState {
 		} else {
 			this.tripId = tripId;
 		}
-		this.enabledModuleIds = enabledModuleIds ? new SvelteSet(enabledModuleIds) : undefined;
 		this.started = true;
 		await this.initialize();
 		this.stopSyncTriggers = startSyncTriggers(this.requestSync);
@@ -417,7 +367,9 @@ export class SharedState {
 		this.databasePromise = undefined;
 		this.initializePromise = undefined;
 		this.syncPromise = undefined;
-		this.syncRequested = false;
+		this.pullRequested = false;
+		this.writeTail = Promise.resolve();
+		this.activeWrites = 0;
 		this.values = {};
 		this.status = { phase: 'idle', pending: 0 };
 		this.pendingUploadIds = [];

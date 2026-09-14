@@ -289,7 +289,7 @@ test('syncs remote changes on focus and while open without overwriting local wri
 	await page.getByRole('textbox', { name: 'Vare' }).fill('Melk');
 	await expect(page.getByRole('button', { name: 'Legg til', exact: true })).toBeEnabled();
 	await page.getByRole('button', { name: 'Legg til', exact: true }).click();
-	await expect(page.getByText('Melk', { exact: true })).toBeVisible();
+	await expect(page.getByText('Melk', { exact: true })).toHaveCount(0);
 
 	const staleResponse = page.waitForResponse(
 		(response) =>
@@ -305,10 +305,7 @@ test('syncs remote changes on focus and while open without overwriting local wri
 	await expect(page.getByText('Melk', { exact: true })).toBeVisible();
 });
 
-test('edits the cached list offline and keeps the optimistic result across reload', async ({
-	context,
-	page
-}) => {
+test('keeps the cached list readable and disables changes offline', async ({ context, page }) => {
 	let apiAvailable = true;
 	let completed = false;
 	await page.route('**/api/shopping-list{,/items}', async (route) => {
@@ -341,24 +338,20 @@ test('edits the cached list offline and keeps the optimistic result across reloa
 
 	apiAvailable = false;
 	await context.setOffline(true);
-	await page.goto('/shopping-list');
+	await page.reload();
 
 	await expect(page.getByText('Solkrem')).toBeVisible();
 	await expect(page.getByText('Faktor 50')).toBeVisible();
 	await expect(page.getByRole('status')).toContainText(/Uten nett|Viser lagret liste/);
-	await expect(page.getByRole('textbox', { name: 'Vare' })).toBeEnabled();
-	await expect(page.getByRole('button', { name: 'Marker Solkrem som kjøpt' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Marker Solkrem som kjøpt' }).click();
-	await expect(page.getByRole('button', { name: 'Legg Solkrem tilbake på listen' })).toBeVisible();
-	await expect(page.getByRole('status')).toContainText(/Uten nett · 1 venter/);
-	await page.reload();
-	await expect(page.getByRole('button', { name: 'Legg Solkrem tilbake på listen' })).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Vare' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Marker Solkrem som kjøpt' })).toBeDisabled();
+	expect(completed).toBe(false);
 
 	apiAvailable = true;
 	await context.setOffline(false);
 	await page.evaluate(() => window.dispatchEvent(new Event('online')));
 	await expect(page.getByRole('status')).toContainText(/Synkronisert/, { timeout: 15_000 });
-	await page.reload();
+	await page.getByRole('button', { name: 'Marker Solkrem som kjøpt' }).click();
 	await expect(page.getByRole('button', { name: 'Legg Solkrem tilbake på listen' })).toBeVisible();
 	expect(completed).toBe(true);
 });

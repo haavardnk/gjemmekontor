@@ -39,7 +39,7 @@ function data(items = [item()]): GearPageData {
 }
 
 describe('gear command plans', (): void => {
-	test('builds category and item upserts with optimistic snapshots', (): void => {
+	test('builds category and item upserts with request snapshots', (): void => {
 		const category = saveGearCategory(data(), { name: 'Elektronikk' }, () => 'new-category');
 		expect(category.next.categories.at(-1)).toEqual({
 			id: 'new-category',

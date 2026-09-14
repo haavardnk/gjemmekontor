@@ -10,6 +10,7 @@
 		X
 	} from '@lucide/svelte';
 
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
 	import {
@@ -103,7 +104,12 @@
 	</div>
 	<div class="flex flex-wrap justify-end gap-2">
 		{#if mode === 'plan'}
-			<button class="btn btn-primary btn-sm" type="button" onclick={() => openCategory()}>
+			<button
+				class="btn btn-primary btn-sm"
+				type="button"
+				disabled={!connectivity.online}
+				onclick={() => openCategory()}
+			>
 				<Plus size={16} /> Kategori
 			</button>
 		{:else if mode === 'pack'}
@@ -119,7 +125,7 @@
 				class="btn btn-square btn-ghost btn-sm"
 				type="button"
 				onclick={resetPacking}
-				disabled={progress.packed === 0}
+				disabled={!connectivity.online || progress.packed === 0}
 				aria-label="Nullstill pakkelisten"
 				title="Nullstill pakkelisten"><RotateCcw size={16} /></button
 			>
@@ -128,7 +134,7 @@
 				class="btn btn-primary btn-sm"
 				type="button"
 				onclick={() => openItem(categories[0]?.id ?? '')}
-				disabled={categories.length === 0}
+				disabled={!connectivity.online || categories.length === 0}
 			>
 				<Plus size={16} /> Utstyr
 			</button>

@@ -1,3 +1,4 @@
+import type { CachedResourceDescriptor } from '$lib/client/cached-resource';
 import { type ClientDatabaseSource, resolveClientDatabase } from '$lib/client/database';
 import {
 	type ShoppingListSnapshot,
@@ -5,6 +6,13 @@ import {
 } from '$lib/modules/shopping-list/domain/shopping-list';
 
 export const shoppingListSnapshotKey = 'shopping-list:snapshot:current';
+
+export const shoppingListCache: CachedResourceDescriptor<ShoppingListSnapshot> = {
+	moduleId: 'shopping-list',
+	snapshotKey: shoppingListSnapshotKey,
+	endpoint: '/api/shopping-list',
+	schema: shoppingListSnapshotSchema
+};
 
 export async function storedShoppingListSnapshot(
 	source: ClientDatabaseSource

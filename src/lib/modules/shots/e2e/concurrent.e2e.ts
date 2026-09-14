@@ -17,10 +17,10 @@ async function addVideo(page: Page, description: string, camera: string): Promis
 	await dialog.getByRole('combobox', { name: 'Kamera' }).selectOption(camera);
 	await dialog.getByRole('button', { name: 'Lagre' }).click();
 	await expect(page.getByText(description)).toBeVisible();
-	await expect(page.getByRole('status')).toHaveText(/Uten nett · 1 venter/);
+	await expect(page.getByRole('status')).toHaveText('Synkronisert');
 }
 
-test('merges rows created by two offline clients', async ({ browser }) => {
+test('streams rows created by two online clients', async ({ browser }) => {
 	const firstContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 	const secondContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 	const firstPage = await firstContext.newPage();
@@ -31,20 +31,10 @@ test('merges rows created by two offline clients', async ({ browser }) => {
 	try {
 		await loginDigest(firstPage);
 		await loginDigest(secondPage);
-		await firstContext.setOffline(true);
-		await secondContext.setOffline(true);
-
 		await addVideo(firstPage, firstDescription, 'Kamera');
+		await expect(secondPage.getByText(firstDescription)).toBeVisible({ timeout: 15_000 });
 		await addVideo(secondPage, secondDescription, 'Mobil');
-
-		await firstContext.setOffline(false);
-		await expect(firstPage.getByRole('status')).toHaveText('Synkronisert', {
-			timeout: 15_000
-		});
-		await secondContext.setOffline(false);
-		await expect(secondPage.getByRole('status')).toHaveText('Synkronisert', {
-			timeout: 15_000
-		});
+		await expect(firstPage.getByText(secondDescription)).toBeVisible({ timeout: 15_000 });
 		await expect(secondPage.getByText(firstDescription)).toBeVisible();
 		await expect(secondPage.getByText(secondDescription)).toBeVisible();
 

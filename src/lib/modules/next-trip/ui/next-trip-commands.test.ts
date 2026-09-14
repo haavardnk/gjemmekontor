@@ -36,7 +36,7 @@ describe('next trip commands', () => {
 		});
 	});
 
-	it('rejects invalid URLs before optimistic storage', () => {
+	it('rejects invalid URLs before request creation', () => {
 		expect(() =>
 			saveNextTripSuggestion(data, {
 				destination: 'Svalbard',
@@ -47,7 +47,7 @@ describe('next trip commands', () => {
 		).toThrow();
 	});
 
-	it('replaces an existing optimistic rating', () => {
+	it('replaces an existing rating in the request snapshot', () => {
 		const suggestionId = '00000000-0000-4000-8000-000000000002';
 		const mutation = rateNextTripSuggestion(
 			{
@@ -73,7 +73,7 @@ describe('next trip commands', () => {
 		expect(mutation.next.suggestions[0]?.ratings).toEqual([{ personId, score: 5 }]);
 	});
 
-	it('deletes a suggestion optimistically', () => {
+	it('deletes a suggestion in the request snapshot', () => {
 		const suggestionId = '00000000-0000-4000-8000-000000000002';
 		const mutation = deleteNextTripSuggestion(
 			{

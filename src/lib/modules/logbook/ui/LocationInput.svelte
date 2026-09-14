@@ -9,12 +9,14 @@
 		value = $bindable(),
 		suggestions,
 		placeholder = '',
+		disabled = false,
 		oncommit
 	}: {
 		label: string;
 		value: string;
 		suggestions: LocationSuggestion[];
 		placeholder?: string;
+		disabled?: boolean;
 		oncommit?: (value: string) => void;
 	} = $props();
 
@@ -48,6 +50,7 @@
 		aria-controls={listboxId}
 		aria-autocomplete="list"
 		{placeholder}
+		{disabled}
 		bind:value
 		maxlength="200"
 		onfocus={() => (open = true)}

@@ -20,6 +20,7 @@
 		archives,
 		isNew,
 		manageMenu,
+		writable,
 		onCancel,
 		onSave,
 		onImport,
@@ -29,6 +30,7 @@
 		archives: readonly MenuArchive[];
 		isNew: boolean;
 		manageMenu: boolean;
+		writable: boolean;
 		onCancel: () => void;
 		onSave: (value: MenuEditorValue) => Promise<void>;
 		onImport: (url: string) => Promise<Partial<MenuEditorValue> | undefined>;
@@ -69,7 +71,7 @@
 	}
 
 	async function importRecipe(): Promise<void> {
-		if (!sourceUrl.trim() || importing) return;
+		if (!writable || !sourceUrl.trim() || importing) return;
 		importing = true;
 		error = '';
 		try {
@@ -97,7 +99,7 @@
 
 	async function submit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		if (!name.trim() || (manageMenu && categories.length === 0) || saving) return;
+		if (!writable || !name.trim() || (manageMenu && categories.length === 0) || saving) return;
 		saving = true;
 		error = '';
 		try {
@@ -122,13 +124,13 @@
 </script>
 
 <div
-	class="modal modal-open z-[100] p-0 sm:p-4"
+	class="modal modal-open z-100 p-0 sm:p-4"
 	role="dialog"
 	aria-modal="true"
 	aria-labelledby="dish-form-title"
 >
 	<form
-		class="modal-box flex h-[100dvh] max-h-[100dvh] w-full max-w-4xl flex-col rounded-none p-0 sm:h-auto sm:max-h-[94dvh] sm:rounded-box"
+		class="modal-box flex h-dvh max-h-dvh w-full max-w-4xl flex-col rounded-none p-0 sm:h-auto sm:max-h-[94dvh] sm:rounded-box"
 		onsubmit={submit}
 	>
 		<header
@@ -174,7 +176,7 @@
 						/><button
 							class="btn join-item btn-outline"
 							type="button"
-							disabled={!sourceUrl || importing}
+							disabled={!writable || !sourceUrl || importing}
 							onclick={importRecipe}
 							><Download class={importing ? 'animate-pulse' : ''} size={18} /> Importer</button
 						>
@@ -258,7 +260,7 @@
 			<button class="btn min-h-11 btn-ghost" type="button" onclick={onCancel}>Avbryt</button><button
 				class="btn min-h-11 flex-1 btn-primary"
 				type="submit"
-				disabled={saving || !name.trim() || (manageMenu && !categories.length)}
+				disabled={!writable || saving || !name.trim() || (manageMenu && !categories.length)}
 				>{saving ? 'Lagrer …' : 'Lagre'}</button
 			>
 		</footer>

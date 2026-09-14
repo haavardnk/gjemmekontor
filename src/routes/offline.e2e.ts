@@ -46,13 +46,12 @@ test('loads the authenticated app shell without a network connection', async ({
 		await sceneGroup.locator(':scope > summary').click();
 		const firstScene = page.locator('[data-scenario-id="dagensHistorie"]');
 		await firstScene.locator('summary').click();
-		await firstScene.getByRole('button', { name: 'Legg til dagens scener' }).click();
+		await expect(firstScene.getByRole('button', { name: 'Legg til dagens scener' })).toBeDisabled();
+	} else {
+		await selectedScene.locator('summary').click();
+		const firstShot = selectedScene.getByRole('button').first();
+		await expect(firstShot).toBeDisabled();
 	}
-	await selectedScene.locator('summary').click();
-	const firstShot = selectedScene.getByRole('button').first();
-	await expect(firstShot).toBeEnabled();
-	await firstShot.click();
-	await expect(firstShot).toHaveAttribute('aria-pressed', 'true');
 
 	await page.getByRole('link', { name: 'Loggbok' }).click();
 	await expect(page.getByRole('heading', { name: 'Loggbok' })).toBeVisible();

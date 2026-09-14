@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { FileCheck2, FileUp, RefreshCw } from '@lucide/svelte';
 
+	import { connectivity } from '$lib/client/connectivity.svelte';
+
 	import { mooringChoices } from '../domain/logbook';
 	import LocationInput from './LocationInput.svelte';
 	import type { LogbookLegDraft } from './logbook-leg-draft';
@@ -161,7 +163,12 @@
 		{#if draft.error}<p class="mt-3 text-sm text-error" role="alert">{draft.error}</p>{/if}
 		<div class="modal-action">
 			<button class="btn" type="button" onclick={onclose}>Avbryt</button>
-			<button class="btn btn-primary" type="button" disabled={!canSave} onclick={onsave}>
+			<button
+				class="btn btn-primary"
+				type="button"
+				disabled={!connectivity.online || !canSave}
+				onclick={onsave}
+			>
 				{draft.editingKey ? 'Lagre endringer' : 'Lagre etappe'}
 			</button>
 		</div>

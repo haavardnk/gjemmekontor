@@ -1,9 +1,9 @@
-import type { OfflineResourceMutation } from '$lib/client/offline-resource';
+import type { CachedResourceMutation } from '$lib/client/cached-resource';
 
 import type { GearCategory, GearItemView, GearPageData } from '../domain/gear';
 import type { GearCategoryDraft, GearItemDraft } from './gear-editor';
 
-export type GearMutation = OfflineResourceMutation<GearPageData>;
+export type GearMutation = CachedResourceMutation<GearPageData>;
 
 export function saveGearCategory(
 	data: GearPageData,

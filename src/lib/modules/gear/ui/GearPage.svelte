@@ -2,14 +2,15 @@
 	import { onMount } from 'svelte';
 
 	import { page } from '$app/state';
-	import { createOfflineResource } from '$lib/client/offline-resource';
+	import { createCachedResource } from '$lib/client/cached-resource';
+	import { connectivity } from '$lib/client/connectivity.svelte';
+	import { gearCache } from '$lib/modules/gear/client/cache';
 	import {
 		filterGearItems,
 		type GearAvailability,
 		type GearCategory,
 		type GearItemSort,
 		type GearItemView,
-		gearPageDataSchema,
 		type GearPersonView,
 		gearProgress,
 		repositionGearCategory,
@@ -62,11 +63,8 @@
 	let itemDraft = $state(emptyGearItemDraft());
 
 	let filtersDialog = $state<HTMLDialogElement>(undefined!);
-	const resource = createOfflineResource({
-		moduleId: 'gear',
-		snapshotKey: 'gear:snapshot:current',
-		endpoint: '/api/gear',
-		schema: gearPageDataSchema,
+	const resource = createCachedResource({
+		...gearCache,
 		read: () => ({ people, categories, items }),
 		write: (value) => {
 			people = value.people;
@@ -187,6 +185,7 @@
 	}
 
 	function openCategory(category?: GearCategory): void {
+		if (!connectivity.online) return;
 		categoryDraft = { editing: category, name: category?.name ?? '' };
 		errorMessage = '';
 		categoryDialog.showModal();
@@ -194,7 +193,7 @@
 
 	async function saveCategory(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		if (!categoryDraft.name.trim() || saving) return;
+		if (!connectivity.online || !categoryDraft.name.trim() || saving) return;
 		saving = true;
 		try {
 			await resource.commitMutation(saveGearCategory(resource.current(), categoryDraft));
@@ -210,6 +209,7 @@
 	}
 
 	function openItem(categoryId: string, item?: GearItemView, ownerId?: string): void {
+		if (!connectivity.online) return;
 		itemDraft = {
 			editing: item,
 			categoryId: item?.categoryId ?? categoryId,
@@ -228,7 +228,7 @@
 
 	async function saveItem(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		if (!itemDraft.name.trim() || !itemDraft.categoryId || saving) return;
+		if (!connectivity.online || !itemDraft.name.trim() || !itemDraft.categoryId || saving) return;
 		saving = true;
 		try {
 			await resource.commitMutation(saveGearItem(resource.current(), itemDraft));
@@ -244,6 +244,7 @@
 	}
 
 	async function deleteItem(item: GearItemView): Promise<void> {
+		if (!connectivity.online) return;
 		if (!window.confirm(`Arkivere ${item.name}? Ingen data slettes.`)) return;
 		try {
 			await resource.commitMutation(archiveGearItem(resource.current(), item.id));
@@ -253,15 +254,18 @@
 	}
 
 	async function setPlanned(item: GearItemView, planned: boolean): Promise<void> {
+		if (!connectivity.online) return;
 		await resource.commitMutation(setGearItemPlanned(resource.current(), item.id, planned));
 	}
 
 	async function removeFromPlan(item: GearItemView): Promise<void> {
+		if (!connectivity.online) return;
 		if (!window.confirm(`Fjerne ${item.name} fra denne utstyrslisten? Den blir i arkivet.`)) return;
 		await setPlanned(item, false);
 	}
 
 	async function deleteCategory(category: GearCategory): Promise<void> {
+		if (!connectivity.online) return;
 		const categoryItems = items.filter((item) => item.categoryId === category.id);
 		if (categoryItems.length) {
 			window.alert(
@@ -278,6 +282,7 @@
 	}
 
 	async function setPacked(item: GearItemView, packed: boolean): Promise<void> {
+		if (!connectivity.online) return;
 		if (item.availability !== 'available') return;
 		try {
 			await resource.commitMutation(setGearItemPacked(resource.current(), item.id, packed));
@@ -287,6 +292,7 @@
 	}
 
 	async function markAvailable(item: GearItemView): Promise<void> {
+		if (!connectivity.online) return;
 		try {
 			await resource.commitMutation(markGearItemAvailable(resource.current(), item.id));
 		} catch (error) {
@@ -298,16 +304,19 @@
 	}
 
 	async function resetPacking(): Promise<void> {
+		if (!connectivity.online) return;
 		const packedItems = plannedItems.filter((item) => item.packed);
 		if (!packedItems.length || !window.confirm('Nullstille alle avhukinger i pakkelisten?')) return;
 		await resource.commitMutation(resetGearPacking(resource.current()));
 	}
 
 	async function persistCategoryOrder(reordered: ReturnType<typeof repositionGearCategory>) {
+		if (!connectivity.online) return;
 		await resource.commitMutation(reorderGearCategories(resource.current(), reordered));
 	}
 
 	async function moveCategory(category: GearCategory, offset: -1 | 1): Promise<void> {
+		if (!connectivity.online) return;
 		const currentIndex = categories.findIndex((candidate) => candidate.id === category.id);
 		const targetIndex = currentIndex + offset;
 		if (targetIndex < 0 || targetIndex >= categories.length) return;
@@ -315,6 +324,7 @@
 	}
 
 	async function dropCategory(sourceId: string, targetCategoryId: string): Promise<void> {
+		if (!connectivity.online) return;
 		if (!sourceId || sourceId === targetCategoryId) return;
 		const targetIndex = categories.findIndex((category) => category.id === targetCategoryId);
 		if (targetIndex < 0) return;
@@ -328,6 +338,7 @@
 	}
 
 	async function retainItem(item: GearItemView): Promise<void> {
+		if (!connectivity.online) return;
 		try {
 			await resource.commitMutation(retainGearItem(resource.current(), item.id));
 		} catch {
@@ -377,6 +388,7 @@
 		{hasFilters}
 		{categoryNames}
 		{ownerNames}
+		writable={connectivity.online}
 		{openCategory}
 		{openItem}
 		{deleteItem}

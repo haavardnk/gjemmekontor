@@ -13,8 +13,8 @@
 
 	import { page } from '$app/state';
 	import { ApiError, apiRequest } from '$lib/client/api';
-	import { createOfflineResource } from '$lib/client/offline-resource';
-	import { watchOnlineStatus } from '$lib/client/online';
+	import { createCachedResource } from '$lib/client/cached-resource';
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		actualRouteFeatures,
@@ -25,9 +25,9 @@
 		visibleActualRoutes
 	} from '$lib/modules/logbook/public';
 	import { startAisPolling } from '$lib/modules/map/client/ais-poller';
+	import { mapCache } from '$lib/modules/map/client/cache';
 	import {
 		downloadOfflineMap,
-		mapSnapshotKey,
 		removeOfflineMap,
 		storedOfflineMaps
 	} from '$lib/modules/map/client/offline';
@@ -42,7 +42,6 @@
 		type MapFeature,
 		type MapMode,
 		type MapSnapshot,
-		mapSnapshotSchema,
 		type OfflineMapManifest,
 		type OfflineMapPackage
 	} from '$lib/modules/map/domain/types';
@@ -82,7 +81,7 @@
 		logbookEnabled ? loggedNauticalMiles(sharedState.values, tripDays) : 0
 	);
 	let mode = $state<MapMode>(untrack(() => defaultMode));
-	let online = $state(true);
+	const online = $derived(connectivity.online);
 	let offlinePackages = $state<OfflineMapPackage[]>([]);
 	let offlineMaps = $state<OfflineMapRecord[]>([]);
 	let downloadingMode = $state<MapMode>();
@@ -106,15 +105,8 @@
 	const depthContoursEnabled = $derived(enabledOverlays.includes('depth-contours'));
 	const modeStorageKey = $derived(`mapMode:${tripId}`);
 	const aisStorageKey = $derived(`mapAisEnabled:${tripId}`);
-	const mapResource = createOfflineResource({
-		moduleId: 'map',
-		snapshotKey: mapSnapshotKey,
-		endpoint: '/api/map',
-		select: (response) =>
-			response && typeof response === 'object' && 'snapshot' in response
-				? response.snapshot
-				: undefined,
-		schema: mapSnapshotSchema,
+	const mapResource = createCachedResource({
+		...mapCache,
 		read: () => snapshot,
 		write: (value) => (snapshot = value),
 		onCached: () => {
@@ -353,14 +345,6 @@
 		aisEnabled = aisAllowed && localStorage.getItem(aisStorageKey) !== 'false';
 		aisPreferenceReady = true;
 		pageVisible = document.visibilityState === 'visible';
-		let initialized = false;
-		const stopOnline = watchOnlineStatus((value) => {
-			online = value;
-			if (initialized && online) {
-				void loadOfflineMaps();
-			}
-			initialized = true;
-		});
 		const updateVisibility = (): void => {
 			pageVisible = document.visibilityState === 'visible';
 		};
@@ -369,7 +353,6 @@
 		void loadOfflineMaps();
 		return (): void => {
 			stopResource();
-			stopOnline();
 			document.removeEventListener('visibilitychange', updateVisibility);
 		};
 	});
@@ -418,7 +401,7 @@
 	{/if}
 
 	<div
-		class="absolute inset-x-3 top-3 z-20 flex flex-col gap-2 lg:right-auto lg:w-[32rem]"
+		class="absolute inset-x-3 top-3 z-20 flex flex-col gap-2 lg:right-auto lg:w-lg"
 		data-map-controls
 	>
 		<div class="flex items-start gap-2">

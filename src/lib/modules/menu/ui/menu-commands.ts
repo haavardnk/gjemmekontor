@@ -1,4 +1,4 @@
-import type { OfflineResourceMutation } from '$lib/client/offline-resource';
+import type { CachedResourceMutation } from '$lib/client/cached-resource';
 
 import {
 	consumeDishCategory,
@@ -17,7 +17,7 @@ import {
 	type TripMenuDish
 } from '../domain/menu';
 
-export type MenuMutation = OfflineResourceMutation<MenuPageData>;
+export type MenuMutation = CachedResourceMutation<MenuPageData>;
 
 export type MenuEditingContext = {
 	archive?: RecipeArchiveView;

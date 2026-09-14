@@ -1,4 +1,4 @@
-import { type DBSchema, type IDBPDatabase, openDB } from 'idb';
+import { type DBSchema, type IDBPDatabase, openDB, unwrap } from 'idb';
 
 export type JsonValue =
 	null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -10,15 +10,6 @@ export type ClientStateEntry = {
 	clientId: string;
 	mutationId: string;
 	updatedAt: string;
-};
-
-export type PendingMutation = {
-	mutationId: string;
-	clientId: string;
-	key: string;
-	value: JsonValue;
-	clientTimestamp: number;
-	sequence?: number;
 };
 
 export type ModuleDataRecord = {
@@ -39,43 +30,10 @@ export type MetaRecord = {
 	value: JsonValue;
 };
 
-export type PendingUpload = {
-	id: string;
-	moduleId: string;
-	relatedStateKey: string;
-	path: string;
-	query: Record<string, string>;
-	contentType: string;
-	data: Blob;
-	clientId: string;
-	createdAt: number;
-	expectedResponse: JsonValue;
-};
-
-export type PendingApiCommand = {
-	id: string;
-	moduleId: string;
-	path: string;
-	method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-	body?: JsonValue;
-	createdAt: number;
-	sequence: number;
-};
-
-export type ApiCommandConflict = PendingApiCommand & {
-	status: number;
-	code: string;
-	failedAt: number;
-};
-
 export interface GjemmekontorDatabase extends DBSchema {
 	state: { key: string; value: ClientStateEntry };
-	mutations: { key: string; value: PendingMutation };
 	moduleData: { key: string; value: ModuleDataRecord };
 	moduleBlobs: { key: string; value: ModuleBlobRecord };
-	pendingUploads: { key: string; value: PendingUpload };
-	pendingApiCommands: { key: string; value: PendingApiCommand };
-	apiCommandConflicts: { key: string; value: ApiCommandConflict };
 	meta: { key: string; value: MetaRecord };
 }
 
@@ -87,19 +45,27 @@ export function tripClientDatabaseName(tripId: string): string {
 }
 
 export function openClientDatabase(name: string): Promise<IDBPDatabase<GjemmekontorDatabase>> {
-	return openDB<GjemmekontorDatabase>(name, 2, {
-		upgrade(db, oldVersion): void {
+	return openDB<GjemmekontorDatabase>(name, 3, {
+		upgrade(db, oldVersion, _newVersion, transaction): void {
 			if (oldVersion < 1) {
 				db.createObjectStore('state', { keyPath: 'key' });
-				db.createObjectStore('mutations', { keyPath: 'mutationId' });
 				db.createObjectStore('moduleData', { keyPath: 'key' });
 				db.createObjectStore('moduleBlobs', { keyPath: 'key' });
-				db.createObjectStore('pendingUploads', { keyPath: 'id' });
 				db.createObjectStore('meta', { keyPath: 'key' });
 			}
-			if (oldVersion < 2) {
-				db.createObjectStore('pendingApiCommands', { keyPath: 'id' });
-				db.createObjectStore('apiCommandConflicts', { keyPath: 'id' });
+			if (oldVersion > 0 && oldVersion < 3) {
+				const nativeDatabase = unwrap(db);
+				for (const store of [
+					'mutations',
+					'pendingUploads',
+					'pendingApiCommands',
+					'apiCommandConflicts'
+				]) {
+					if (nativeDatabase.objectStoreNames.contains(store)) {
+						nativeDatabase.deleteObjectStore(store);
+					}
+				}
+				void transaction.objectStore('meta').delete('serverRevision');
 			}
 		}
 	});

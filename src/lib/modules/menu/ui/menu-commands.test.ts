@@ -79,7 +79,7 @@ const editor: MenuEditorValue = {
 };
 
 describe('menu command plans', (): void => {
-	test('creates and activates a new recipe atomically in the optimistic snapshot', (): void => {
+	test('creates and activates a new recipe atomically in the request snapshot', (): void => {
 		const ids = [
 			'66666666-6666-4666-8666-666666666666',
 			'77777777-7777-4777-8777-777777777777',

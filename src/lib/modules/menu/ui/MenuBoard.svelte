@@ -19,6 +19,7 @@
 
 	let {
 		dishes,
+		writable,
 		mobileCategory = $bindable(),
 		onshopping,
 		onrecipe,
@@ -29,6 +30,7 @@
 		onuseLatest
 	}: {
 		dishes: TripMenuDish[];
+		writable: boolean;
 		mobileCategory: MealCategory;
 		onshopping: (scope: 'dish' | 'menu', dishes: TripMenuDish[]) => void;
 		onrecipe: (dish: TripMenuDish) => void;
@@ -44,7 +46,7 @@
 	<button
 		class="btn min-h-10 w-full btn-outline leading-tight btn-sm sm:w-auto"
 		type="button"
-		disabled={!dishes.length}
+		disabled={!writable || !dishes.length}
 		onclick={() => onshopping('menu', [...dishes])}
 		><ShoppingBasket class="shrink-0" size={17} /> Hele menyen til handlelisten</button
 	>
@@ -92,6 +94,7 @@
 								{#if dish.archive.recipeVersion < dish.latestRecipeVersion}<button
 										class="badge shrink-0 badge-sm badge-warning"
 										type="button"
+										disabled={!writable}
 										onclick={() => onuseLatest(dish)}
 										aria-label={`Bruk nyeste versjon av ${dish.archive.name}`}>Ny versjon</button
 									>{/if}
@@ -108,6 +111,7 @@
 								<button
 									class="btn btn-outline btn-sm"
 									type="button"
+									disabled={!writable}
 									onclick={() => onshopping('dish', [dish])}
 									><ShoppingBasket size={16} />{dish.active.shoppingStatus
 										? 'Legg til igjen'
@@ -117,6 +121,7 @@
 							<div class="grid grid-cols-[minmax(0,1fr)_repeat(4,auto)] gap-1.5">
 								<select
 									class="select-bordered select select-sm"
+									disabled={!writable}
 									aria-label={`Flytt ${dish.archive.name}`}
 									onchange={(event) => {
 										const to = event.currentTarget.value as MealCategory;
@@ -132,7 +137,7 @@
 								<button
 									class="btn btn-square btn-ghost btn-sm"
 									type="button"
-									disabled={index === 0}
+									disabled={!writable || index === 0}
 									onclick={() => onreorder(dish, category, -1)}
 									aria-label={`Flytt ${dish.archive.name} opp i ${labels[category].toLocaleLowerCase('nb-NO')}`}
 									><ArrowUp size={17} /></button
@@ -140,7 +145,7 @@
 								<button
 									class="btn btn-square btn-ghost btn-sm"
 									type="button"
-									disabled={index === categoryDishes.length - 1}
+									disabled={!writable || index === categoryDishes.length - 1}
 									onclick={() => onreorder(dish, category, 1)}
 									aria-label={`Flytt ${dish.archive.name} ned i ${labels[category].toLocaleLowerCase('nb-NO')}`}
 									><ArrowDown size={17} /></button
@@ -148,12 +153,14 @@
 								<button
 									class="btn btn-square btn-ghost btn-sm"
 									type="button"
+									disabled={!writable}
 									onclick={() => onedit(dish)}
 									aria-label={`Rediger ${dish.archive.name}`}><Edit3 size={17} /></button
 								>
 								<button
 									class="btn btn-square btn-sm btn-success"
 									type="button"
+									disabled={!writable}
 									onclick={() => onconsume(dish, category)}
 									aria-label={`Marker ${dish.archive.name} som spist til ${labels[category].toLocaleLowerCase('nb-NO')}`}
 									><Check size={17} /></button

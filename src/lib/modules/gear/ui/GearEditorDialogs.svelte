@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import ModalDialog from '$lib/ui/ModalDialog.svelte';
 
 	import type { GearCategory, GearPersonView } from '../domain/gear';
@@ -55,6 +56,7 @@
 			<input
 				class="input w-full"
 				bind:value={categoryDraft.name}
+				disabled={!connectivity.online}
 				maxlength="100"
 				required
 				aria-label="Kategorinavn"
@@ -68,8 +70,10 @@
 				onclick={() => categoryDialog.close()}
 				disabled={saving}>Avbryt</button
 			>
-			<button class="btn btn-primary" type="submit" disabled={saving || !categoryDraft.name.trim()}
-				>Lagre</button
+			<button
+				class="btn btn-primary"
+				type="submit"
+				disabled={!connectivity.online || saving || !categoryDraft.name.trim()}>Lagre</button
 			>
 		</div>
 	</form>
@@ -191,8 +195,10 @@
 				onclick={() => itemDialog.close()}
 				disabled={saving}>Avbryt</button
 			>
-			<button class="btn btn-primary" type="submit" disabled={saving || !itemDraft.name.trim()}
-				>Lagre</button
+			<button
+				class="btn btn-primary"
+				type="submit"
+				disabled={!connectivity.online || saving || !itemDraft.name.trim()}>Lagre</button
 			>
 		</div>
 	</form>

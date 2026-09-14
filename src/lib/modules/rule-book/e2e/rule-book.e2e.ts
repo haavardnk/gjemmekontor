@@ -26,7 +26,7 @@ async function login(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-test('starts a fixed rotation offline and keeps a synchronized numbered rule book', async ({
+test('keeps the synchronized rule book readable and disables changes offline', async ({
 	context,
 	page
 }) => {
@@ -39,8 +39,6 @@ test('starts a fixed rotation offline and keeps a synchronized numbered rule boo
 	await expect(page.getByRole('heading', { name: 'Regelboka', level: 1 })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Mer' })).toHaveAttribute('aria-current', 'page');
 	await expect(page.getByLabel('Tilgjengelig uten nett')).toBeVisible();
-	await context.setOffline(true);
-
 	const includedNames = ['Ada', 'Bo'];
 	const excludedNames = ['Cleo', 'Dina', 'Eli', 'Finn'];
 	for (const name of [...includedNames, ...excludedNames]) {
@@ -84,9 +82,12 @@ test('starts a fixed rotation offline and keeps a synchronized numbered rule boo
 		})
 	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Endre deltakere' })).toHaveCount(0);
-	await expect(page.getByRole('status')).toContainText(/Uten nett/);
+	await context.setOffline(true);
 	await page.reload();
 	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toHaveValue(rule);
+	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Lagre endring' })).toBeDisabled();
+	await expect(page.getByRole('status')).toContainText('Uten nett · kun lesing');
 	await context.setOffline(false);
 	await page.evaluate(() => window.dispatchEvent(new Event('online')));
 	await expect(page.getByRole('status')).toHaveText('Synkronisert', { timeout: 15_000 });

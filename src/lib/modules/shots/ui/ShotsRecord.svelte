@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ChevronDown, CirclePlus, Search, X } from '@lucide/svelte';
 
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import { sharedState } from '$lib/client/state.svelte';
 	import type { TripDay } from '$lib/trip/itinerary';
 
@@ -58,14 +59,17 @@
 	}
 
 	function toggle(key: string): void {
+		if (!connectivity.online) return;
 		void sharedState.set(key, !checked(key));
 	}
 
 	function addScenario(id: string): void {
+		if (!connectivity.online) return;
 		void sharedState.set(fieldKey(`scenario:${id}`), true);
 	}
 
 	function removeScenario(id: string): void {
+		if (!connectivity.online) return;
 		void sharedState.set(fieldKey(`scenario:${id}`), false);
 	}
 
@@ -119,7 +123,7 @@
 								<button
 									class={`flex w-full items-start gap-2 rounded p-2 text-left text-sm hover:bg-base-200 ${checked(fieldKey(`${item.optional ? 'activity' : 'module'}:${item.id}:${index}`)) ? 'bg-primary/10' : ''}`}
 									type="button"
-									disabled={!sharedState.ready}
+									disabled={!sharedState.ready || !connectivity.online}
 									onclick={() =>
 										toggle(
 											fieldKey(`${item.optional ? 'activity' : 'module'}:${item.id}:${index}`)
@@ -152,6 +156,7 @@
 								<button
 									class="btn mt-2 btn-ghost btn-sm"
 									type="button"
+									disabled={!connectivity.online}
 									onclick={() => removeScenario(item.id)}
 								>
 									<X size={16} />
@@ -239,7 +244,7 @@
 										<button
 											class="btn w-full btn-primary btn-sm"
 											type="button"
-											disabled={!sharedState.ready}
+											disabled={!sharedState.ready || !connectivity.online}
 											onclick={() => addScenario(moduleId)}
 										>
 											<CirclePlus size={16} />

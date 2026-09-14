@@ -2,6 +2,7 @@
 	import { LoaderCircle, ScrollText, Shuffle, Users } from '@lucide/svelte';
 
 	import { page } from '$app/state';
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		activeRuleBookGameSchema,
@@ -67,6 +68,7 @@
 	});
 
 	async function setParticipation(member: RuleBookMember, participating: boolean): Promise<void> {
+		if (!connectivity.online) return;
 		errorMessage = '';
 		try {
 			await sharedState.set(ruleBookPreferenceKey(member.id), !participating);
@@ -76,7 +78,7 @@
 	}
 
 	async function startGame(): Promise<void> {
-		if (activeGame || participants.length < 2 || saving) return;
+		if (!connectivity.online || activeGame || participants.length < 2 || saving) return;
 		saving = true;
 		try {
 			const timestamp = new Date().toISOString();
@@ -97,7 +99,7 @@
 	}
 
 	async function returnToSetup(): Promise<void> {
-		if (!activeGame || rules.length > 0) return;
+		if (!connectivity.online || !activeGame || rules.length > 0) return;
 		if (!window.confirm('Vil du endre deltakerne? Det trekkes en ny rekkefølge.')) return;
 		saving = true;
 		try {
@@ -113,7 +115,14 @@
 	async function saveRule(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
 		const text = ruleText.trim();
-		if (!text || !activeGame || selectedRuleDayIndex === undefined || saving) return;
+		if (
+			!connectivity.online ||
+			!text ||
+			!activeGame ||
+			selectedRuleDayIndex === undefined ||
+			saving
+		)
+			return;
 		saving = true;
 		try {
 			const timestamp = new Date().toISOString();
@@ -154,6 +163,7 @@
 					class="btn shrink-0 btn-outline btn-sm"
 					type="button"
 					onclick={returnToSetup}
+					disabled={!connectivity.online || saving}
 					aria-label="Endre deltakere"
 					title="Endre deltakere"
 				>
@@ -194,6 +204,7 @@
 									id={`rule-book-member-${member.id}`}
 									class="checkbox checkbox-sm checkbox-primary"
 									type="checkbox"
+									disabled={!connectivity.online || saving}
 									checked={!member.optedOut}
 									onchange={(event) => setParticipation(member, event.currentTarget.checked)}
 								/>
@@ -216,7 +227,7 @@
 				class="btn mt-5 w-full btn-primary"
 				type="button"
 				onclick={startGame}
-				disabled={participants.length < 2 || saving}
+				disabled={!connectivity.online || participants.length < 2 || saving}
 			>
 				{#if saving}<LoaderCircle class="animate-spin" size={18} />{:else}<Shuffle size={18} />{/if}
 				Start spillet
@@ -278,13 +289,14 @@
 					id="daily-rule"
 					class="textarea mt-2 min-h-24 w-full"
 					bind:value={ruleText}
+					disabled={!connectivity.online}
 					maxlength="500"
 					placeholder="Skriv dagens regel …"></textarea>
 				<div class="mt-2 flex justify-end">
 					<button
 						class="btn btn-primary btn-sm"
 						type="submit"
-						disabled={!ruleText.trim() || saving}
+						disabled={!connectivity.online || !ruleText.trim() || saving}
 					>
 						{#if saving}<LoaderCircle class="animate-spin" size={17} />{/if}
 						{selectedRule ? 'Lagre endring' : 'Legg til regel'}

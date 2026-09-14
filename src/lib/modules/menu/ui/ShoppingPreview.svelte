@@ -5,6 +5,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { apiRequest } from '$lib/client/api';
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import type { CurrentDish } from '$lib/modules/menu/domain/menu';
 	import type {
 		MenuShoppingPreview,
@@ -62,6 +63,7 @@
 	}
 
 	async function loadPreview(): Promise<void> {
+		if (!connectivity.online) return;
 		loading = true;
 		error = '';
 		try {
@@ -123,7 +125,7 @@
 	}
 
 	async function rematchRow(id: string, sourceName: string): Promise<void> {
-		if (!preview || matchingRowId) return;
+		if (!connectivity.online || !preview || matchingRowId) return;
 		const editedRow = rows.find((row) => row.id === id);
 		if (!editedRow) return;
 		matchingRowId = id;
@@ -162,7 +164,7 @@
 	}
 
 	async function apply(): Promise<void> {
-		if (!preview || !canApply || applying) return;
+		if (!connectivity.online || !preview || !canApply || applying) return;
 		applying = true;
 		error = '';
 		try {
@@ -334,7 +336,7 @@
 			<button class="btn btn-ghost" type="button" onclick={onClose}>Avbryt</button><button
 				class="btn btn-primary"
 				type="button"
-				disabled={!canApply || applying || loading}
+				disabled={!connectivity.online || !canApply || applying || loading}
 				onclick={apply}
 				>{#if applying}<LoaderCircle class="animate-spin" size={18} />{/if}<ShoppingBasket
 					size={18}

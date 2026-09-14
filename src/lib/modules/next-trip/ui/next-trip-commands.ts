@@ -1,4 +1,4 @@
-import type { OfflineResourceMutation } from '$lib/client/offline-resource';
+import type { CachedResourceMutation } from '$lib/client/cached-resource';
 
 import {
 	type NextTripPageData,
@@ -7,7 +7,7 @@ import {
 	upsertSuggestionRating
 } from '../domain/next-trip';
 
-export type NextTripMutation = OfflineResourceMutation<NextTripPageData>;
+export type NextTripMutation = CachedResourceMutation<NextTripPageData>;
 
 export function deleteNextTripSuggestion(
 	data: NextTripPageData,

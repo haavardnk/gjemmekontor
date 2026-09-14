@@ -4,15 +4,15 @@
 
 	import { page } from '$app/state';
 	import { apiRequest } from '$lib/client/api';
-	import { createOfflineResource } from '$lib/client/offline-resource';
-	import { watchOnlineStatus } from '$lib/client/online';
+	import { createCachedResource } from '$lib/client/cached-resource';
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import { sharedState } from '$lib/client/state.svelte';
+	import { menuCache } from '$lib/modules/menu/client/cache';
 	import {
 		mealCategories,
 		type MealCategory,
 		type MenuArchive,
 		type MenuEditorValue,
-		menuPageDataSchema,
 		type RecipeArchiveView,
 		type TripMenuDish
 	} from '$lib/modules/menu/domain/menu';
@@ -44,18 +44,14 @@
 	let view = $state<'menu' | 'archive'>('menu');
 	let mobileCategory = $state<MealCategory>('breakfast');
 	let query = $state('');
-	let online = $state(true);
 	let editing = $state<MenuEditingContext>();
 	let recipe = $state<{ archive: MenuArchive; plannedServings: number }>();
 	let activating = $state<RecipeArchiveView>();
 	let activationCategories = $state<MealCategory[]>(['dinner']);
 	let activationServings = $state(4);
 	let shoppingScope = $state<{ scope: 'dish' | 'menu'; dishes: TripMenuDish[] }>();
-	const resource = createOfflineResource({
-		moduleId: 'menu',
-		snapshotKey: 'menu:snapshot:current',
-		endpoint: '/api/menu',
-		schema: menuPageDataSchema,
+	const resource = createCachedResource({
+		...menuCache,
 		read: () => ({ archives, dishes }),
 		write: (value) => {
 			archives = value.archives;
@@ -84,6 +80,7 @@
 	}
 
 	async function saveEditor(value: MenuEditorValue): Promise<void> {
+		if (!connectivity.online) return;
 		const context = editing;
 		if (!context) return;
 		await resource.commitMutation(
@@ -94,7 +91,7 @@
 	}
 
 	async function importRecipe(url: string): Promise<Partial<MenuEditorValue> | undefined> {
-		if (!online) throw new Error('OFFLINE');
+		if (!connectivity.online) throw new Error('OFFLINE');
 		return apiRequest<Partial<MenuEditorValue>>('/api/menu/import', {
 			method: 'POST',
 			json: { url },
@@ -103,13 +100,14 @@
 	}
 
 	function openActivation(archive: RecipeArchiveView): void {
+		if (!connectivity.online) return;
 		activating = archive;
 		activationCategories = ['dinner'];
 		activationServings = archive.defaultPlannedServings;
 	}
 
 	async function activate(): Promise<void> {
-		if (!activating || !activationCategories.length) return;
+		if (!connectivity.online || !activating || !activationCategories.length) return;
 		await resource.commitMutation(
 			activateMenuArchive(
 				resource.current(),
@@ -124,6 +122,7 @@
 	}
 
 	async function consume(dish: TripMenuDish, category: MealCategory): Promise<void> {
+		if (!connectivity.online) return;
 		const final = dish.active.categories.length === 1;
 		if (
 			!window.confirm(
@@ -137,6 +136,7 @@
 	}
 
 	async function move(dish: TripMenuDish, from: MealCategory, to: MealCategory): Promise<void> {
+		if (!connectivity.online) return;
 		await resource.commitMutation(moveMenuDish(resource.current(), dish, from, to));
 	}
 
@@ -145,11 +145,13 @@
 		category: MealCategory,
 		offset: -1 | 1
 	): Promise<void> {
+		if (!connectivity.online) return;
 		const mutation = reorderMenuDish(resource.current(), dish, category, offset);
 		if (mutation) await resource.commitMutation(mutation);
 	}
 
 	async function archiveRecipe(archive: RecipeArchiveView): Promise<void> {
+		if (!connectivity.online) return;
 		const active = activeById.get(archive.id);
 		const message = active
 			? `Arkivere ${archive.name}? Den skjules i Arkiv, men blir liggende i denne menyen.`
@@ -159,11 +161,13 @@
 	}
 
 	async function useLatestRecipe(dish: TripMenuDish): Promise<void> {
+		if (!connectivity.online) return;
 		const latest = latestArchiveById.get(dish.archive.id);
 		await resource.commitMutation(useLatestMenuRecipe(resource.current(), dish, latest));
 	}
 
 	function useExisting(archive: MenuArchive): void {
+		if (!connectivity.online) return;
 		editing = undefined;
 		const result = menuEditorForExistingArchive(archives, dishes, archive);
 		if (!result) return;
@@ -183,6 +187,7 @@
 	}
 
 	function openDishEditor(dish: TripMenuDish): void {
+		if (!connectivity.online) return;
 		const archive = latestArchiveById.get(dish.archive.id) ?? dish.archive;
 		editing = {
 			archive,
@@ -194,6 +199,7 @@
 	}
 
 	function openArchiveEditor(archive: RecipeArchiveView, dish?: TripMenuDish): void {
+		if (!connectivity.online) return;
 		editing = {
 			archive,
 			active: dish?.active,
@@ -204,6 +210,7 @@
 	}
 
 	function openShopping(scope: 'dish' | 'menu', selectedDishes: TripMenuDish[]): void {
+		if (!connectivity.online) return;
 		shoppingScope = { scope, dishes: selectedDishes };
 	}
 
@@ -214,12 +221,8 @@
 	}
 
 	onMount(() => {
-		const stopOnline = watchOnlineStatus((value) => (online = value));
 		const stopResource = resource.start();
-		return (): void => {
-			stopResource();
-			stopOnline();
-		};
+		return stopResource;
 	});
 </script>
 
@@ -238,15 +241,16 @@
 			<button
 				class="btn btn-primary btn-sm"
 				type="button"
+				disabled={!connectivity.online}
 				onclick={() => (editing = { activateOnSave: true, initial: emptyMenuEditor() })}
 				><Plus size={17} /> Ny rett</button
 			>
 		</div>
 	</header>
 
-	{#if !online}<div class="mb-4 alert py-2 text-sm">
+	{#if !connectivity.online}<div class="mb-4 alert py-2 text-sm">
 			<WifiOff size={17} /><span
-				>Oppskrifter og menyvalg virker uten nett. Import og Handleliste krever nett.</span
+				>Frakoblet · oppskrifter kan leses, men menyen er skrivebeskyttet.</span
 			>
 		</div>{/if}
 
@@ -269,6 +273,7 @@
 	{#if view === 'menu'}
 		<MenuBoard
 			{dishes}
+			writable={connectivity.online}
 			bind:mobileCategory
 			onshopping={openShopping}
 			onrecipe={showDishRecipe}
@@ -281,6 +286,7 @@
 	{:else}
 		<RecipeArchive
 			archives={filteredArchives}
+			writable={connectivity.online}
 			{dishById}
 			bind:query
 			onrecipe={showArchiveRecipe}
@@ -296,6 +302,7 @@
 			{archives}
 			isNew={!editing.archive}
 			manageMenu={editing.activateOnSave}
+			writable={connectivity.online}
 			onCancel={() => (editing = undefined)}
 			onSave={saveEditor}
 			onImport={importRecipe}
@@ -321,7 +328,7 @@
 			<h2 id="activate-title" class="font-display text-2xl font-bold">
 				Legg til {activating.name}
 			</h2>
-			<fieldset class="mt-4">
+			<fieldset class="mt-4" disabled={!connectivity.online}>
 				<legend class="mb-2 font-bold">Vis i</legend
 				>{#each mealCategories as category (category)}<label
 						class="label cursor-pointer justify-start gap-3"
@@ -348,7 +355,7 @@
 				><button
 					class="btn btn-primary"
 					type="button"
-					disabled={!activationCategories.length}
+					disabled={!connectivity.online || !activationCategories.length}
 					onclick={activate}>Legg til</button
 				>
 			</div>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { CirclePlus, Film, Trash2 } from '@lucide/svelte';
 
+	import { connectivity } from '$lib/client/connectivity.svelte';
 	import { sharedState } from '$lib/client/state.svelte';
 	import type { TripDay } from '$lib/trip/itinerary';
 
@@ -28,6 +29,7 @@
 	}
 
 	function toggle(key: string): void {
+		if (!connectivity.online) return;
 		void sharedState.set(key, !checked(key));
 	}
 
@@ -37,6 +39,7 @@
 	}
 
 	function saveText(key: string, event: Event): void {
+		if (!connectivity.online) return;
 		const input = event.currentTarget;
 		if (input instanceof HTMLTextAreaElement) {
 			void sharedState.set(key, input.value.trim());
@@ -44,6 +47,7 @@
 	}
 
 	function openAdd(): void {
+		if (!connectivity.online) return;
 		adding = true;
 		description = '';
 		camera = cameraChoices[0] ?? 'Annet';
@@ -52,7 +56,7 @@
 	}
 
 	async function addMedia(): Promise<void> {
-		if (!description.trim()) {
+		if (!connectivity.online || !description.trim()) {
 			return;
 		}
 		const id = crypto.randomUUID();
@@ -70,6 +74,7 @@
 	}
 
 	function deleteMedia(key: string, row: MediaRow): void {
+		if (!connectivity.online) return;
 		void sharedState.set(key, serializeMediaRow({ ...row, tombstone: true }));
 	}
 </script>
@@ -82,6 +87,7 @@
 				class="textarea min-h-28 w-full bg-base-100"
 				placeholder="Hva handler dagen om?"
 				value={textValue(`digest:d${day.index}:story`)}
+				disabled={!connectivity.online}
 				onchange={(event) => saveText(`digest:d${day.index}:story`, event)}></textarea>
 		</label>
 		<label class="block">
@@ -90,6 +96,7 @@
 				class="textarea min-h-28 w-full bg-base-100"
 				placeholder="Hva skulle dere gjerne hatt?"
 				value={textValue(`digest:d${day.index}:missing`)}
+				disabled={!connectivity.online}
 				onchange={(event) => saveText(`digest:d${day.index}:missing`, event)}></textarea>
 		</label>
 	</div>
@@ -103,7 +110,7 @@
 			<button
 				class="btn btn-primary btn-sm"
 				type="button"
-				disabled={!sharedState.ready}
+				disabled={!sharedState.ready || !connectivity.online}
 				onclick={openAdd}
 			>
 				<CirclePlus size={17} />
@@ -124,6 +131,7 @@
 					<button
 						class="btn btn-square btn-ghost btn-sm"
 						type="button"
+						disabled={!connectivity.online}
 						onclick={() => deleteMedia(row.key, row)}
 						aria-label="Slett rad"
 						title="Slett rad"
@@ -154,7 +162,7 @@
 							<input
 								class="checkbox mt-0.5 checkbox-sm"
 								type="checkbox"
-								disabled={!sharedState.ready}
+								disabled={!sharedState.ready || !connectivity.online}
 								checked={checked(fieldKey(`backup:${index}`))}
 								onchange={() => toggle(fieldKey(`backup:${index}`))}
 							/>
@@ -173,7 +181,7 @@
 							<input
 								class="checkbox checkbox-sm"
 								type="checkbox"
-								disabled={!sharedState.ready}
+								disabled={!sharedState.ready || !connectivity.online}
 								checked={checked(fieldKey(`offload:${index}`))}
 								onchange={() => toggle(fieldKey(`offload:${index}`))}
 							/>
@@ -222,7 +230,9 @@
 				<button
 					class="btn btn-primary"
 					type="button"
-					disabled={!description.trim() || (camera === 'Annet' && !customCamera.trim())}
+					disabled={!connectivity.online ||
+						!description.trim() ||
+						(camera === 'Annet' && !customCamera.trim())}
 					onclick={addMedia}
 				>
 					Lagre
