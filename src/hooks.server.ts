@@ -16,6 +16,8 @@ import {
 	sessionCookieName
 } from '$lib/server/auth';
 import { getRuntimeConfig } from '$lib/server/env';
+import { liveInvalidation } from '$lib/server/live-invalidation';
+import { liveUpdates } from '$lib/server/live-updates';
 
 const publicPaths = new Set(['/trips', '/admin/login', '/api/health']);
 
@@ -171,6 +173,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 	if (idempotentModuleCommand && event.locals.trip && response.ok) {
 		rememberApiCommand(db, event.locals.trip.id, idempotencyKey);
+	}
+	if (response.ok) {
+		const invalidation = liveInvalidation(pathname, event.request.method, event.locals.trip?.id);
+		if (invalidation) liveUpdates.publish(invalidation.tripId, invalidation.update);
 	}
 	applySecurityHeaders(response, pathname);
 	return response;
