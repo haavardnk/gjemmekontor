@@ -6,7 +6,6 @@
 	import { sharedState } from '$lib/client/state.svelte';
 	import {
 		activeRuleBookGameSchema,
-		nextSectionNumber,
 		parseRuleBookRule,
 		participantForDay,
 		ruleBookGame,
@@ -66,6 +65,13 @@
 		const currentDate = dateKeyAt(new Date(), timeZone);
 		return currentDate < (days[0]?.date ?? '') ? 'before' : 'after';
 	});
+	const visibleRuleDays = $derived(
+		tripPhase === 'before'
+			? []
+			: tripPhase === 'during' && todayIndex !== undefined
+				? days.slice(0, todayIndex + 1)
+				: days
+	);
 
 	async function setParticipation(member: RuleBookMember, participating: boolean): Promise<void> {
 		if (!connectivity.online) return;
@@ -130,7 +136,7 @@
 				{
 					version: 1,
 					dayIndex: selectedRuleDayIndex,
-					sectionNumber: selectedRule?.sectionNumber ?? nextSectionNumber(rules),
+					sectionNumber: selectedRuleDayIndex + 1,
 					text,
 					createdAt: selectedRule?.createdAt ?? timestamp,
 					createdBy: selectedRule?.createdBy ?? (await sharedState.clientId()),
@@ -265,13 +271,13 @@
 			{/if}
 		</div>
 
-		{#if tripPhase === 'during' && todayParticipant && todayIndex !== undefined}
+		{#if tripPhase === 'during' && todayParticipant && todayIndex !== undefined && selectedRuleDayIndex !== undefined}
 			<form class="mb-5 rounded-box border border-base-300 bg-base-100 p-4" onsubmit={saveRule}>
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<label class="font-semibold text-neutral" for="daily-rule">
 						{selectedRule
-							? `Rediger § ${selectedRule.sectionNumber}`
-							: `§ ${nextSectionNumber(rules)}`}
+							? `Rediger § ${selectedRuleDayIndex + 1}`
+							: `§ ${selectedRuleDayIndex + 1}`}
 					</label>
 					<div>
 						<label class="sr-only" for="rule-book-day">Velg dag</label>
@@ -323,14 +329,21 @@
 
 		<div class="rounded-box border border-base-300 bg-base-100 p-4 sm:p-5">
 			<h2 class="font-display text-2xl font-bold text-neutral">Regelboka</h2>
-			{#if rules.length}
+			{#if visibleRuleDays.length}
 				<ol class="mt-4 space-y-5">
-					{#each rules as rule (rule.dayIndex)}
+					{#each visibleRuleDays as day (day.id)}
+						{@const rule = ruleForDay(rules, day.index)}
 						<li class="grid grid-cols-[auto_1fr] gap-3">
 							<span class="font-display text-lg font-bold whitespace-nowrap text-primary">
-								§ {rule.sectionNumber}
+								§ {day.index + 1}
 							</span>
-							<p class="whitespace-pre-wrap text-base-content">{rule.text}</p>
+							{#if rule}
+								<p class="whitespace-pre-wrap text-base-content">{rule.text}</p>
+							{:else}
+								<p class="text-base-content/55">
+									{participantForDay(activeGame, day.index).name} har ikke lagt inn
+								</p>
+							{/if}
 						</li>
 					{/each}
 				</ol>

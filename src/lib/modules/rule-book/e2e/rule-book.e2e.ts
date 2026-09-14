@@ -63,18 +63,19 @@ test('keeps the synchronized rule book readable and disables changes offline', a
 	await editParticipantsButton.click();
 	expect(confirmationMessage).toBe('Vil du endre deltakerne? Det trekkes en ny rekkefølge.');
 
-	await page.getByText('Rekkefølge', { exact: true }).click();
+	const participantOrder = page.getByText('Rekkefølge', { exact: true }).locator('..');
+	await participantOrder.getByText('Rekkefølge', { exact: true }).click();
 	for (const name of includedNames) {
-		await expect(page.getByRole('listitem').filter({ hasText: name })).toBeVisible();
+		await expect(participantOrder.getByRole('listitem').filter({ hasText: name })).toBeVisible();
 	}
 	for (const name of excludedNames) {
-		await expect(page.getByRole('listitem').filter({ hasText: name })).toHaveCount(0);
+		await expect(participantOrder.getByRole('listitem').filter({ hasText: name })).toHaveCount(0);
 	}
 
 	const rule = `Den siste som står opp lager kaffe ${crypto.randomUUID().slice(0, 8)}`;
-	await page.getByRole('textbox', { name: '§ 1' }).fill(rule);
+	await page.getByRole('textbox', { name: '§ 2' }).fill(rule);
 	await page.getByRole('button', { name: 'Legg til regel' }).click();
-	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toHaveValue(rule);
+	await expect(page.getByRole('textbox', { name: 'Rediger § 2' })).toHaveValue(rule);
 	await expect(page.getByText('Testdag 3', { exact: true })).toBeVisible();
 	await expect(
 		page.getByText(new RegExp(`(${includedNames.join('|')}) lager den neste regelen`), {
@@ -82,10 +83,19 @@ test('keeps the synchronized rule book readable and disables changes offline', a
 		})
 	).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Endre deltakere' })).toHaveCount(0);
+	const book = page.getByRole('heading', { name: 'Regelboka', level: 2 }).locator('..');
+	const sections = book.getByRole('listitem');
+	await expect(sections).toHaveCount(2);
+	await expect(sections.nth(0)).toContainText('§ 1');
+	await expect(sections.nth(0)).toContainText(
+		new RegExp(`(${includedNames.join('|')}) har ikke lagt inn`)
+	);
+	await expect(sections.nth(1)).toContainText('§ 2');
+	await expect(sections.nth(1)).toContainText(rule);
 	await context.setOffline(true);
 	await page.reload();
-	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toHaveValue(rule);
-	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toBeDisabled();
+	await expect(page.getByRole('textbox', { name: 'Rediger § 2' })).toHaveValue(rule);
+	await expect(page.getByRole('textbox', { name: 'Rediger § 2' })).toBeDisabled();
 	await expect(page.getByRole('button', { name: 'Lagre endring' })).toBeDisabled();
 	await expect(page.getByRole('status')).toContainText('Uten nett · kun lesing');
 	await context.setOffline(false);
@@ -94,20 +104,19 @@ test('keeps the synchronized rule book readable and disables changes offline', a
 
 	const missedRule = `Alle må bade før frokost ${crypto.randomUUID().slice(0, 8)}`;
 	await page.getByRole('combobox', { name: 'Velg dag' }).selectOption({ label: 'Testdag 1' });
-	await page.getByRole('textbox', { name: '§ 2' }).fill(missedRule);
+	await page.getByRole('textbox', { name: '§ 1' }).fill(missedRule);
 	await page.getByRole('button', { name: 'Legg til regel' }).click();
 
-	const book = page.getByRole('heading', { name: 'Regelboka', level: 2 }).locator('..');
-	await expect(book.getByText('§ 1', { exact: true })).toBeVisible();
-	await expect(book.getByText(rule, { exact: true })).toBeVisible();
-	await expect(book.getByText('§ 2', { exact: true })).toBeVisible();
-	await expect(book.getByText(missedRule, { exact: true })).toBeVisible();
+	await expect(sections.nth(0)).toContainText('§ 1');
+	await expect(sections.nth(0)).toContainText(missedRule);
+	await expect(sections.nth(1)).toContainText('§ 2');
+	await expect(sections.nth(1)).toContainText(rule);
 	for (const name of includedNames) {
 		await expect(book).not.toContainText(name);
 	}
 
 	await page.reload();
-	await expect(page.getByRole('textbox', { name: 'Rediger § 1' })).toHaveValue(rule);
+	await expect(page.getByRole('textbox', { name: 'Rediger § 2' })).toHaveValue(rule);
 	await expect(page.getByText(rule, { exact: true })).toBeVisible();
 	await expect(page.getByText(missedRule, { exact: true })).toBeVisible();
 

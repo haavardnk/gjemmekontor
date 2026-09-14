@@ -4,7 +4,6 @@ import type { JsonValue } from '$lib/client/database';
 
 import {
 	activeRuleBookGameSchema,
-	nextSectionNumber,
 	participantForDay,
 	ruleBookGame,
 	ruleBookGameKey,
@@ -48,7 +47,7 @@ describe('rule book', () => {
 		]);
 	});
 
-	test('reads valid state, ignores malformed entries, and orders sections', () => {
+	test('reads valid state, ignores malformed entries, and orders sections by day', () => {
 		const values: Record<string, JsonValue> = {
 			[ruleBookGameKey]: {
 				version: 1,
@@ -58,7 +57,7 @@ describe('rule book', () => {
 			[ruleBookRuleKey(1)]: {
 				version: 1,
 				dayIndex: 1,
-				sectionNumber: 2,
+				sectionNumber: 1,
 				text: 'Andre regel',
 				createdAt: '2027-06-02T10:00:00.000Z',
 				createdBy: 'client-1',
@@ -67,7 +66,7 @@ describe('rule book', () => {
 			[ruleBookRuleKey(0)]: {
 				version: 1,
 				dayIndex: 0,
-				sectionNumber: 1,
+				sectionNumber: 2,
 				text: 'Første regel',
 				createdAt: '2027-06-01T10:00:00.000Z',
 				createdBy: 'client-1',
@@ -77,10 +76,11 @@ describe('rule book', () => {
 		};
 
 		expect(ruleBookGame(values)?.status).toBe('setup');
-		expect(ruleBookRules(values, 19).map((rule) => rule.text)).toEqual([
-			'Første regel',
-			'Andre regel'
+		expect(
+			ruleBookRules(values, 19).map((rule) => [rule.dayIndex, rule.sectionNumber, rule.text])
+		).toEqual([
+			[0, 1, 'Første regel'],
+			[1, 2, 'Andre regel']
 		]);
-		expect(nextSectionNumber(ruleBookRules(values, 19))).toBe(3);
 	});
 });

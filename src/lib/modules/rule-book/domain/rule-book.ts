@@ -95,12 +95,10 @@ export function ruleBookRules(values: Record<string, JsonValue>, dayCount: numbe
 			return parsed.success &&
 				validRuleDay(parsed.data, dayCount) &&
 				key === ruleBookRuleKey(parsed.data.dayIndex)
-				? [parsed.data]
+				? [{ ...parsed.data, sectionNumber: parsed.data.dayIndex + 1 }]
 				: [];
 		})
-		.sort(
-			(left, right) => left.sectionNumber - right.sectionNumber || left.dayIndex - right.dayIndex
-		);
+		.sort((left, right) => left.dayIndex - right.dayIndex);
 }
 
 export function ruleForDay(
@@ -108,10 +106,6 @@ export function ruleForDay(
 	dayIndex: number
 ): RuleBookRule | undefined {
 	return rules.find((rule) => rule.dayIndex === dayIndex);
-}
-
-export function nextSectionNumber(rules: readonly RuleBookRule[]): number {
-	return rules.reduce((highest, rule) => Math.max(highest, rule.sectionNumber), 0) + 1;
 }
 
 export function participantForDay(game: ActiveRuleBookGame, dayIndex: number): RuleBookParticipant {
