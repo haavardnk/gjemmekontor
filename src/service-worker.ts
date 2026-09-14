@@ -85,8 +85,8 @@ async function warmPages(paths: readonly string[], tripId: string): Promise<void
 				});
 				const response = await fetch(request);
 				await cachePage(request, response, tripId);
-			} catch {
-				// Preserve an existing cached page when refreshing while connectivity is unavailable.
+			} catch (error) {
+				if (!(error instanceof TypeError)) throw error;
 			}
 		})
 	);
@@ -116,19 +116,30 @@ worker.addEventListener('install', (event): void => {
 
 worker.addEventListener('activate', (event): void => {
 	event.waitUntil(
-		Promise.all([
-			caches.keys().then(async (keys): Promise<void> => {
-				await Promise.all(
+		(async (): Promise<void> => {
+			const keys = await caches.keys();
+			const upgrading = keys.some(
+				(key) => key.startsWith(cachePrefix) && key !== assetCacheName && key !== pageCacheName
+			);
+			await Promise.all([
+				Promise.all(
 					keys
 						.filter(
 							(key) =>
 								key.startsWith(cachePrefix) && key !== assetCacheName && key !== pageCacheName
 						)
 						.map((key) => caches.delete(key))
-				);
-			}),
-			worker.clients.claim()
-		])
+				),
+				worker.clients.claim()
+			]);
+			if (!upgrading) return;
+			const clients = await worker.clients.matchAll({ type: 'window', includeUncontrolled: true });
+			await Promise.all(
+				clients.map((client) =>
+					'url' in client && 'navigate' in client ? client.navigate(client.url) : undefined
+				)
+			);
+		})()
 	);
 });
 
