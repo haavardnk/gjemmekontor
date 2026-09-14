@@ -2,7 +2,8 @@ import type Database from 'better-sqlite3';
 
 import {
 	createNextTripSchema,
-	migrateNextTripSchemaV5
+	migrateNextTripSchemaV5,
+	migrateNextTripSchemaV6
 } from '$lib/modules/next-trip/server/schema';
 import {
 	createCoreSchema,
@@ -14,7 +15,7 @@ import { reconcileBundledTripModules } from './module-reconciliation';
 import { createTripSchema } from './trip-schema';
 
 export const applicationDatabaseSchema: DatabaseSchema = {
-	version: 6,
+	version: 7,
 	create(db): void {
 		createCoreSchema(db);
 		createTripSchema(db);
@@ -27,6 +28,10 @@ export const applicationDatabaseSchema: DatabaseSchema = {
 		}
 		if (fromVersion === 5) {
 			migrateNextTripSchemaV5(db);
+			return;
+		}
+		if (fromVersion === 6) {
+			migrateNextTripSchemaV6(db);
 			return;
 		}
 		throw new Error('DATABASE_VERSION_UNSUPPORTED');

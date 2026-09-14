@@ -13,6 +13,15 @@ export type NextTripRating = {
 	score: number;
 };
 
+export type NextTripComment = {
+	id: string;
+	personId: string;
+	personName: string;
+	body: string;
+	createdAt: string;
+	updatedAt: string;
+};
+
 export type NextTripSuggestion = {
 	id: string;
 	destination: string;
@@ -21,7 +30,9 @@ export type NextTripSuggestion = {
 	submittedByPersonId: string;
 	submittedByName: string;
 	createdAt: string;
+	updatedAt: string;
 	ratings: NextTripRating[];
+	comments: NextTripComment[];
 };
 
 export type NextTripPageData = {
@@ -42,14 +53,31 @@ const nextTripUrlSchema = z
 		}
 	});
 
-export const nextTripSuggestionInputSchema = z
+export const nextTripSuggestionEditInputSchema = z
 	.object({
-		id: z.uuid(),
 		destination: z.string().trim().min(1).max(200),
 		note: z.string().trim().max(1000),
-		url: nextTripUrlSchema,
+		url: nextTripUrlSchema
+	})
+	.strict();
+
+export const nextTripSuggestionInputSchema = nextTripSuggestionEditInputSchema
+	.extend({
+		id: z.uuid(),
 		submittedByPersonId: z.uuid()
 	})
+	.strict();
+
+export const nextTripCommentInputSchema = z
+	.object({
+		id: z.uuid(),
+		personId: z.uuid(),
+		body: z.string().trim().min(1).max(2000)
+	})
+	.strict();
+
+export const nextTripCommentEditInputSchema = z
+	.object({ body: z.string().trim().min(1).max(2000) })
 	.strict();
 
 export const nextTripRatingInputSchema = z
@@ -69,11 +97,24 @@ export const nextTripPageDataSchema = z
 					submittedByPersonId: z.uuid(),
 					submittedByName: z.string(),
 					createdAt: z.iso.datetime(),
+					updatedAt: z.iso.datetime(),
 					ratings: z.array(
 						z
 							.object({
 								personId: z.uuid(),
 								score: z.number().int().min(1).max(5)
+							})
+							.strict()
+					),
+					comments: z.array(
+						z
+							.object({
+								id: z.uuid(),
+								personId: z.uuid(),
+								personName: z.string(),
+								body: z.string().min(1),
+								createdAt: z.iso.datetime(),
+								updatedAt: z.iso.datetime()
 							})
 							.strict()
 					)

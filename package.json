@@ -76,6 +76,7 @@
 		"fast-xml-parser": "^5.11.0",
 		"idb": "^8.0.3",
 		"ipaddr.js": "^2.5.0",
+		"linkify-it": "^6.1.0",
 		"lucide": "^1.33.0",
 		"maplibre-gl": "^6.4.1",
 		"parse-ingredient": "^2.2.0",

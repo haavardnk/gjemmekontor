@@ -7,9 +7,13 @@ import { describe, expect, it } from 'vitest';
 import { createApplicationDatabase } from '$lib/app/server/database';
 
 import {
+	handleAddNextTripComment,
+	handleDeleteNextTripComment,
 	handleDeleteNextTripSuggestion,
 	handleNextTripRating,
 	handleSaveNextTripSuggestion,
+	handleUpdateNextTripComment,
+	handleUpdateNextTripSuggestion,
 	loadNextTripPageData
 } from './library';
 
@@ -269,6 +273,121 @@ describe('next trip server library', () => {
 
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ ignored: true });
+		db.close();
+		rmSync(dataDir, { recursive: true, force: true });
+	});
+
+	it('edits suggestions without changing attribution or ratings', async () => {
+		const dataDir = mkdtempSync(join(tmpdir(), 'gjemmekontor-next-trip-'));
+		const db = createApplicationDatabase(dataDir);
+		seedTrip(db, tripId, 'trip-a', [personId]);
+		await handleSaveNextTripSuggestion(
+			request({
+				id: suggestionId,
+				destination: 'Svalbard',
+				note: '',
+				url: '',
+				submittedByPersonId: personId
+			}),
+			db,
+			tripId,
+			() => new Date(timestamp)
+		);
+		await handleNextTripRating(request({ personId, score: 5 }), db, tripId, suggestionId);
+
+		const response = await handleUpdateNextTripSuggestion(
+			request({
+				destination: 'Longyearbyen',
+				note: 'Nordlys',
+				url: 'https://example.com/svalbard'
+			}),
+			db,
+			tripId,
+			suggestionId,
+			() => new Date('2026-01-02T00:00:00.000Z')
+		);
+
+		expect(response.status).toBe(200);
+		expect(loadNextTripPageData(db, tripId).suggestions[0]).toMatchObject({
+			id: suggestionId,
+			destination: 'Longyearbyen',
+			note: 'Nordlys',
+			url: 'https://example.com/svalbard',
+			submittedByPersonId: personId,
+			createdAt: timestamp,
+			updatedAt: '2026-01-02T00:00:00.000Z',
+			ratings: [{ personId, score: 5 }]
+		});
+		db.close();
+		rmSync(dataDir, { recursive: true, force: true });
+	});
+
+	it('orders, edits, and soft-deletes member comments', async () => {
+		const dataDir = mkdtempSync(join(tmpdir(), 'gjemmekontor-next-trip-'));
+		const db = createApplicationDatabase(dataDir);
+		seedTrip(db, tripId, 'trip-a', [personId, otherPersonId]);
+		await handleSaveNextTripSuggestion(
+			request({
+				id: suggestionId,
+				destination: 'Svalbard',
+				note: '',
+				url: '',
+				submittedByPersonId: personId
+			}),
+			db,
+			tripId
+		);
+		const firstCommentId = '00000000-0000-4000-8000-000000000031';
+		const secondCommentId = '00000000-0000-4000-8000-000000000032';
+		await handleAddNextTripComment(
+			request({ id: secondCommentId, personId: otherPersonId, body: 'Andre' }),
+			db,
+			tripId,
+			suggestionId,
+			() => new Date('2026-01-03T00:00:00.000Z')
+		);
+		await handleAddNextTripComment(
+			request({ id: firstCommentId, personId, body: 'Første' }),
+			db,
+			tripId,
+			suggestionId,
+			() => new Date('2026-01-02T00:00:00.000Z')
+		);
+
+		expect(loadNextTripPageData(db, tripId).suggestions[0]?.comments).toMatchObject([
+			{ id: firstCommentId, personId, body: 'Første' },
+			{ id: secondCommentId, personId: otherPersonId, body: 'Andre' }
+		]);
+
+		await handleUpdateNextTripComment(
+			request({ body: 'Oppdatert' }),
+			db,
+			tripId,
+			suggestionId,
+			firstCommentId,
+			() => new Date('2026-01-04T00:00:00.000Z')
+		);
+		const deleted = handleDeleteNextTripComment(
+			db,
+			tripId,
+			suggestionId,
+			secondCommentId,
+			() => new Date('2026-01-05T00:00:00.000Z')
+		);
+
+		expect(await deleted.json()).toEqual({ deleted: true });
+		expect(loadNextTripPageData(db, tripId).suggestions[0]?.comments).toMatchObject([
+			{
+				id: firstCommentId,
+				body: 'Oppdatert',
+				updatedAt: '2026-01-04T00:00:00.000Z'
+			}
+		]);
+		expect(
+			db
+				.prepare('SELECT body, deleted_at AS deletedAt FROM next_trip_comments WHERE id = ?')
+				.get(secondCommentId)
+		).toEqual({ body: 'Andre', deletedAt: '2026-01-05T00:00:00.000Z' });
 		db.close();
 		rmSync(dataDir, { recursive: true, force: true });
 	});

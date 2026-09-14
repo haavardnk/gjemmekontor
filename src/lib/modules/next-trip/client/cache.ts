@@ -6,7 +6,7 @@ import {
 
 export const nextTripCache: CachedResourceDescriptor<NextTripPageData> = {
 	moduleId: 'next-trip',
-	snapshotKey: 'next-trip:snapshot:current',
+	snapshotKey: 'next-trip:snapshot:v2',
 	endpoint: '/api/next-trip',
 	schema: nextTripPageDataSchema
 };

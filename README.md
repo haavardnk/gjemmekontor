@@ -16,8 +16,9 @@ A shared, offline-first app for planning and using multiple trips.
 - Shared meal planning with recipe import, cooking mode, and Bring shopping list integration
 - Shared gear archive, planning, and packing with categories, owners, purchasing status, and progress
 - Shared trip rule book with a randomized daily participant rotation
+- Shared destination board with ratings, editable suggestions, links, and comments
 - Optional server-side FlightAware lookup for flight times, airports, terminals, gates, and status
-- Offline editing and synchronization between devices
+- Cached offline reading and live synchronization between devices
 - Installable progressive web app
 
 ## Local development
