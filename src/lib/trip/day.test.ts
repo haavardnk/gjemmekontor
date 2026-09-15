@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 
 import { deleteDB } from 'idb';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { openClientDatabase } from '$lib/client/database';
 
@@ -23,6 +23,7 @@ const testDays = Array.from({ length: 19 }, (_, index) => {
 });
 
 afterEach(async (): Promise<void> => {
+	vi.unstubAllGlobals();
 	for (const name of databaseNames.splice(0)) {
 		await deleteDB(name);
 	}
@@ -107,21 +108,48 @@ describe('trip day selection', (): void => {
 		await second.close();
 	});
 
-	test('returns to today on app resume only while the trip is active', async (): Promise<void> => {
-		let now = new Date('2027-06-06T10:00:00.000Z');
+	test('suspends automatic today selection during focused interactions', async (): Promise<void> => {
+		const now = new Date('2027-06-06T10:00:00.000Z');
+		vi.stubGlobal('window', new EventTarget());
 		const controller = state({ databaseName: databaseName(), now: () => now });
-		await controller.initialize();
-		await controller.select(15);
+		await controller.start('test-trip', testDays, testTimeZone);
+		try {
+			await controller.select(2);
+			const resumeTodaySelection = controller.suspendTodaySelection();
 
-		await controller.selectToday();
+			window.dispatchEvent(new Event('focus'));
+			await Promise.resolve();
 
-		expect(controller.selectedIndex).toBe(5);
-		now = new Date('2026-10-01T10:00:00.000Z');
-		await controller.select(12);
-		await controller.selectToday();
-		expect(controller.selectedIndex).toBe(12);
-		expect(controller.todayIndex).toBeUndefined();
-		await controller.close();
+			expect(controller.selectedIndex).toBe(2);
+			expect(controller.todayIndex).toBe(5);
+			expect(controller.showTodayOffer).toBe(false);
+			resumeTodaySelection();
+			window.dispatchEvent(new Event('focus'));
+			await Promise.resolve();
+			expect(controller.selectedIndex).toBe(5);
+			expect(controller.showTodayOffer).toBe(false);
+		} finally {
+			await controller.close();
+		}
+	});
+
+	test('preserves selection on app resume outside the trip calendar', async (): Promise<void> => {
+		vi.stubGlobal('window', new EventTarget());
+		const controller = state({
+			databaseName: databaseName(),
+			now: () => new Date('2026-10-01T10:00:00.000Z')
+		});
+		await controller.start('test-trip', testDays, testTimeZone);
+		try {
+			await controller.select(12);
+			window.dispatchEvent(new Event('focus'));
+			await Promise.resolve();
+
+			expect(controller.selectedIndex).toBe(12);
+			expect(controller.todayIndex).toBeUndefined();
+		} finally {
+			await controller.close();
+		}
 	});
 
 	test('offers the new day after midnight without changing selection', async (): Promise<void> => {

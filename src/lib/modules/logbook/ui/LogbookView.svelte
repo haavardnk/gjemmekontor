@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { CirclePlus, FileCheck2, Pencil, Trash2 } from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 
 	import { page } from '$app/state';
 	import { apiRequest } from '$lib/client/api';
@@ -14,6 +14,7 @@
 		storedMapSnapshot,
 		storeMapSnapshot
 	} from '$lib/modules/map/public';
+	import { tripDayState } from '$lib/trip/day.svelte';
 	import type { TripDay } from '$lib/trip/itinerary';
 
 	import { extractGpxXml, gpxMaximumBytes } from '../domain/gpx';
@@ -41,6 +42,7 @@
 	let locationsReady = $state(false);
 	let addingLeg = $state(false);
 	let draft = $state(newLogbookLegDraft());
+	let resumeTodaySelection: (() => void) | undefined;
 
 	const legs = $derived(logbookLegs(sharedState.values, day.id));
 	const totals = $derived(logbookTotals(legs));
@@ -126,14 +128,22 @@
 
 	function openLeg(): void {
 		if (!connectivity.online) return;
-		addingLeg = true;
+		resumeTodaySelection = tripDayState.suspendTodaySelection();
 		draft = newLogbookLegDraft(legs.at(-1)?.to.name ?? destination?.name ?? '');
+		addingLeg = true;
 	}
 
 	function editLeg(key: string, leg: LogbookLeg): void {
 		if (!connectivity.online) return;
-		addingLeg = true;
+		resumeTodaySelection = tripDayState.suspendTodaySelection();
 		draft = editLogbookLegDraft(key, leg);
+		addingLeg = true;
+	}
+
+	function closeLeg(): void {
+		resumeTodaySelection?.();
+		resumeTodaySelection = undefined;
+		addingLeg = false;
 	}
 
 	function localTime(value: string): string {
@@ -263,7 +273,7 @@
 		} else {
 			await sharedState.set(key, serializeLogbookLeg(parsed.data));
 		}
-		addingLeg = false;
+		closeLeg();
 	}
 
 	function deleteLeg(key: string, leg: LogbookLeg): void {
@@ -314,6 +324,8 @@
 			}
 		})();
 	});
+
+	onDestroy((): void => resumeTodaySelection?.());
 </script>
 
 <div class="space-y-7">
@@ -471,6 +483,6 @@
 		formatDuration={durationSeconds}
 		onimport={importGpx}
 		onsave={addLeg}
-		onclose={() => (addingLeg = false)}
+		onclose={closeLeg}
 	/>
 {/if}

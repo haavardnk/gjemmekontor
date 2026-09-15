@@ -28,11 +28,15 @@ export class TripDayState {
 	private databasePromise: Promise<IDBPDatabase<GjemmekontorDatabase>> | undefined;
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private started = false;
+	private todaySelectionSuspensions = 0;
 	private tripId: string | undefined;
 	private days: readonly TripDay[];
 	private timeZone: string;
 	private readonly resumeToday = (): void => {
-		if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+		if (
+			this.todaySelectionSuspensions > 0 ||
+			(typeof document !== 'undefined' && document.visibilityState === 'hidden')
+		) {
 			return;
 		}
 		void this.selectToday();
@@ -96,6 +100,16 @@ export class TripDayState {
 			return;
 		}
 		await this.select(this.todayIndex);
+	}
+
+	suspendTodaySelection(): () => void {
+		this.todaySelectionSuspensions += 1;
+		let suspended = true;
+		return (): void => {
+			if (!suspended) return;
+			suspended = false;
+			this.todaySelectionSuspensions -= 1;
+		};
 	}
 
 	async selectToday(): Promise<void> {

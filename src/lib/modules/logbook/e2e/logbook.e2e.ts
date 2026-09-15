@@ -20,6 +20,26 @@ function largeGpx(pointCount: number): string {
 	return `<?xml version="1.0"?><gpx creator="Orca App" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Stor etappe</name><trkseg>${points}</trkseg></trk></gpx>`;
 }
 
+test('keeps a previous day selected while importing GPX', async ({ page }) => {
+	await page.clock.setFixedTime(new Date('2027-06-02T10:00:00.000Z'));
+	await login(page);
+	await page.goto('/logbook');
+	const daySelector = page.getByRole('combobox', { name: 'Velg dag' });
+	await expect(daySelector).toHaveValue('1');
+	await daySelector.selectOption('0');
+	await page.getByRole('button', { name: 'Ny etappe' }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.locator('input[type="file"]').setInputFiles({
+		name: 'orca-etappe.gpx',
+		mimeType: 'application/gpx+xml',
+		buffer: Buffer.from(gpx)
+	});
+	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+
+	await expect(daySelector).toHaveValue('0');
+	await expect(dialog.getByRole('alert')).toHaveCount(0);
+});
+
 test('persists daily details and manages journey legs without mobile overflow', async ({
 	page
 }) => {
