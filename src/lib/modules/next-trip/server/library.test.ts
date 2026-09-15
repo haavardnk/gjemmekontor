@@ -9,6 +9,7 @@ import { createApplicationDatabase } from '$lib/app/server/database';
 import {
 	handleAddNextTripComment,
 	handleDeleteNextTripComment,
+	handleDeleteNextTripRating,
 	handleDeleteNextTripSuggestion,
 	handleNextTripRating,
 	handleSaveNextTripSuggestion,
@@ -74,6 +75,43 @@ describe('next trip server library', () => {
 		const data = loadNextTripPageData(db, tripId);
 		expect(data.suggestions[0]?.ratings).toHaveLength(1);
 		expect(data.suggestions[0]?.ratings[0]?.score).toBe(5);
+		db.close();
+		rmSync(dataDir, { recursive: true, force: true });
+	});
+
+	it('removes a member rating idempotently', async () => {
+		const dataDir = mkdtempSync(join(tmpdir(), 'gjemmekontor-next-trip-'));
+		const db = createApplicationDatabase(dataDir);
+		seedTrip(db, tripId, 'trip-a', [personId]);
+		await handleSaveNextTripSuggestion(
+			request({
+				id: suggestionId,
+				destination: 'Svalbard',
+				note: '',
+				url: '',
+				submittedByPersonId: personId
+			}),
+			db,
+			tripId
+		);
+		await handleNextTripRating(request({ personId, score: 5 }), db, tripId, suggestionId);
+
+		const deleted = await handleDeleteNextTripRating(
+			request({ personId }),
+			db,
+			tripId,
+			suggestionId
+		);
+		const repeated = await handleDeleteNextTripRating(
+			request({ personId }),
+			db,
+			tripId,
+			suggestionId
+		);
+
+		expect(await deleted.json()).toEqual({ deleted: true });
+		expect(await repeated.json()).toEqual({ deleted: false });
+		expect(loadNextTripPageData(db, tripId).suggestions[0]?.ratings).toEqual([]);
 		db.close();
 		rmSync(dataDir, { recursive: true, force: true });
 	});

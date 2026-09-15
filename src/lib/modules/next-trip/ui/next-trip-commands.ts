@@ -4,6 +4,7 @@ import {
 	nextTripCommentEditInputSchema,
 	nextTripCommentInputSchema,
 	type NextTripPageData,
+	nextTripRatingDeleteInputSchema,
 	nextTripRatingInputSchema,
 	nextTripSuggestionEditInputSchema,
 	nextTripSuggestionInputSchema,
@@ -209,8 +210,35 @@ export function rateNextTripSuggestion(
 	const input = nextTripRatingInputSchema.parse({ personId, score });
 	if (!data.people.some((person) => person.id === personId))
 		throw new Error('NEXT_TRIP_MEMBER_REQUIRED');
-	if (!data.suggestions.some((suggestion) => suggestion.id === suggestionId)) {
+	const suggestion = data.suggestions.find((candidate) => candidate.id === suggestionId);
+	if (!suggestion) {
 		throw new Error('NEXT_TRIP_SUGGESTION_NOT_FOUND');
+	}
+	const removing = suggestion.ratings.some(
+		(rating) => rating.personId === personId && rating.score === score
+	);
+	if (removing) {
+		const deleteInput = nextTripRatingDeleteInputSchema.parse({ personId });
+		return {
+			next: {
+				...data,
+				suggestions: data.suggestions.map((candidate) =>
+					candidate.id === suggestionId
+						? {
+								...candidate,
+								ratings: candidate.ratings.filter((rating) => rating.personId !== personId)
+							}
+						: candidate
+				)
+			},
+			requests: [
+				{
+					path: `/api/next-trip/suggestions/${suggestionId}/ratings`,
+					method: 'DELETE',
+					body: deleteInput
+				}
+			]
+		};
 	}
 	return {
 		next: {

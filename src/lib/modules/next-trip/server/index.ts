@@ -1,6 +1,7 @@
 export {
 	handleAddNextTripComment,
 	handleDeleteNextTripComment,
+	handleDeleteNextTripRating,
 	handleDeleteNextTripSuggestion,
 	handleNextTripRating,
 	handleSaveNextTripSuggestion,

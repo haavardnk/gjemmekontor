@@ -5,6 +5,7 @@ import { apiError, apiSuccess, parseJsonRequest } from '$lib/server/api';
 import {
 	nextTripCommentEditInputSchema,
 	nextTripCommentInputSchema,
+	nextTripRatingDeleteInputSchema,
 	nextTripRatingInputSchema,
 	nextTripSuggestionEditInputSchema,
 	nextTripSuggestionInputSchema
@@ -185,4 +186,24 @@ export async function handleNextTripRating(
 		 score = excluded.score, updated_at = excluded.updated_at`
 	).run(tripId, suggestionId, parsed.data.personId, parsed.data.score, now().toISOString());
 	return apiSuccess({ score: parsed.data.score });
+}
+
+export async function handleDeleteNextTripRating(
+	request: Request,
+	db: Database.Database,
+	tripId: string,
+	suggestionId: string
+): Promise<Response> {
+	const parsed = await parseJsonRequest(request, nextTripRatingDeleteInputSchema);
+	if (!parsed.success) return apiError('INVALID_NEXT_TRIP_RATING', 400);
+	if (!suggestionExists(db, tripId, suggestionId)) return apiSuccess({ ignored: true });
+	if (!isNextTripMember(db, tripId, parsed.data.personId)) {
+		return apiError('NEXT_TRIP_MEMBER_REQUIRED', 409);
+	}
+	const result = db
+		.prepare(
+			'DELETE FROM next_trip_ratings WHERE trip_id = ? AND suggestion_id = ? AND person_id = ?'
+		)
+		.run(tripId, suggestionId, parsed.data.personId);
+	return apiSuccess({ deleted: result.changes > 0 });
 }

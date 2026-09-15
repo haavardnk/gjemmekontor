@@ -79,6 +79,41 @@ describe('next trip commands', () => {
 		expect(mutation.next.suggestions[0]?.ratings).toEqual([{ personId, score: 5 }]);
 	});
 
+	it('removes an existing rating when the same score is selected again', () => {
+		const suggestionId = '00000000-0000-4000-8000-000000000002';
+		const mutation = rateNextTripSuggestion(
+			{
+				...data,
+				suggestions: [
+					{
+						id: suggestionId,
+						destination: 'Svalbard',
+						note: '',
+						url: '',
+						submittedByPersonId: personId,
+						submittedByName: 'Håvard',
+						createdAt: '2026-01-01T00:00:00.000Z',
+						updatedAt: '2026-01-01T00:00:00.000Z',
+						comments: [],
+						ratings: [{ personId, score: 5 }]
+					}
+				]
+			},
+			suggestionId,
+			personId,
+			5
+		);
+
+		expect(mutation.next.suggestions[0]?.ratings).toEqual([]);
+		expect(mutation.requests).toEqual([
+			{
+				path: `/api/next-trip/suggestions/${suggestionId}/ratings`,
+				method: 'DELETE',
+				body: { personId }
+			}
+		]);
+	});
+
 	it('deletes a suggestion in the request snapshot', () => {
 		const suggestionId = '00000000-0000-4000-8000-000000000002';
 		const mutation = deleteNextTripSuggestion(

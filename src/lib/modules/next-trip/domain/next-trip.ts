@@ -84,6 +84,8 @@ export const nextTripRatingInputSchema = z
 	.object({ personId: z.uuid(), score: z.number().int().min(1).max(5) })
 	.strict();
 
+export const nextTripRatingDeleteInputSchema = z.object({ personId: z.uuid() }).strict();
+
 export const nextTripPageDataSchema = z
 	.object({
 		people: z.array(z.object({ id: z.uuid(), name: z.string() }).strict()),

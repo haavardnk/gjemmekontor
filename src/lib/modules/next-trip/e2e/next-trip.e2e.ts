@@ -57,6 +57,13 @@ test('keeps suggestions readable and disables changes offline', async ({ context
 	await expect(
 		editedCard.getByRole('link', { name: 'Åpne visitnorway.com i ny fane' })
 	).toHaveAttribute('href', 'https://www.visitnorway.com/places-to-go/northern-norway/');
+	const fiveStarRating = editedCard.getByRole('button', { name: '5 stjerner' });
+	await fiveStarRating.click();
+	await expect(fiveStarRating).toHaveAttribute('aria-pressed', 'true');
+	await expect(editedCard.getByText('1 vurdering', { exact: true })).toBeVisible();
+	await fiveStarRating.click();
+	await expect(fiveStarRating).toHaveAttribute('aria-pressed', 'false');
+	await expect(editedCard.getByText('0 vurderinger', { exact: true })).toBeVisible();
 
 	await editedCard.getByRole('button', { name: '0 kommentarer' }).click();
 	await editedCard
@@ -83,6 +90,11 @@ test('keeps suggestions readable and disables changes offline', async ({ context
 	const persistedCard = page.locator('article').filter({
 		has: page.getByRole('heading', { name: 'Lofoten og Vesterålen', level: 3 })
 	});
+	await expect(persistedCard.getByRole('button', { name: '5 stjerner' })).toHaveAttribute(
+		'aria-pressed',
+		'false'
+	);
+	await expect(persistedCard.getByText('0 vurderinger', { exact: true })).toBeVisible();
 	await persistedCard.getByRole('button', { name: '1 kommentar' }).click();
 	await expect(persistedCard.getByText('Endret kommentar med')).toBeVisible();
 
