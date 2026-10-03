@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { PlanningPageData } from '../domain/planning';
 import {
+	addPlanningComment,
 	deletePlanningCategory,
+	deletePlanningComment,
 	placePlanningCard,
+	reactToPlanningCard,
 	savePlanningCard,
-	togglePlanningChecklistItem
+	togglePlanningChecklistItem,
+	updatePlanningComment
 } from './planning-commands';
 
 const personId = '00000000-0000-4000-8000-000000000011';
@@ -50,6 +54,8 @@ const data: PlanningPageData = {
 		checklist: [{ id: itemIds[index], text: 'Punkt', checked: false, checkedByPersonId: null }],
 		links: index === 1 ? [readyLink] : [],
 		photos: index === 0 ? [{ id: photoIds[0], width: 4, height: 3 }] : [],
+		reactions: [],
+		comments: [],
 		createdByPersonId: personId,
 		createdByName: 'Kari',
 		createdAt: timestamp,
@@ -151,5 +157,39 @@ describe('planning commands', () => {
 		expect(() =>
 			togglePlanningChecklistItem(data, cardIds[0], itemIds[0], cardIds[0], true)
 		).toThrow('PLANNING_MEMBER_REQUIRED');
+	});
+
+	it('replaces a reaction and removes it when picked again', () => {
+		const loved = reactToPlanningCard(data, cardIds[0], personId, 'love');
+		const liked = reactToPlanningCard(loved.next, cardIds[0], personId, 'like');
+		const cleared = reactToPlanningCard(liked.next, cardIds[0], personId, 'like');
+
+		expect(liked.next.cards[0]?.reactions).toEqual([{ personId, reaction: 'like' }]);
+		expect(liked.requests).toEqual([
+			{
+				path: `/api/planning/cards/${cardIds[0]}/reactions`,
+				method: 'PUT',
+				body: { personId, reaction: 'like' }
+			}
+		]);
+		expect(cleared.next.cards[0]?.reactions).toEqual([]);
+		expect(cleared.requests).toEqual([
+			{ path: `/api/planning/cards/${cardIds[0]}/reactions`, method: 'DELETE', body: { personId } }
+		]);
+	});
+
+	it('adds, edits, and deletes comments', () => {
+		const commentId = '00000000-0000-4000-8000-000000000071';
+		const added = addPlanningComment(data, cardIds[0], personId, ' Ja! ', () => commentId);
+		const edited = updatePlanningComment(added.next, cardIds[0], commentId, 'Kanskje');
+		const deleted = deletePlanningComment(edited.next, cardIds[0], commentId);
+
+		expect(added.next.cards[0]?.comments).toMatchObject([
+			{ id: commentId, personId, personName: 'Kari', body: 'Ja!' }
+		]);
+		expect(added.requests[0]?.body).toEqual({ id: commentId, personId, body: 'Ja!' });
+		expect(edited.next.cards[0]?.comments[0]?.body).toBe('Kanskje');
+		expect(deleted.next.cards[0]?.comments).toEqual([]);
+		expect(deleted.requests[0]?.method).toBe('DELETE');
 	});
 });

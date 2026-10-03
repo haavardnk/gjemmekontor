@@ -12,6 +12,13 @@ export {
 	handlePlacePlanningCategory,
 	handleUpdatePlanningCategory
 } from './categories';
+export {
+	handleAddPlanningComment,
+	handleDeletePlanningComment,
+	handleDeletePlanningReaction,
+	handleSetPlanningReaction,
+	handleUpdatePlanningComment
+} from './feedback';
 export { runtimePlanningFiles } from './files';
 export { handlePlanningLinkImage, handleRetryPlanningLinkPreview } from './links';
 export {

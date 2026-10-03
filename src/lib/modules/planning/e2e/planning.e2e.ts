@@ -244,4 +244,47 @@ test.describe('on desktop', () => {
 		page.on('dialog', (dialog) => dialog.accept());
 		await deleteCard(page, 'Utsikt');
 	});
+
+	test('collects reactions and comments on a card', async ({ page }) => {
+		test.setTimeout(60_000);
+		await login(page);
+		await page.goto('/planning');
+		await page.getByRole('button', { name: 'Nytt kort', exact: true }).click();
+		const editor = page.getByRole('dialog', { name: 'Nytt kort' });
+		await editor.getByLabel('Tittel').fill('Strandhytte');
+		await editor.getByRole('button', { name: 'Lagre' }).click();
+		await expect(editor).toHaveCount(0);
+
+		await page.getByRole('button', { name: 'Strandhytte', exact: true }).click();
+		const detail = page.getByRole('dialog', { name: 'Strandhytte' });
+		const love = detail.getByRole('button', { name: 'Elsker', exact: true });
+		const like = detail.getByRole('button', { name: 'Bra', exact: true });
+		await love.click();
+		await expect(love).toHaveAttribute('aria-pressed', 'true');
+		await like.click();
+		await expect(like).toHaveAttribute('aria-pressed', 'true');
+		await expect(love).toHaveAttribute('aria-pressed', 'false');
+
+		await detail.getByRole('button', { name: '0 kommentarer' }).click();
+		await detail.getByPlaceholder('Skriv en kommentar').fill('Ser fin ut, sjekk example.com/hytte');
+		await detail.getByRole('button', { name: 'Legg til kommentar' }).click();
+		await expect(detail.getByRole('link', { name: 'example.com/hytte' })).toBeVisible();
+		await detail.getByRole('button', { name: 'Lukk kortet' }).click();
+
+		const tile = page.getByRole('listitem').filter({ has: page.getByText('Strandhytte') });
+		await expect(tile).toContainText('Kommentarer: 1');
+
+		await page.reload();
+		await page.getByRole('button', { name: 'Strandhytte', exact: true }).click();
+		await expect(like).toHaveAttribute('aria-pressed', 'true');
+		await like.click();
+		await expect(like).toHaveAttribute('aria-pressed', 'false');
+		await detail.getByRole('button', { name: '1 kommentar' }).click();
+		page.on('dialog', (dialog) => dialog.accept());
+		await detail.getByRole('button', { name: /Slett kommentar fra/ }).click();
+		await expect(detail.getByText('Ser fin ut')).toHaveCount(0);
+		await detail.getByRole('button', { name: 'Lukk kortet' }).click();
+
+		await deleteCard(page, 'Strandhytte');
+	});
 });

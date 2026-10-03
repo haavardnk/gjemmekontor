@@ -18,16 +18,20 @@
 		planningSections
 	} from '../domain/planning';
 	import {
+		addPlanningComment,
 		deletePlanningCard,
 		deletePlanningCategory,
+		deletePlanningComment,
 		placePlanningCard,
 		placePlanningCategory,
 		type PlanningMutation,
 		type PlanningPhotoChanges,
+		reactToPlanningCard,
 		retryPlanningLinkPreview,
 		savePlanningCard,
 		savePlanningCategory,
-		togglePlanningChecklistItem
+		togglePlanningChecklistItem,
+		updatePlanningComment
 	} from './planning-commands';
 	import PlanningBoard from './PlanningBoard.svelte';
 	import PlanningCardDetail from './PlanningCardDetail.svelte';
@@ -84,6 +88,17 @@
 			await resource.commitMutation(mutation());
 		} catch {
 			actionErrorMessage = failure;
+		}
+	}
+
+	async function commitComment(mutation: () => PlanningMutation, failure: string): Promise<void> {
+		if (!connectivity.online) return;
+		actionErrorMessage = '';
+		try {
+			await resource.commitMutation(mutation());
+		} catch (error) {
+			actionErrorMessage = failure;
+			throw error;
 		}
 	}
 
@@ -218,7 +233,9 @@
 		</button>
 	</section>
 
-	{#if actionErrorMessage}<p class="text-sm text-error" role="alert">{actionErrorMessage}</p>{/if}
+	{#if actionErrorMessage && !openCard}
+		<p class="text-sm text-error" role="alert">{actionErrorMessage}</p>
+	{/if}
 
 	{#if sections.length === 0}
 		<p class="border border-dashed border-base-300 px-4 py-8 text-center text-base-content/65">
@@ -229,7 +246,10 @@
 			{sections}
 			categories={planning.categories}
 			{canWrite}
-			onopen={(cardId) => (openCardId = cardId)}
+			onopen={(cardId) => {
+				actionErrorMessage = '';
+				openCardId = cardId;
+			}}
 			onnewcard={(categoryId) => newCard(categoryId)}
 			oneditcategory={(category) => {
 				editorErrorMessage = '';
@@ -251,9 +271,12 @@
 		card={openCard}
 		categories={planning.categories}
 		people={planning.people}
+		personId={selectedPersonId}
 		sectionIndex={openSection.cards.findIndex(({ id }) => id === openCard.id)}
 		sectionLength={openSection.cards.length}
 		{canWrite}
+		online={connectivity.online}
+		errorMessage={actionErrorMessage}
 		ontoggle={(itemId, checked) =>
 			commit(
 				() =>
@@ -278,12 +301,35 @@
 				() => retryPlanningLinkPreview(resource.current(), linkId),
 				'Kunne ikke hente forhåndsvisningen på nytt.'
 			)}
+		onreact={(reaction) =>
+			commit(
+				() => reactToPlanningCard(resource.current(), openCard.id, selectedPersonId, reaction),
+				'Kunne ikke lagre reaksjonen.'
+			)}
+		onaddcomment={(body) =>
+			commitComment(
+				() => addPlanningComment(resource.current(), openCard.id, selectedPersonId, body),
+				'Kunne ikke legge til kommentaren.'
+			)}
+		onupdatecomment={(commentId, body) =>
+			commitComment(
+				() => updatePlanningComment(resource.current(), openCard.id, commentId, body),
+				'Kunne ikke lagre kommentaren.'
+			)}
+		ondeletecomment={(commentId) =>
+			commitComment(
+				() => deletePlanningComment(resource.current(), openCard.id, commentId),
+				'Kunne ikke slette kommentaren.'
+			)}
 		onedit={() => {
 			editorErrorMessage = '';
 			editingCard = openCard;
 		}}
 		ondelete={() => deleteCard(openCard)}
-		onclose={() => (openCardId = undefined)}
+		onclose={() => {
+			actionErrorMessage = '';
+			openCardId = undefined;
+		}}
 	/>
 {/if}
 

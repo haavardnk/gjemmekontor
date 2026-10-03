@@ -4,13 +4,18 @@ import type {
 	PlanningCard,
 	PlanningCategory,
 	PlanningChecklistItem,
+	PlanningComment,
 	PlanningLink,
 	PlanningPageData,
 	PlanningPerson,
-	PlanningPhoto
+	PlanningPhoto,
+	PlanningReaction
 } from '../domain/planning';
 
-type CardRow = Omit<PlanningCard, 'place' | 'checklist' | 'links' | 'photos'> & {
+type CardRow = Omit<
+	PlanningCard,
+	'place' | 'checklist' | 'links' | 'photos' | 'reactions' | 'comments'
+> & {
 	placeLabel: string | null;
 	placeLat: number | null;
 	placeLng: number | null;
@@ -19,6 +24,8 @@ type CardRow = Omit<PlanningCard, 'place' | 'checklist' | 'links' | 'photos'> & 
 type ChecklistRow = Omit<PlanningChecklistItem, 'checked'> & { cardId: string; checked: number };
 type LinkRow = Omit<PlanningLink, 'hasImage'> & { cardId: string; hasImage: number };
 type PhotoRow = PlanningPhoto & { cardId: string };
+type ReactionRow = PlanningReaction & { cardId: string };
+type CommentRow = PlanningComment & { cardId: string };
 
 export function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
 	const groups = new Map<K, T[]>();
@@ -94,6 +101,31 @@ export function loadPlanningPageData(db: Database.Database, tripId: string): Pla
 			.all(tripId) as PhotoRow[],
 		(row) => row.cardId
 	);
+	const reactions = groupBy(
+		db
+			.prepare(
+				`SELECT card_id AS cardId, person_id AS personId, reaction
+				 FROM planning_card_reactions WHERE trip_id = ? ORDER BY updated_at, person_id`
+			)
+			.all(tripId) as ReactionRow[],
+		(row) => row.cardId
+	);
+	const comments = groupBy(
+		db
+			.prepare(
+				`SELECT comment.id, comment.card_id AS cardId, comment.person_id AS personId,
+				        COALESCE(member.trip_label, person.display_name) AS personName,
+				        comment.body, comment.created_at AS createdAt, comment.updated_at AS updatedAt
+				 FROM planning_card_comments comment
+				 JOIN trip_members member
+				   ON member.trip_id = comment.trip_id AND member.person_id = comment.person_id
+				 JOIN people person ON person.id = member.person_id
+				 WHERE comment.trip_id = ? AND comment.deleted_at IS NULL
+				 ORDER BY comment.created_at, comment.id`
+			)
+			.all(tripId) as CommentRow[],
+		(row) => row.cardId
+	);
 	return {
 		people: loadPlanningPeople(db, tripId),
 		categories,
@@ -117,7 +149,21 @@ export function loadPlanningPageData(db: Database.Database, tripId: string): Pla
 				siteName: link.siteName,
 				hasImage: Boolean(link.hasImage)
 			})),
-			photos: (photos.get(card.id) ?? []).map(({ id, width, height }) => ({ id, width, height }))
+			photos: (photos.get(card.id) ?? []).map(({ id, width, height }) => ({ id, width, height })),
+			reactions: (reactions.get(card.id) ?? []).map(({ personId, reaction }) => ({
+				personId,
+				reaction
+			})),
+			comments: (comments.get(card.id) ?? []).map(
+				({ id, personId, personName, body, createdAt, updatedAt }) => ({
+					id,
+					personId,
+					personName,
+					body,
+					createdAt,
+					updatedAt
+				})
+			)
 		}))
 	};
 }

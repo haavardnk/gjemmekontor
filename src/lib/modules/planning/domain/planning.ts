@@ -25,10 +25,14 @@ export const planningLimits = {
 	photoEdge: 2048,
 	thumbEdge: 480,
 	photoBytes: 4 * 1024 * 1024,
-	thumbBytes: 400 * 1024
+	thumbBytes: 400 * 1024,
+	comment: 2000
 } as const;
 
 export const planningLinkStatuses = ['pending', 'ready', 'failed'] as const;
+
+export const planningReactions = ['love', 'like', 'unsure', 'dislike'] as const;
+export type PlanningReactionKind = (typeof planningReactions)[number];
 
 const personSchema = z.object({ id: z.uuid(), name: z.string() }).strict();
 
@@ -78,6 +82,21 @@ const photoSchema = z
 	})
 	.strict();
 
+const reactionSchema = z
+	.object({ personId: z.uuid(), reaction: z.enum(planningReactions) })
+	.strict();
+
+const commentSchema = z
+	.object({
+		id: z.uuid(),
+		personId: z.uuid(),
+		personName: z.string(),
+		body: z.string().min(1),
+		createdAt: z.iso.datetime(),
+		updatedAt: z.iso.datetime()
+	})
+	.strict();
+
 const cardSchema = z
 	.object({
 		id: z.uuid(),
@@ -88,6 +107,8 @@ const cardSchema = z
 		checklist: z.array(checklistItemSchema),
 		links: z.array(linkSchema),
 		photos: z.array(photoSchema),
+		reactions: z.array(reactionSchema),
+		comments: z.array(commentSchema),
 		createdByPersonId: z.uuid(),
 		createdByName: z.string(),
 		createdAt: z.iso.datetime(),
@@ -109,6 +130,8 @@ export type PlanningPlace = z.infer<typeof placeSchema>;
 export type PlanningChecklistItem = z.infer<typeof checklistItemSchema>;
 export type PlanningLink = z.infer<typeof linkSchema>;
 export type PlanningPhoto = z.infer<typeof photoSchema>;
+export type PlanningReaction = z.infer<typeof reactionSchema>;
+export type PlanningComment = z.infer<typeof commentSchema>;
 export type PlanningCard = z.infer<typeof cardSchema>;
 export type PlanningPageData = z.infer<typeof planningPageDataSchema>;
 
@@ -144,6 +167,17 @@ export function checklistProgress(card: PlanningCard): { checked: number; total:
 		checked: card.checklist.filter((item) => item.checked).length,
 		total: card.checklist.length
 	};
+}
+
+export function reactionSummary(
+	card: PlanningCard
+): Array<{ reaction: PlanningReactionKind; personIds: string[] }> {
+	return planningReactions.map((reaction) => ({
+		reaction,
+		personIds: card.reactions
+			.filter((candidate) => candidate.reaction === reaction)
+			.map(({ personId }) => personId)
+	}));
 }
 
 export function planningLinkImagePath(linkId: string): string {

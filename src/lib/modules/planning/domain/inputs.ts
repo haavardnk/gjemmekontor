@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { planningCategoryColors, planningLimits } from './planning';
+import { planningCategoryColors, planningLimits, planningReactions } from './planning';
 
 const uniqueIds = (items: readonly { id: string }[]): boolean =>
 	new Set(items.map((item) => item.id)).size === items.length;
@@ -70,6 +70,20 @@ export const planningCardCreateInputSchema = planningCardInputSchema
 
 export const planningChecklistToggleInputSchema = z
 	.object({ personId: z.uuid(), checked: z.boolean() })
+	.strict();
+
+export const planningReactionInputSchema = z
+	.object({ personId: z.uuid(), reaction: z.enum(planningReactions) })
+	.strict();
+
+export const planningReactionDeleteInputSchema = z.object({ personId: z.uuid() }).strict();
+
+export const planningCommentEditInputSchema = z
+	.object({ body: z.string().trim().min(1).max(planningLimits.comment) })
+	.strict();
+
+export const planningCommentInputSchema = planningCommentEditInputSchema
+	.extend({ id: z.uuid(), personId: z.uuid() })
 	.strict();
 
 export type PlanningCategoryInput = z.infer<typeof planningCategoryInputSchema>;

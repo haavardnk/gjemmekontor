@@ -7,16 +7,30 @@ import {
 	planningCategoryCreateInputSchema,
 	type PlanningCategoryInput,
 	planningCategoryInputSchema,
-	planningChecklistToggleInputSchema
+	planningChecklistToggleInputSchema,
+	planningCommentEditInputSchema,
+	planningCommentInputSchema,
+	planningReactionDeleteInputSchema,
+	planningReactionInputSchema
 } from '../domain/inputs';
 import {
 	moveInList,
 	type PlanningCard,
 	type PlanningPageData,
+	type PlanningReactionKind,
 	planningSections
 } from '../domain/planning';
 
 export type PlanningMutation = CachedResourceMutation<PlanningPageData>;
+
+function withCard(
+	data: PlanningPageData,
+	cardId: string,
+	change: (card: PlanningCard) => PlanningCard
+): PlanningPageData {
+	if (!data.cards.some(({ id }) => id === cardId)) throw new Error('PLANNING_CARD_NOT_FOUND');
+	return { ...data, cards: data.cards.map((card) => (card.id === cardId ? change(card) : card)) };
+}
 
 function sectionCards(data: PlanningPageData, categoryId: string | null): PlanningCard[] {
 	return (
@@ -135,6 +149,8 @@ export function savePlanningCard(
 				}
 		),
 		photos: (existing?.photos ?? []).filter(({ id }) => !photos.removed.includes(id)),
+		reactions: existing?.reactions ?? [],
+		comments: existing?.comments ?? [],
 		createdByPersonId: existing?.createdByPersonId ?? person.id,
 		createdByName: existing?.createdByName ?? person.name,
 		createdAt: existing?.createdAt ?? now,
@@ -241,5 +257,88 @@ export function togglePlanningChecklistItem(
 				body: input
 			}
 		]
+	};
+}
+
+export function reactToPlanningCard(
+	data: PlanningPageData,
+	cardId: string,
+	personId: string,
+	reaction: PlanningReactionKind
+): PlanningMutation {
+	if (!data.people.some(({ id }) => id === personId)) throw new Error('PLANNING_MEMBER_REQUIRED');
+	const card = data.cards.find(({ id }) => id === cardId);
+	const others = card?.reactions.filter((candidate) => candidate.personId !== personId) ?? [];
+	const path = `/api/planning/cards/${cardId}/reactions`;
+	if (card?.reactions.some((item) => item.personId === personId && item.reaction === reaction)) {
+		return {
+			next: withCard(data, cardId, (current) => ({ ...current, reactions: others })),
+			requests: [
+				{ path, method: 'DELETE', body: planningReactionDeleteInputSchema.parse({ personId }) }
+			]
+		};
+	}
+	const input = planningReactionInputSchema.parse({ personId, reaction });
+	return {
+		next: withCard(data, cardId, (current) => ({ ...current, reactions: [...others, input] })),
+		requests: [{ path, method: 'PUT', body: input }]
+	};
+}
+
+export function addPlanningComment(
+	data: PlanningPageData,
+	cardId: string,
+	personId: string,
+	body: string,
+	randomId: () => string = () => crypto.randomUUID()
+): PlanningMutation {
+	const person = data.people.find(({ id }) => id === personId);
+	if (!person) throw new Error('PLANNING_MEMBER_REQUIRED');
+	const input = planningCommentInputSchema.parse({ id: randomId(), personId, body });
+	const now = new Date().toISOString();
+	return {
+		next: withCard(data, cardId, (card) => ({
+			...card,
+			comments: [
+				...card.comments,
+				{ ...input, personName: person.name, createdAt: now, updatedAt: now }
+			]
+		})),
+		requests: [{ path: `/api/planning/cards/${cardId}/comments`, method: 'POST', body: input }]
+	};
+}
+
+export function updatePlanningComment(
+	data: PlanningPageData,
+	cardId: string,
+	commentId: string,
+	body: string
+): PlanningMutation {
+	const input = planningCommentEditInputSchema.parse({ body });
+	const now = new Date().toISOString();
+	return {
+		next: withCard(data, cardId, (card) => ({
+			...card,
+			comments: card.comments.map((comment) =>
+				comment.id === commentId ? { ...comment, body: input.body, updatedAt: now } : comment
+			)
+		})),
+		requests: [
+			{ path: `/api/planning/cards/${cardId}/comments/${commentId}`, method: 'PATCH', body: input }
+		]
+	};
+}
+
+export function deletePlanningComment(
+	data: PlanningPageData,
+	cardId: string,
+	commentId: string
+): PlanningMutation {
+	return {
+		next: withCard(data, cardId, (card) => ({
+			...card,
+			comments: card.comments.filter(({ id }) => id !== commentId)
+		})),
+		requests: [{ path: `/api/planning/cards/${cardId}/comments/${commentId}`, method: 'DELETE' }]
 	};
 }

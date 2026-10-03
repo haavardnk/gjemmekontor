@@ -7,18 +7,23 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApplicationDatabase } from '$lib/app/server/database';
 
 import {
+	handleAddPlanningComment,
 	handleCreatePlanningCard,
 	handleCreatePlanningCategory,
 	handleDeletePlanningCard,
 	handleDeletePlanningCategory,
+	handleDeletePlanningComment,
 	handleDeletePlanningPhoto,
+	handleDeletePlanningReaction,
 	handlePlacePlanningCard,
 	handlePlacePlanningCategory,
 	handlePlanningLinkImage,
 	handlePlanningPhoto,
 	handleRetryPlanningLinkPreview,
+	handleSetPlanningReaction,
 	handleTogglePlanningChecklistItem,
 	handleUpdatePlanningCard,
+	handleUpdatePlanningComment,
 	handleUploadPlanningPhoto,
 	loadPlanningPageData
 } from '.';
@@ -432,5 +437,72 @@ describe('planning server', () => {
 
 		expect(statuses).toEqual([...Array.from({ length: 12 }, () => 200), 409]);
 		expect(loadPlanningPageData(db, tripId).cards[0]?.photos).toHaveLength(12);
+	});
+
+	it('keeps one reaction per member and removes feedback with the card', async () => {
+		await handleCreatePlanningCard(request(card({ id: cardIds[0] })), db, tripId);
+		await handleSetPlanningReaction(
+			request({ personId, reaction: 'love' }),
+			db,
+			tripId,
+			cardIds[0]
+		);
+		await handleSetPlanningReaction(
+			request({ personId, reaction: 'like' }),
+			db,
+			tripId,
+			cardIds[0]
+		);
+		await handleSetPlanningReaction(
+			request({ personId: otherPersonId, reaction: 'unsure' }),
+			db,
+			tripId,
+			cardIds[0]
+		);
+		const inactive = await handleSetPlanningReaction(
+			request({ personId: inactivePersonId, reaction: 'dislike' }),
+			db,
+			tripId,
+			cardIds[0]
+		);
+		await handleDeletePlanningReaction(
+			request({ personId: otherPersonId }),
+			db,
+			tripId,
+			cardIds[0]
+		);
+
+		expect(inactive.status).toBe(409);
+		expect(loadPlanningPageData(db, tripId).cards[0]?.reactions).toEqual([
+			{ personId, reaction: 'like' }
+		]);
+
+		const commentId = '00000000-0000-4000-8000-000000000071';
+		const comment = { id: commentId, personId, body: 'Ja!' };
+		await handleAddPlanningComment(request(comment), db, tripId, cardIds[0]);
+		await handleAddPlanningComment(request(comment), db, tripId, cardIds[0]);
+		await handleUpdatePlanningComment(
+			request({ body: 'Kanskje' }),
+			db,
+			tripId,
+			cardIds[0],
+			commentId
+		);
+		expect(loadPlanningPageData(db, tripId).cards[0]?.comments).toMatchObject([
+			{ id: commentId, personId, personName: personId, body: 'Kanskje' }
+		]);
+
+		handleDeletePlanningComment(db, tripId, cardIds[0], commentId);
+		await handleAddPlanningComment(request(comment), db, tripId, cardIds[0]);
+		expect(loadPlanningPageData(db, tripId).cards[0]?.comments).toEqual([]);
+
+		handleDeletePlanningCard(db, tripId, cardIds[0], files);
+		const remaining = db
+			.prepare(
+				`SELECT (SELECT count(*) FROM planning_card_reactions)
+				      + (SELECT count(*) FROM planning_card_comments) AS count`
+			)
+			.get() as { count: number };
+		expect(remaining.count).toBe(0);
 	});
 });

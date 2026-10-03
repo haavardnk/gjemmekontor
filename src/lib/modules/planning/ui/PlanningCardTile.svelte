@@ -1,7 +1,13 @@
 <script lang="ts">
-	import { GripVertical, Image, Link2, ListChecks, MapPin } from '@lucide/svelte';
+	import { GripVertical, Image, Link2, ListChecks, MapPin, MessageCircle } from '@lucide/svelte';
 
-	import { checklistProgress, type PlanningCard, planningCardCoverPath } from '../domain/planning';
+	import {
+		checklistProgress,
+		type PlanningCard,
+		planningCardCoverPath,
+		reactionSummary
+	} from '../domain/planning';
+	import { planningReactionStyles } from './planning-reactions';
 	import PlanningImage from './PlanningImage.svelte';
 
 	let {
@@ -22,6 +28,7 @@
 
 	const progress = $derived(checklistProgress(card));
 	const coverPath = $derived(planningCardCoverPath(card));
+	const reactions = $derived(reactionSummary(card).filter(({ personIds }) => personIds.length));
 </script>
 
 <article
@@ -57,7 +64,7 @@
 				{card.body}
 			</p>
 		{/if}
-		{#if card.place || progress.total || card.links.length || card.photos.length}
+		{#if card.place || progress.total || card.links.length || card.photos.length || reactions.length || card.comments.length}
 			<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-base-content/60">
 				{#if card.place}
 					<span class="flex min-w-0 items-center gap-1">
@@ -83,6 +90,20 @@
 						{card.photos.length}
 					</span>
 				{/if}
+				{#if card.comments.length}
+					<span class="flex items-center gap-1">
+						<MessageCircle size={13} aria-hidden="true" />
+						<span class="sr-only">Kommentarer:</span>
+						{card.comments.length}
+					</span>
+				{/if}
+				{#each reactions as { reaction, personIds } (reaction)}
+					<span class="flex items-center gap-0.5">
+						<span aria-hidden="true">{planningReactionStyles[reaction].emoji}</span>
+						<span class="sr-only">{planningReactionStyles[reaction].label}:</span>
+						{personIds.length}
+					</span>
+				{/each}
 			</div>
 		{/if}
 	</div>

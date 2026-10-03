@@ -89,5 +89,33 @@ export function createPlanningSchema(db: Database.Database): void {
 				FOREIGN KEY (trip_id, created_by_person_id) REFERENCES trip_members(trip_id, person_id)
 			);
 			CREATE INDEX planning_card_photos_card ON planning_card_photos(trip_id, card_id, position);
+
+			CREATE TABLE planning_card_reactions (
+				trip_id TEXT NOT NULL,
+				card_id TEXT NOT NULL,
+				person_id TEXT NOT NULL,
+				reaction TEXT NOT NULL CHECK (reaction IN ('love', 'like', 'unsure', 'dislike')),
+				updated_at TEXT NOT NULL,
+				PRIMARY KEY (trip_id, card_id, person_id),
+				FOREIGN KEY (trip_id, card_id) REFERENCES planning_cards(trip_id, id) ON DELETE CASCADE,
+				FOREIGN KEY (trip_id, person_id)
+					REFERENCES trip_members(trip_id, person_id) ON DELETE CASCADE
+			);
+
+			CREATE TABLE planning_card_comments (
+				id TEXT PRIMARY KEY,
+				trip_id TEXT NOT NULL,
+				card_id TEXT NOT NULL,
+				person_id TEXT NOT NULL,
+				body TEXT NOT NULL CHECK (length(trim(body)) BETWEEN 1 AND 2000),
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
+				deleted_at TEXT,
+				FOREIGN KEY (trip_id, card_id) REFERENCES planning_cards(trip_id, id) ON DELETE CASCADE,
+				FOREIGN KEY (trip_id, person_id)
+					REFERENCES trip_members(trip_id, person_id) ON DELETE CASCADE
+			);
+			CREATE INDEX planning_card_comments_card
+				ON planning_card_comments(trip_id, card_id, created_at);
 		`);
 }

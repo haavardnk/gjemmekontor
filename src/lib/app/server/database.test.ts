@@ -9,7 +9,7 @@ import { applicationDatabaseSchema, createApplicationDatabase } from './database
 
 const temporaryDirectories: string[] = [];
 const dropPlanningTables =
-	'DROP TABLE planning_card_photos; DROP TABLE planning_card_links; DROP TABLE planning_checklist_items; DROP TABLE planning_cards; DROP TABLE planning_categories;';
+	'DROP TABLE planning_card_comments; DROP TABLE planning_card_reactions; DROP TABLE planning_card_photos; DROP TABLE planning_card_links; DROP TABLE planning_checklist_items; DROP TABLE planning_cards; DROP TABLE planning_categories;';
 
 afterEach((): void => {
 	for (const directory of temporaryDirectories.splice(0)) {
@@ -64,7 +64,9 @@ describe('application database', (): void => {
 			'planning_cards',
 			'planning_checklist_items',
 			'planning_card_links',
-			'planning_card_photos'
+			'planning_card_photos',
+			'planning_card_reactions',
+			'planning_card_comments'
 		]) {
 			expect(tables, table).toContain(table);
 		}
@@ -390,8 +392,10 @@ describe('application database', (): void => {
 			.map((row) => (row as { name: string }).name);
 
 		expect(tables.sort()).toEqual([
+			'planning_card_comments',
 			'planning_card_links',
 			'planning_card_photos',
+			'planning_card_reactions',
 			'planning_cards',
 			'planning_categories',
 			'planning_checklist_items'

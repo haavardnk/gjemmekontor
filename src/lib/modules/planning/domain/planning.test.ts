@@ -18,6 +18,8 @@ const card = (id: string, categoryId: string | null): PlanningCard => ({
 	checklist: [],
 	links: [],
 	photos: [],
+	reactions: [],
+	comments: [],
 	createdByPersonId: '00000000-0000-4000-8000-000000000011',
 	createdByName: 'Kari',
 	createdAt: '2026-01-01T00:00:00.000Z',

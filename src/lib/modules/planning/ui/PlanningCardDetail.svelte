@@ -3,6 +3,7 @@
 
 	import { ArrowDown, ArrowUp, Edit3, MapPin, Trash2, X } from '@lucide/svelte';
 
+	import CommentThread from '$lib/ui/CommentThread.svelte';
 	import LinkedText from '$lib/ui/LinkedText.svelte';
 
 	import {
@@ -11,24 +12,33 @@
 		type PlanningCard,
 		type PlanningCategory,
 		type PlanningPerson,
-		planningPhotoPath
+		planningPhotoPath,
+		type PlanningReactionKind
 	} from '../domain/planning';
 	import { planningColorStyles } from './planning-colors';
 	import PlanningImage from './PlanningImage.svelte';
 	import PlanningLinkPreview from './PlanningLinkPreview.svelte';
 	import PlanningPhotoViewer from './PlanningPhotoViewer.svelte';
+	import PlanningReactions from './PlanningReactions.svelte';
 
 	let {
 		card,
 		categories,
 		people,
+		personId,
 		sectionIndex,
 		sectionLength,
 		canWrite,
+		online,
+		errorMessage,
 		ontoggle,
 		oncategory,
 		onmove,
 		onretry,
+		onreact,
+		onaddcomment,
+		onupdatecomment,
+		ondeletecomment,
 		onedit,
 		ondelete,
 		onclose
@@ -36,13 +46,20 @@
 		card: PlanningCard;
 		categories: PlanningCategory[];
 		people: PlanningPerson[];
+		personId: string;
 		sectionIndex: number;
 		sectionLength: number;
 		canWrite: boolean;
+		online: boolean;
+		errorMessage: string;
 		ontoggle: (itemId: string, checked: boolean) => Promise<void>;
 		oncategory: (categoryId: string | null) => Promise<void>;
 		onmove: (index: number) => Promise<void>;
 		onretry: (linkId: string) => Promise<void>;
+		onreact: (reaction: PlanningReactionKind) => Promise<void>;
+		onaddcomment: (body: string) => Promise<void>;
+		onupdatecomment: (commentId: string, body: string) => Promise<void>;
+		ondeletecomment: (commentId: string) => Promise<void>;
 		onedit: () => void;
 		ondelete: () => Promise<void>;
 		onclose: () => void;
@@ -95,6 +112,7 @@
 		</header>
 
 		<div class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+			{#if errorMessage}<p class="text-sm text-error" role="alert">{errorMessage}</p>{/if}
 			{#if card.body}<p><LinkedText text={card.body} /></p>{/if}
 			{#if card.place}
 				<a
@@ -107,6 +125,7 @@
 					<span class="wrap-break-word">{card.place.label}</span>
 				</a>
 			{/if}
+			<PlanningReactions {card} {people} {personId} {canWrite} {onreact} />
 			{#if card.photos.length}
 				<section aria-labelledby="planning-card-photos" class="space-y-2">
 					<h3 id="planning-card-photos" class="font-bold">Bilder</h3>
@@ -172,6 +191,14 @@
 					</ul>
 				</section>
 			{/if}
+			<CommentThread
+				comments={card.comments}
+				canComment={Boolean(personId)}
+				{online}
+				onadd={onaddcomment}
+				onupdate={onupdatecomment}
+				ondelete={ondeletecomment}
+			/>
 			<section aria-labelledby="planning-card-placement" class="space-y-2">
 				<h3 id="planning-card-placement" class="font-bold">Plassering</h3>
 				<div class="flex items-end gap-2">
