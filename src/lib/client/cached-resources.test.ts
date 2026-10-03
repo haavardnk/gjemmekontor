@@ -43,6 +43,23 @@ describe('cached resources', (): void => {
 		expect(store.status('gear')).toEqual({ phase: 'synced', pending: 0 });
 	});
 
+	test('sends form uploads without a JSON content type', async (): Promise<void> => {
+		const fetcher = vi.fn(async (): Promise<Response> => Response.json({ saved: true }));
+		const store = new CachedResources({ fetcher, randomId: (): string => 'upload-a' });
+		stores.push(store);
+		store.prepare(tripId(), ['planning']);
+		const form = new FormData();
+		form.set('caption', 'Utsikt');
+
+		await store.mutate('planning', [{ path: '/api/planning/photos', method: 'PUT', form }]);
+
+		expect(fetcher).toHaveBeenCalledWith('/api/planning/photos', {
+			method: 'PUT',
+			headers: { 'x-idempotency-key': 'upload-a' },
+			body: form
+		});
+	});
+
 	test('rejects mutations while offline', async (): Promise<void> => {
 		vi.stubGlobal('navigator', { onLine: false });
 		const fetcher = vi.fn();

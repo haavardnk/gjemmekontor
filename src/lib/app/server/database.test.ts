@@ -8,6 +8,8 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { applicationDatabaseSchema, createApplicationDatabase } from './database';
 
 const temporaryDirectories: string[] = [];
+const dropPlanningTables =
+	'DROP TABLE planning_card_comments; DROP TABLE planning_card_reactions; DROP TABLE planning_card_photos; DROP TABLE planning_card_links; DROP TABLE planning_checklist_items; DROP TABLE planning_cards; DROP TABLE planning_categories;';
 
 afterEach((): void => {
 	for (const directory of temporaryDirectories.splice(0)) {
@@ -57,7 +59,14 @@ describe('application database', (): void => {
 			'trip_gear_packing',
 			'next_trip_suggestions',
 			'next_trip_ratings',
-			'next_trip_comments'
+			'next_trip_comments',
+			'planning_categories',
+			'planning_cards',
+			'planning_checklist_items',
+			'planning_card_links',
+			'planning_card_photos',
+			'planning_card_reactions',
+			'planning_card_comments'
 		]) {
 			expect(tables, table).toContain(table);
 		}
@@ -88,6 +97,7 @@ describe('application database', (): void => {
 	test('migrates the released schema with Next Trip tables', (): void => {
 		const dataDir = dataDirectory('gjemmekontor-app-migrate-');
 		const database = createApplicationDatabase(dataDir);
+		database.exec(dropPlanningTables);
 		database.exec(
 			'DROP TABLE next_trip_comments; DROP TABLE next_trip_ratings; DROP TABLE next_trip_suggestions;'
 		);
@@ -111,6 +121,7 @@ describe('application database', (): void => {
 	test('preserves all version 5 Next Trip data', (): void => {
 		const dataDir = dataDirectory('gjemmekontor-app-v5-');
 		const database = createApplicationDatabase(dataDir);
+		database.exec(dropPlanningTables);
 		database.exec(`
 			DROP TABLE next_trip_comments;
 			DROP TABLE next_trip_ratings;
@@ -210,7 +221,9 @@ describe('application database', (): void => {
 			name: string;
 		}>;
 
-		expect(migrated.pragma('user_version', { simple: true })).toBe(7);
+		expect(migrated.pragma('user_version', { simple: true })).toBe(
+			applicationDatabaseSchema.version
+		);
 		expect(tables).not.toContain('next_trip_participation');
 		expect(columns.map((column) => column.name)).not.toContain('active');
 		expect(columns.map((column) => column.name)).toContain('updated_at');
@@ -263,6 +276,7 @@ describe('application database', (): void => {
 				 VALUES (?, ?, 1, 0, ?, NULL)`
 			)
 			.run('trip-1', 'person-1', '2026-01-01T00:00:00.000Z');
+		database.exec(dropPlanningTables);
 		database.exec(`
 			DROP TABLE next_trip_comments;
 			CREATE TABLE next_trip_suggestions_v6 (
@@ -361,6 +375,34 @@ describe('application database', (): void => {
 			updatedAt: '2026-02-04T04:05:06.000Z'
 		});
 		expect(migrated.pragma('foreign_key_check')).toEqual([]);
+		migrated.close();
+	});
+
+	test('adds planning tables to version 7 databases', (): void => {
+		const dataDir = dataDirectory('gjemmekontor-app-v7-');
+		const database = createApplicationDatabase(dataDir);
+		database.exec(dropPlanningTables);
+		database.pragma('user_version = 7');
+		database.close();
+
+		const migrated = createApplicationDatabase(dataDir);
+		const tables = migrated
+			.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'planning_%'")
+			.all()
+			.map((row) => (row as { name: string }).name);
+
+		expect(tables.sort()).toEqual([
+			'planning_card_comments',
+			'planning_card_links',
+			'planning_card_photos',
+			'planning_card_reactions',
+			'planning_cards',
+			'planning_categories',
+			'planning_checklist_items'
+		]);
+		expect(migrated.pragma('user_version', { simple: true })).toBe(
+			applicationDatabaseSchema.version
+		);
 		migrated.close();
 	});
 

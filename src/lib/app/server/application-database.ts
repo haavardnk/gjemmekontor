@@ -5,6 +5,7 @@ import {
 	migrateNextTripSchemaV5,
 	migrateNextTripSchemaV6
 } from '$lib/modules/next-trip/server/schema';
+import { createPlanningSchema } from '$lib/modules/planning/server/schema';
 import {
 	createCoreSchema,
 	createDatabase as createCoreDatabase,
@@ -15,26 +16,19 @@ import { reconcileBundledTripModules } from './module-reconciliation';
 import { createTripSchema } from './trip-schema';
 
 export const applicationDatabaseSchema: DatabaseSchema = {
-	version: 7,
+	version: 8,
 	create(db): void {
 		createCoreSchema(db);
 		createTripSchema(db);
 		createNextTripSchema(db);
+		createPlanningSchema(db);
 	},
 	migrate(db, fromVersion): void {
-		if (fromVersion === 4) {
-			createNextTripSchema(db);
-			return;
-		}
-		if (fromVersion === 5) {
-			migrateNextTripSchemaV5(db);
-			return;
-		}
-		if (fromVersion === 6) {
-			migrateNextTripSchemaV6(db);
-			return;
-		}
-		throw new Error('DATABASE_VERSION_UNSUPPORTED');
+		if (fromVersion < 4 || fromVersion > 7) throw new Error('DATABASE_VERSION_UNSUPPORTED');
+		if (fromVersion === 4) createNextTripSchema(db);
+		if (fromVersion === 5) migrateNextTripSchemaV5(db);
+		if (fromVersion === 6) migrateNextTripSchemaV6(db);
+		createPlanningSchema(db);
 	}
 };
 

@@ -10,13 +10,13 @@ import type {
 import { parseRational } from '$lib/modules/menu/domain/quantities';
 import { norwegianUnitDefinitions } from '$lib/modules/menu/domain/units';
 import { apiError, apiSuccess, parseJsonRequest } from '$lib/server/api';
+import { fetchRemoteResource, RemoteFetchError } from '$lib/server/remote-fetch';
 
 import {
 	extractEmbeddedGroupedRecipe,
 	extractPageTitle,
 	recoverDomIngredientGroups
 } from './embedded-recipe';
-import { fetchRemoteResource, RemoteFetchError } from './remote-fetch';
 
 const importRequestSchema = z.object({ url: z.url().max(2_048) }).strict();
 

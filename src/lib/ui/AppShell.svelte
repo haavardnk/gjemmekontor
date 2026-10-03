@@ -5,6 +5,7 @@
 		ChevronsUpDown,
 		CloudCheck,
 		Ellipsis,
+		Lightbulb,
 		LogOut,
 		Map,
 		MapPin,
@@ -57,6 +58,7 @@
 	const icons = {
 		backpack: Backpack,
 		'book-open': BookOpen,
+		lightbulb: Lightbulb,
 		map: Map,
 		'map-pin': MapPin,
 		route: Route,

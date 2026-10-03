@@ -5,6 +5,7 @@ import { gearCache } from '$lib/modules/gear/client/cache';
 import { mapCache } from '$lib/modules/map/client/cache';
 import { menuCache } from '$lib/modules/menu/client/cache';
 import { nextTripCache } from '$lib/modules/next-trip/client/cache';
+import { planningCache } from '$lib/modules/planning/client/cache';
 import { shoppingListCache } from '$lib/modules/shopping-list/client/cache';
 
 export const snapshotCaches = [
@@ -12,6 +13,7 @@ export const snapshotCaches = [
 	mapCache,
 	menuCache,
 	nextTripCache,
+	planningCache,
 	shoppingListCache
 ] as const;
 

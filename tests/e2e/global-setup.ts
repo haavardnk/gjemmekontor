@@ -44,7 +44,8 @@ export default function globalSetup(): void {
 						'menu',
 						'gear',
 						'rule-book',
-						'next-trip'
+						'next-trip',
+						'planning'
 					],
 					enabled: [
 						'map',
@@ -55,7 +56,8 @@ export default function globalSetup(): void {
 						'menu',
 						'gear',
 						'rule-book',
-						'next-trip'
+						'next-trip',
+						'planning'
 					],
 					mapGoogleMyMapsId: 'e2e-map',
 					mapDefaultMode: 'normal',

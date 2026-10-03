@@ -4,11 +4,12 @@
 	import { Edit3, EllipsisVertical, ExternalLink, Star, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
+	import CommentThread from '$lib/ui/CommentThread.svelte';
+	import LinkedText from '$lib/ui/LinkedText.svelte';
+	import { websiteLabel } from '$lib/ui/links';
+
 	import type { NextTripSuggestion } from '../domain/next-trip';
 	import { suggestionRatingSummary } from '../domain/next-trip';
-	import LinkedText from './LinkedText.svelte';
-	import { websiteLabel } from './links';
-	import NextTripComments from './NextTripComments.svelte';
 
 	let {
 		suggestion,
@@ -131,7 +132,7 @@
 			{/each}
 		</div>
 	{/if}
-	<NextTripComments
+	<CommentThread
 		comments={suggestion.comments}
 		canComment={Boolean(selectedPersonId)}
 		{online}
