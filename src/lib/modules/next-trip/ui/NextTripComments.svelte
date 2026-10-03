@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { Edit3, MessageCircle, Send, Trash2 } from '@lucide/svelte';
 
+	import LinkedText from '$lib/ui/LinkedText.svelte';
+
 	import type { NextTripComment } from '../domain/next-trip';
-	import LinkedText from './LinkedText.svelte';
 
 	let {
 		comments,
