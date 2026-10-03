@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -11,12 +11,15 @@ import {
 	handleCreatePlanningCategory,
 	handleDeletePlanningCard,
 	handleDeletePlanningCategory,
+	handleDeletePlanningPhoto,
 	handlePlacePlanningCard,
 	handlePlacePlanningCategory,
 	handlePlanningLinkImage,
+	handlePlanningPhoto,
 	handleRetryPlanningLinkPreview,
 	handleTogglePlanningChecklistItem,
 	handleUpdatePlanningCard,
+	handleUploadPlanningPhoto,
 	loadPlanningPageData
 } from '.';
 import { type PlanningFiles, planningFiles } from './files';
@@ -44,7 +47,34 @@ const linkIds = [
 	'00000000-0000-4000-8000-000000000052'
 ] as const;
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+const photoIds = [
+	'00000000-0000-4000-8000-000000000061',
+	'00000000-0000-4000-8000-000000000062'
+] as const;
 const timestamp = '2026-01-01T00:00:00.000Z';
+
+function photoJpeg(width: number, height: number): Uint8Array<ArrayBuffer> {
+	return new Uint8Array([
+		...[0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08],
+		...[height >> 8, height & 0xff, width >> 8, width & 0xff, 0x03],
+		...Array.from({ length: 9 }, () => 0),
+		...[0xff, 0xd9]
+	]);
+}
+
+function photoRequest(
+	fields: {
+		personId?: string;
+		full?: Uint8Array<ArrayBuffer>;
+		thumb?: Uint8Array<ArrayBuffer>;
+	} = {}
+): Request {
+	const form = new FormData();
+	form.set('personId', fields.personId ?? personId);
+	form.set('full', new File([fields.full ?? photoJpeg(2048, 1536)], 'full.jpg'));
+	form.set('thumb', new File([fields.thumb ?? photoJpeg(480, 360)], 'thumb.jpg'));
+	return new Request('http://localhost/api/planning', { method: 'PUT', body: form });
+}
 
 type Db = ReturnType<typeof createApplicationDatabase>;
 
@@ -334,5 +364,73 @@ describe('planning server', () => {
 
 		expect(changed).toBe(false);
 		expect(existsSync(join(files.links, linkIds[0]))).toBe(false);
+	});
+
+	it('stores photos once per id and removes their files with the photo or card', async () => {
+		for (const id of cardIds.slice(0, 2)) {
+			await handleCreatePlanningCard(request(card({ id })), db, tripId);
+		}
+		const upload = (cardId: string, photoId: string): Promise<Response> =>
+			handleUploadPlanningPhoto(photoRequest(), db, tripId, cardId, photoId, files);
+
+		expect((await upload(cardIds[0], photoIds[0])).status).toBe(200);
+		expect((await upload(cardIds[0], photoIds[0])).status).toBe(200);
+		expect((await upload(cardIds[1], photoIds[0])).status).toBe(400);
+		expect(
+			loadPlanningPageData(db, tripId).cards.find(({ id }) => id === cardIds[0])?.photos
+		).toEqual([{ id: photoIds[0], width: 2048, height: 1536 }]);
+		const thumb = handlePlanningPhoto(db, tripId, photoIds[0], 'thumb', files);
+		expect(new Uint8Array(await thumb.arrayBuffer())).toEqual(photoJpeg(480, 360));
+		expect(
+			handlePlanningPhoto(db, otherTripId, photoIds[0], 'full', planningFiles(dataDir, otherTripId))
+				.status
+		).toBe(404);
+		expect(handlePlanningPhoto(db, tripId, photoIds[0], 'original', files).status).toBe(404);
+
+		handleDeletePlanningPhoto(db, tripId, photoIds[0], files);
+		expect(readdirSync(files.photos)).toEqual([]);
+		await upload(cardIds[1], photoIds[1]);
+		handleDeletePlanningCard(db, tripId, cardIds[1], files);
+		expect(readdirSync(files.photos)).toEqual([]);
+	});
+
+	it.each([
+		['a PNG', { full: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) }, 400],
+		['an oversized photo', { full: photoJpeg(4096, 1000) }, 400],
+		['an oversized thumbnail', { thumb: photoJpeg(800, 600) }, 400],
+		['an inactive member', { personId: inactivePersonId }, 409]
+	])('rejects photos with %s', async (_, fields, expected) => {
+		await handleCreatePlanningCard(request(card({ id: cardIds[0] })), db, tripId);
+
+		const response = await handleUploadPlanningPhoto(
+			photoRequest(fields),
+			db,
+			tripId,
+			cardIds[0],
+			photoIds[0],
+			files
+		);
+
+		expect(response.status).toBe(expected);
+		expect(existsSync(files.photos)).toBe(false);
+	});
+
+	it('limits photos per card', async () => {
+		await handleCreatePlanningCard(request(card({ id: cardIds[0] })), db, tripId);
+		const statuses: number[] = [];
+		for (let index = 0; index <= 12; index += 1) {
+			const response = await handleUploadPlanningPhoto(
+				photoRequest(),
+				db,
+				tripId,
+				cardIds[0],
+				crypto.randomUUID(),
+				files
+			);
+			statuses.push(response.status);
+		}
+
+		expect(statuses).toEqual([...Array.from({ length: 12 }, () => 200), 409]);
+		expect(loadPlanningPageData(db, tripId).cards[0]?.photos).toHaveLength(12);
 	});
 });

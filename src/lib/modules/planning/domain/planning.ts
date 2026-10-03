@@ -20,7 +20,12 @@ export const planningLimits = {
 	checklistItems: 50,
 	checklistText: 200,
 	links: 10,
-	url: 2048
+	url: 2048,
+	photos: 12,
+	photoEdge: 2048,
+	thumbEdge: 480,
+	photoBytes: 4 * 1024 * 1024,
+	thumbBytes: 400 * 1024
 } as const;
 
 export const planningLinkStatuses = ['pending', 'ready', 'failed'] as const;
@@ -65,6 +70,14 @@ const linkSchema = z
 	})
 	.strict();
 
+const photoSchema = z
+	.object({
+		id: z.uuid(),
+		width: z.int().positive(),
+		height: z.int().positive()
+	})
+	.strict();
+
 const cardSchema = z
 	.object({
 		id: z.uuid(),
@@ -74,6 +87,7 @@ const cardSchema = z
 		place: placeSchema.nullable(),
 		checklist: z.array(checklistItemSchema),
 		links: z.array(linkSchema),
+		photos: z.array(photoSchema),
 		createdByPersonId: z.uuid(),
 		createdByName: z.string(),
 		createdAt: z.iso.datetime(),
@@ -94,6 +108,7 @@ export type PlanningCategory = z.infer<typeof categorySchema>;
 export type PlanningPlace = z.infer<typeof placeSchema>;
 export type PlanningChecklistItem = z.infer<typeof checklistItemSchema>;
 export type PlanningLink = z.infer<typeof linkSchema>;
+export type PlanningPhoto = z.infer<typeof photoSchema>;
 export type PlanningCard = z.infer<typeof cardSchema>;
 export type PlanningPageData = z.infer<typeof planningPageDataSchema>;
 
@@ -133,6 +148,17 @@ export function checklistProgress(card: PlanningCard): { checked: number; total:
 
 export function planningLinkImagePath(linkId: string): string {
 	return `/api/planning/links/${linkId}/image`;
+}
+
+export function planningPhotoPath(photoId: string, size: 'full' | 'thumb'): string {
+	return `/api/planning/photos/${photoId}/${size}`;
+}
+
+export function planningCardCoverPath(card: PlanningCard): string | undefined {
+	const photo = card.photos[0];
+	if (photo) return planningPhotoPath(photo.id, 'thumb');
+	const link = card.links.find(({ hasImage }) => hasImage);
+	return link ? planningLinkImagePath(link.id) : undefined;
 }
 
 export function planningLinkHost(url: string): string {

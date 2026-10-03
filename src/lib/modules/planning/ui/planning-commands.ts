@@ -1,5 +1,6 @@
-import type { CachedResourceMutation } from '$lib/client/cached-resource';
+import type { CachedResourceMutation, CachedResourceRequest } from '$lib/client/cached-resource';
 
+import type { PlanningPhotoUpload } from '../client/photos';
 import {
 	planningCardCreateInputSchema,
 	type PlanningCardDraft,
@@ -97,10 +98,16 @@ export function placePlanningCategory(
 	};
 }
 
+export type PlanningPhotoChanges = {
+	added: readonly PlanningPhotoUpload[];
+	removed: readonly string[];
+};
+
 export function savePlanningCard(
 	data: PlanningPageData,
 	cardId: string,
-	draft: PlanningCardDraft
+	draft: PlanningCardDraft,
+	photos: PlanningPhotoChanges = { added: [], removed: [] }
 ): PlanningMutation {
 	const person = data.people.find(({ id }) => id === draft.personId);
 	if (!person) throw new Error('PLANNING_MEMBER_REQUIRED');
@@ -127,6 +134,7 @@ export function savePlanningCard(
 					hasImage: false
 				}
 		),
+		photos: (existing?.photos ?? []).filter(({ id }) => !photos.removed.includes(id)),
 		createdByPersonId: existing?.createdByPersonId ?? person.id,
 		createdByName: existing?.createdByName ?? person.name,
 		createdAt: existing?.createdAt ?? now,
@@ -142,7 +150,18 @@ export function savePlanningCard(
 		requests: [
 			existing
 				? { path: `/api/planning/cards/${id}`, method: 'PUT', body }
-				: { path: '/api/planning/cards', method: 'POST', body: input }
+				: { path: '/api/planning/cards', method: 'POST', body: input },
+			...photos.removed.map((photoId): CachedResourceRequest => ({
+				path: `/api/planning/photos/${photoId}`,
+				method: 'DELETE'
+			})),
+			...photos.added.map((photo): CachedResourceRequest => {
+				const form = new FormData();
+				form.set('personId', personId);
+				form.set('full', photo.full, 'photo.jpg');
+				form.set('thumb', photo.thumb, 'thumb.jpg');
+				return { path: `/api/planning/cards/${id}/photos/${photo.id}`, method: 'PUT', form };
+			})
 		]
 	};
 }

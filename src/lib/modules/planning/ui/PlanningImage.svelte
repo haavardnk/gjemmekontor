@@ -9,21 +9,28 @@
 		alt,
 		class: className = ''
 	}: { src: string; cachedSrc?: string; alt: string; class?: string } = $props();
-	let fallbackUrl = $state<string>();
+	let fallback = $state<{ src: string; url: string }>();
 
-	async function fallback(): Promise<void> {
+	async function loadFallback(): Promise<void> {
 		const tripId = page.data.tripId;
-		if (fallbackUrl || !tripId) return;
+		const failedSrc = src;
+		if (fallback?.src === failedSrc || !tripId) return;
 		const blob = await cachedPlanningImage(tripId, cachedSrc).catch(() => undefined);
-		if (blob) fallbackUrl = URL.createObjectURL(blob);
+		if (blob && src === failedSrc) fallback = { src: failedSrc, url: URL.createObjectURL(blob) };
 	}
 
 	$effect(() => {
-		const url = fallbackUrl;
+		const url = fallback?.url;
 		return () => {
 			if (url) URL.revokeObjectURL(url);
 		};
 	});
 </script>
 
-<img src={fallbackUrl ?? src} {alt} class={className} loading="lazy" onerror={fallback} />
+<img
+	src={fallback?.src === src ? fallback.url : src}
+	{alt}
+	class={className}
+	loading="lazy"
+	onerror={loadFallback}
+/>

@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 
 import { apiError, apiSuccess } from '$lib/server/api';
 
-import { type PlanningFiles, readPlanningFile } from './files';
+import { type PlanningFiles, planningImageResponse, readPlanningFile } from './files';
 
 export function handlePlanningLinkImage(
 	db: Database.Database,
@@ -18,13 +18,7 @@ export function handlePlanningLinkImage(
 		.get(tripId, linkId) as { imageType: string } | undefined;
 	const body = row ? readPlanningFile(files.links, linkId) : undefined;
 	if (!row || !body) return apiError('PLANNING_IMAGE_NOT_FOUND', 404);
-	return new Response(new Uint8Array(body), {
-		headers: {
-			'content-type': row.imageType,
-			'cache-control': 'private, max-age=31536000, immutable',
-			'content-security-policy': "default-src 'none'"
-		}
-	});
+	return planningImageResponse(body, row.imageType);
 }
 
 export function handleRetryPlanningLinkPreview(

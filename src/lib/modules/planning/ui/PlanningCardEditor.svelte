@@ -1,21 +1,26 @@
 <script lang="ts">
-	import { Link2, Plus, Trash2, X } from '@lucide/svelte';
-	import { untrack } from 'svelte';
+	import { ImagePlus, Link2, Plus, Trash2, X } from '@lucide/svelte';
+	import { onDestroy, untrack } from 'svelte';
 
 	import { PlaceInput, type PlaceSelection } from '$lib/modules/map/public';
 
+	import { pastedImages, type PlanningPhotoUpload, preparePlanningPhoto } from '../client/photos';
 	import { type PlanningCardDraft, planningLinkInputSchema } from '../domain/inputs';
 	import {
 		type PlanningCard,
 		type PlanningCategory,
 		planningLimits,
-		planningLinkHost
+		planningLinkHost,
+		planningPhotoPath
 	} from '../domain/planning';
+	import type { PlanningPhotoChanges } from './planning-commands';
+	import PlanningImage from './PlanningImage.svelte';
 
 	let {
 		card,
 		categories,
 		defaultCategoryId,
+		initialPhotos = [],
 		personId,
 		googlePlacesApiKey,
 		online,
@@ -27,18 +32,24 @@
 		card?: PlanningCard;
 		categories: PlanningCategory[];
 		defaultCategoryId: string | null;
+		initialPhotos?: readonly File[];
 		personId: string;
 		googlePlacesApiKey: string;
 		online: boolean;
 		saving: boolean;
 		errorMessage: string;
-		onsave: (cardId: string, draft: PlanningCardDraft) => Promise<void>;
+		onsave: (
+			cardId: string,
+			draft: PlanningCardDraft,
+			photos: PlanningPhotoChanges
+		) => Promise<void>;
 		onclose: () => void;
 	} = $props();
 
 	const seed = untrack(() => ({
 		card: $state.snapshot(card),
-		categoryId: defaultCategoryId
+		categoryId: defaultCategoryId,
+		photos: initialPhotos
 	}));
 	const cardId = seed.card?.id ?? crypto.randomUUID();
 	let title = $state(seed.card?.title ?? '');
@@ -62,6 +73,46 @@
 	let links = $state((seed.card?.links ?? []).map(({ id, url }) => ({ id, url })));
 	let newLinkUrl = $state('');
 	let linkError = $state('');
+	let photos = $state.raw<{ id: string; src: string; upload?: PlanningPhotoUpload }[]>(
+		(seed.card?.photos ?? []).map(({ id }) => ({ id, src: planningPhotoPath(id, 'thumb') }))
+	);
+	let processingPhotos = $state(0);
+	let photoError = $state('');
+	let destroyed = false;
+
+	void addPhotos(seed.photos);
+
+	onDestroy(() => {
+		destroyed = true;
+		for (const photo of photos) if (photo.upload) URL.revokeObjectURL(photo.src);
+	});
+
+	async function addPhotos(files: readonly File[]): Promise<void> {
+		if (!files.length) return;
+		const room = planningLimits.photos - photos.length - processingPhotos;
+		const accepted = files.slice(0, Math.max(0, room));
+		photoError =
+			accepted.length < files.length ? `Maks ${planningLimits.photos} bilder per kort.` : '';
+		processingPhotos += accepted.length;
+		for (const file of accepted) {
+			try {
+				const upload = await preparePlanningPhoto(file);
+				if (destroyed) return;
+				photos = [...photos, { id: upload.id, src: URL.createObjectURL(upload.thumb), upload }];
+			} catch {
+				photoError = 'Kunne ikke lese bildet.';
+			} finally {
+				processingPhotos -= 1;
+			}
+		}
+	}
+
+	function removePhoto(photoId: string): void {
+		const photo = photos.find(({ id }) => id === photoId);
+		if (photo?.upload) URL.revokeObjectURL(photo.src);
+		photos = photos.filter(({ id }) => id !== photoId);
+		photoError = '';
+	}
 
 	function parseLink(value: string): string | undefined {
 		const text = value.trim();
@@ -108,15 +159,24 @@
 					}
 				: { label, lat: null, lng: null, googlePlaceId: null }
 			: null;
-		await onsave(cardId, {
-			personId,
-			categoryId: categoryId || null,
-			title,
-			body,
-			place,
-			checklist: checklist.filter((item) => item.text.trim()),
-			links
-		});
+		await onsave(
+			cardId,
+			{
+				personId,
+				categoryId: categoryId || null,
+				title,
+				body,
+				place,
+				checklist: checklist.filter((item) => item.text.trim()),
+				links
+			},
+			{
+				added: photos.flatMap(({ upload }) => (upload ? [upload] : [])),
+				removed: (seed.card?.photos ?? [])
+					.map(({ id }) => id)
+					.filter((photoId) => !photos.some(({ id }) => id === photoId))
+			}
+		);
 	}
 </script>
 
@@ -129,6 +189,12 @@
 	<form
 		class="modal-box flex h-dvh max-h-dvh w-full max-w-2xl flex-col rounded-none p-0 sm:h-auto sm:max-h-[94dvh] sm:rounded-box"
 		onsubmit={submit}
+		onpaste={(event) => {
+			const images = pastedImages(event);
+			if (!images.length) return;
+			event.preventDefault();
+			void addPhotos(images);
+		}}
 	>
 		<header
 			class="shrink-0 border-b border-base-300 bg-base-100 px-4 pb-3 sm:px-6 sm:pt-5"
@@ -277,6 +343,52 @@
 				{/if}
 				{#if linkError}<p class="text-sm text-error" role="alert">{linkError}</p>{/if}
 			</fieldset>
+			<fieldset class="space-y-2">
+				<legend class="label-text mb-1 font-semibold">Bilder</legend>
+				{#if photos.length || processingPhotos}
+					<ul class="grid grid-cols-3 gap-2 sm:grid-cols-4">
+						{#each photos as photo, index (photo.id)}
+							<li class="relative">
+								<PlanningImage
+									src={photo.src}
+									alt={`Bilde ${index + 1}`}
+									class="aspect-square w-full rounded-field bg-base-200 object-cover"
+								/>
+								<button
+									class="btn absolute top-1 right-1 btn-circle shadow-sm btn-xs"
+									type="button"
+									onclick={() => removePhoto(photo.id)}
+									aria-label={`Fjern bilde ${index + 1}`}><X size={14} /></button
+								>
+							</li>
+						{/each}
+						{#each { length: processingPhotos }, index (index)}
+							<li class="aspect-square skeleton rounded-field"></li>
+						{/each}
+					</ul>
+				{/if}
+				{#if photos.length + processingPhotos < planningLimits.photos}
+					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+						<label class="btn btn-ghost btn-sm has-focus-visible:outline-2">
+							<ImagePlus size={18} aria-hidden="true" />
+							Legg til bilder
+							<input
+								class="sr-only"
+								type="file"
+								accept="image/*"
+								multiple
+								onchange={(event) => {
+									const input = event.currentTarget;
+									void addPhotos([...(input.files ?? [])]);
+									input.value = '';
+								}}
+							/>
+						</label>
+						<span class="text-xs text-base-content/60">Du kan også lime inn bilder.</span>
+					</div>
+				{/if}
+				{#if photoError}<p class="text-sm text-error" role="alert">{photoError}</p>{/if}
+			</fieldset>
 			{#if errorMessage}<p class="text-sm text-error" role="alert">{errorMessage}</p>{/if}
 		</div>
 
@@ -286,8 +398,10 @@
 		>
 			<button class="btn btn-ghost" type="button" disabled={saving} onclick={onclose}>Avbryt</button
 			>
-			<button class="btn btn-primary" type="submit" disabled={!online || saving || !title.trim()}
-				>Lagre</button
+			<button
+				class="btn btn-primary"
+				type="submit"
+				disabled={!online || saving || processingPhotos > 0 || !title.trim()}>Lagre</button
 			>
 		</footer>
 	</form>

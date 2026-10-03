@@ -10,10 +10,13 @@
 		googleMapsPlaceUrl,
 		type PlanningCard,
 		type PlanningCategory,
-		type PlanningPerson
+		type PlanningPerson,
+		planningPhotoPath
 	} from '../domain/planning';
 	import { planningColorStyles } from './planning-colors';
+	import PlanningImage from './PlanningImage.svelte';
 	import PlanningLinkPreview from './PlanningLinkPreview.svelte';
+	import PlanningPhotoViewer from './PlanningPhotoViewer.svelte';
 
 	let {
 		card,
@@ -49,6 +52,8 @@
 	const progress = $derived(checklistProgress(card));
 	const personName = (personId: string | null): string | undefined =>
 		people.find(({ id }) => id === personId)?.name;
+	let viewerPhotoId = $state<string>();
+	const viewerIndex = $derived(card.photos.findIndex(({ id }) => id === viewerPhotoId));
 </script>
 
 <div
@@ -101,6 +106,29 @@
 					<MapPin class="shrink-0" size={17} aria-hidden="true" />
 					<span class="wrap-break-word">{card.place.label}</span>
 				</a>
+			{/if}
+			{#if card.photos.length}
+				<section aria-labelledby="planning-card-photos" class="space-y-2">
+					<h3 id="planning-card-photos" class="font-bold">Bilder</h3>
+					<ul class="grid grid-cols-3 gap-2 sm:grid-cols-4">
+						{#each card.photos as photo, index (photo.id)}
+							<li>
+								<button
+									class="block w-full rounded-field focus-visible:outline-2 focus-visible:outline-primary"
+									type="button"
+									onclick={() => (viewerPhotoId = photo.id)}
+									aria-label={`Vis bilde ${index + 1}`}
+								>
+									<PlanningImage
+										src={planningPhotoPath(photo.id, 'thumb')}
+										alt=""
+										class="aspect-square w-full rounded-field bg-base-200 object-cover"
+									/>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				</section>
 			{/if}
 			{#if card.links.length}
 				<section aria-labelledby="planning-card-links" class="space-y-2">
@@ -192,3 +220,12 @@
 		</footer>
 	</article>
 </div>
+
+{#if viewerIndex >= 0}
+	<PlanningPhotoViewer
+		photos={card.photos}
+		index={viewerIndex}
+		onselect={(photoId) => (viewerPhotoId = photoId)}
+		onclose={() => (viewerPhotoId = undefined)}
+	/>
+{/if}

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { GripVertical, Link2, ListChecks, MapPin } from '@lucide/svelte';
+	import { GripVertical, Image, Link2, ListChecks, MapPin } from '@lucide/svelte';
 
-	import { checklistProgress, type PlanningCard, planningLinkImagePath } from '../domain/planning';
+	import { checklistProgress, type PlanningCard, planningCardCoverPath } from '../domain/planning';
 	import PlanningImage from './PlanningImage.svelte';
 
 	let {
@@ -21,7 +21,7 @@
 	} = $props();
 
 	const progress = $derived(checklistProgress(card));
-	const coverLink = $derived(card.links.find(({ hasImage }) => hasImage));
+	const coverPath = $derived(planningCardCoverPath(card));
 </script>
 
 <article
@@ -38,9 +38,9 @@
 		>
 	{/if}
 	<div class="min-w-0 flex-1 space-y-1.5 p-3">
-		{#if coverLink}
+		{#if coverPath}
 			<PlanningImage
-				src={planningLinkImagePath(coverLink.id)}
+				src={coverPath}
 				alt=""
 				class="mb-2 aspect-video w-full rounded-field bg-base-200 object-cover"
 			/>
@@ -57,7 +57,7 @@
 				{card.body}
 			</p>
 		{/if}
-		{#if card.place || progress.total || card.links.length}
+		{#if card.place || progress.total || card.links.length || card.photos.length}
 			<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-base-content/60">
 				{#if card.place}
 					<span class="flex min-w-0 items-center gap-1">
@@ -75,6 +75,12 @@
 					<span class="flex items-center gap-1">
 						<Link2 size={13} aria-hidden="true" />
 						{card.links.length}
+					</span>
+				{/if}
+				{#if card.photos.length}
+					<span class="flex items-center gap-1">
+						<Image size={13} aria-hidden="true" />
+						{card.photos.length}
 					</span>
 				{/if}
 			</div>

@@ -75,5 +75,19 @@ export function createPlanningSchema(db: Database.Database): void {
 			);
 			CREATE INDEX planning_card_links_card ON planning_card_links(trip_id, card_id, position);
 			CREATE INDEX planning_card_links_pending ON planning_card_links(trip_id, status);
+
+			CREATE TABLE planning_card_photos (
+				id TEXT PRIMARY KEY,
+				trip_id TEXT NOT NULL,
+				card_id TEXT NOT NULL,
+				position INTEGER NOT NULL CHECK (position >= 0),
+				width INTEGER NOT NULL CHECK (width BETWEEN 1 AND 2048),
+				height INTEGER NOT NULL CHECK (height BETWEEN 1 AND 2048),
+				created_by_person_id TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				FOREIGN KEY (trip_id, card_id) REFERENCES planning_cards(trip_id, id) ON DELETE CASCADE,
+				FOREIGN KEY (trip_id, created_by_person_id) REFERENCES trip_members(trip_id, person_id)
+			);
+			CREATE INDEX planning_card_photos_card ON planning_card_photos(trip_id, card_id, position);
 		`);
 }

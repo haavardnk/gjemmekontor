@@ -4,11 +4,15 @@ import { join } from 'node:path';
 
 import { getRuntimeConfig } from '$lib/server/env';
 
-export type PlanningFiles = { links: string };
+export type PlanningFiles = { links: string; photos: string };
 
 export function planningFiles(dataDir: string, tripId: string): PlanningFiles {
 	const root = join(dataDir, 'trips', tripId, 'planning');
-	return { links: join(root, 'links') };
+	return { links: join(root, 'links'), photos: join(root, 'photos') };
+}
+
+export function planningPhotoFileNames(photoId: string): [string, string] {
+	return [`${photoId}.jpg`, `${photoId}.thumb.jpg`];
 }
 
 export function runtimePlanningFiles(tripId: string): PlanningFiles {
@@ -33,6 +37,16 @@ export function readPlanningFile(directory: string, name: string): Uint8Array | 
 	} catch {
 		return undefined;
 	}
+}
+
+export function planningImageResponse(body: Uint8Array, contentType: string): Response {
+	return new Response(new Uint8Array(body), {
+		headers: {
+			'content-type': contentType,
+			'cache-control': 'private, max-age=31536000, immutable',
+			'content-security-policy': "default-src 'none'"
+		}
+	});
 }
 
 export function removePlanningFiles(directory: string, names: readonly string[]): void {

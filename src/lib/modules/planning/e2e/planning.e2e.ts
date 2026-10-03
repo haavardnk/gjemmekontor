@@ -48,6 +48,25 @@ function cardTitles(page: Page, section: string): Locator {
 	return page.getByRole('list', { name: `Kort i ${section}` }).getByRole('heading', { level: 3 });
 }
 
+const onePixelPng =
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+async function pasteImage(target: Locator, text?: string): Promise<void> {
+	await target.evaluate(async (element, text) => {
+		const canvas = document.createElement('canvas');
+		canvas.width = 40;
+		canvas.height = 30;
+		canvas.getContext('2d')?.fillRect(0, 0, 40, 30);
+		const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+		const data = new DataTransfer();
+		if (blob) data.items.add(new File([blob], 'utklipp.png', { type: 'image/png' }));
+		if (text) data.setData('text/plain', text);
+		element.dispatchEvent(
+			new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+		);
+	}, text);
+}
+
 test('collects ideas in categories and keeps them readable offline', async ({ context, page }) => {
 	test.setTimeout(60_000);
 	await openPlanning(page);
@@ -180,5 +199,49 @@ test.describe('on desktop', () => {
 		await deleteCategory(page, 'Aktiviteter');
 		await deleteCategory(page, 'Overnatting');
 		for (const title of ['Fjelltur', 'Hytte', 'Bading']) await deleteCard(page, title);
+	});
+
+	test('adds photos by upload and paste', async ({ page }) => {
+		test.setTimeout(60_000);
+		await login(page);
+		await page.goto('/planning');
+
+		await pasteImage(page.locator('body'));
+		const editor = page.getByRole('dialog', { name: 'Nytt kort' });
+		await expect(editor.getByRole('img', { name: 'Bilde 1' })).toBeVisible();
+		await editor.getByLabel('Tittel').fill('Utsikt');
+		await editor.getByLabel('Legg til bilder').setInputFiles({
+			name: 'fjell.png',
+			mimeType: 'image/png',
+			buffer: Buffer.from(onePixelPng, 'base64')
+		});
+		await expect(editor.getByRole('img', { name: 'Bilde 2' })).toBeVisible();
+		await pasteImage(editor.getByLabel('Tittel'), 'Utsikt fra toppen');
+		await pasteImage(editor.getByLabel('Tittel'));
+		await expect(editor.getByRole('img', { name: /^Bilde \d$/ })).toHaveCount(3);
+		await editor.getByRole('button', { name: 'Lagre' }).click();
+		await expect(editor).toHaveCount(0);
+
+		await page.getByRole('button', { name: 'Utsikt', exact: true }).click();
+		const detail = page.getByRole('dialog', { name: 'Utsikt' });
+		await detail.getByRole('button', { name: 'Vis bilde 1' }).click();
+		const viewer = page.getByRole('dialog', { name: 'Bilde 1 av 3' });
+		await expect
+			.poll(() => viewer.getByRole('img').evaluate((image: HTMLImageElement) => image.naturalWidth))
+			.toBeGreaterThan(0);
+		await viewer.getByRole('button', { name: 'Neste bilde' }).click();
+		await expect(page.getByRole('dialog', { name: 'Bilde 2 av 3' })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog', { name: /^Bilde \d av 3$/ })).toHaveCount(0);
+
+		await detail.getByRole('button', { name: 'Rediger' }).click();
+		const cardEditor = page.getByRole('dialog', { name: 'Rediger kort' });
+		await cardEditor.getByRole('button', { name: 'Fjern bilde 1' }).click();
+		await cardEditor.getByRole('button', { name: 'Lagre' }).click();
+		await expect(detail.getByRole('button', { name: /^Vis bilde \d$/ })).toHaveCount(2);
+		await detail.getByRole('button', { name: 'Lukk kortet' }).click();
+
+		page.on('dialog', (dialog) => dialog.accept());
+		await deleteCard(page, 'Utsikt');
 	});
 });

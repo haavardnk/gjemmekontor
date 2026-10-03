@@ -14,4 +14,9 @@ export {
 } from './categories';
 export { runtimePlanningFiles } from './files';
 export { handlePlanningLinkImage, handleRetryPlanningLinkPreview } from './links';
+export {
+	handleDeletePlanningPhoto,
+	handlePlanningPhoto,
+	handleUploadPlanningPhoto
+} from './photos';
 export { loadPlanningPageData } from './queries';

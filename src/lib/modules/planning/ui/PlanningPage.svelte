@@ -9,6 +9,7 @@
 
 	import { planningCache } from '../client/cache';
 	import { cachePlanningImages, planningImagePaths } from '../client/images';
+	import { pastedImages } from '../client/photos';
 	import type { PlanningCardDraft, PlanningCategoryInput } from '../domain/inputs';
 	import {
 		type PlanningCard,
@@ -22,6 +23,7 @@
 		placePlanningCard,
 		placePlanningCategory,
 		type PlanningMutation,
+		type PlanningPhotoChanges,
 		retryPlanningLinkPreview,
 		savePlanningCard,
 		savePlanningCategory,
@@ -38,6 +40,7 @@
 	let openCardId = $state<string>();
 	let editingCard = $state<PlanningCard | null>();
 	let newCardCategoryId = $state<string | null>(null);
+	let newCardPhotos = $state.raw<File[]>([]);
 	let editingCategory = $state<PlanningCategory | null>();
 	let editorErrorMessage = $state('');
 	let actionErrorMessage = $state('');
@@ -101,15 +104,29 @@
 		}
 	}
 
-	function newCard(categoryId: string | null): void {
+	function newCard(categoryId: string | null, photos: File[] = []): void {
 		editorErrorMessage = '';
 		newCardCategoryId = categoryId;
+		newCardPhotos = photos;
 		editingCard = null;
 	}
 
-	async function saveCard(cardId: string, draft: PlanningCardDraft): Promise<void> {
+	function pasteCard(event: ClipboardEvent): void {
+		if (event.defaultPrevented || !canWrite) return;
+		if (editingCard !== undefined || editingCategory !== undefined || openCard) return;
+		const images = pastedImages(event);
+		if (!images.length) return;
+		event.preventDefault();
+		newCard(null, images);
+	}
+
+	async function saveCard(
+		cardId: string,
+		draft: PlanningCardDraft,
+		photos: PlanningPhotoChanges
+	): Promise<void> {
 		await save(
-			() => savePlanningCard(resource.current(), cardId, draft),
+			() => savePlanningCard(resource.current(), cardId, draft, photos),
 			() => (editingCard = undefined)
 		);
 	}
@@ -155,6 +172,8 @@
 <svelte:head>
 	<title>Planlegging</title>
 </svelte:head>
+
+<svelte:window onpaste={pasteCard} />
 
 <main class="mx-auto w-full max-w-5xl space-y-5 px-4 py-5 pb-10 lg:py-7">
 	<header>
@@ -211,7 +230,7 @@
 			categories={planning.categories}
 			{canWrite}
 			onopen={(cardId) => (openCardId = cardId)}
-			onnewcard={newCard}
+			onnewcard={(categoryId) => newCard(categoryId)}
 			oneditcategory={(category) => {
 				editorErrorMessage = '';
 				editingCategory = category;
@@ -274,6 +293,7 @@
 			card={editingCard ?? undefined}
 			categories={planning.categories}
 			defaultCategoryId={newCardCategoryId}
+			initialPhotos={editingCard ? [] : newCardPhotos}
 			personId={selectedPersonId}
 			{googlePlacesApiKey}
 			online={connectivity.online}

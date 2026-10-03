@@ -33,6 +33,10 @@ const readyLink = {
 	siteName: null,
 	hasImage: true
 };
+const photoIds = [
+	'00000000-0000-4000-8000-000000000061',
+	'00000000-0000-4000-8000-000000000062'
+] as const;
 
 const data: PlanningPageData = {
 	people: [{ id: personId, name: 'Kari' }],
@@ -45,6 +49,7 @@ const data: PlanningPageData = {
 		place: null,
 		checklist: [{ id: itemIds[index], text: 'Punkt', checked: false, checkedByPersonId: null }],
 		links: index === 1 ? [readyLink] : [],
+		photos: index === 0 ? [{ id: photoIds[0], width: 4, height: 3 }] : [],
 		createdByPersonId: personId,
 		createdByName: 'Kari',
 		createdAt: timestamp,
@@ -99,6 +104,36 @@ describe('planning commands', () => {
 				hasImage: false
 			}
 		]);
+	});
+
+	it('deletes removed photos before uploading new ones', () => {
+		const mutation = savePlanningCard(
+			data,
+			cardIds[0],
+			{
+				personId,
+				categoryId: foodId,
+				title: 'Kort 1',
+				body: '',
+				place: null,
+				checklist: [],
+				links: []
+			},
+			{
+				added: [
+					{ id: photoIds[1], width: 4, height: 3, full: new Blob(['f']), thumb: new Blob(['t']) }
+				],
+				removed: [photoIds[0]]
+			}
+		);
+
+		expect(mutation.requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
+			`PUT /api/planning/cards/${cardIds[0]}`,
+			`DELETE /api/planning/photos/${photoIds[0]}`,
+			`PUT /api/planning/cards/${cardIds[0]}/photos/${photoIds[1]}`
+		]);
+		expect(mutation.requests[2]?.form?.get('personId')).toBe(personId);
+		expect(mutation.next.cards[0]?.photos).toEqual([]);
 	});
 
 	it('moves cards and sends cards of deleted categories to unsorted', () => {

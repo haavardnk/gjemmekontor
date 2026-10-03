@@ -10,7 +10,7 @@ import {
 	planningChecklistToggleInputSchema
 } from '../domain/inputs';
 import { moveInList, planningLimits } from '../domain/planning';
-import { type PlanningFiles, removePlanningFiles } from './files';
+import { type PlanningFiles, planningPhotoFileNames, removePlanningFiles } from './files';
 import {
 	isActivePlanningMember,
 	planningCardCategory,
@@ -266,12 +266,19 @@ export function handleDeletePlanningCard(
 			 WHERE trip_id = ? AND card_id = ? AND image_type IS NOT NULL`
 		)
 		.all(tripId, cardId) as Array<{ id: string }>;
+	const photos = db
+		.prepare('SELECT id FROM planning_card_photos WHERE trip_id = ? AND card_id = ?')
+		.all(tripId, cardId) as Array<{ id: string }>;
 	const result = db
 		.prepare('DELETE FROM planning_cards WHERE trip_id = ? AND id = ?')
 		.run(tripId, cardId);
 	removePlanningFiles(
 		files.links,
 		linkImages.map(({ id }) => id)
+	);
+	removePlanningFiles(
+		files.photos,
+		photos.flatMap(({ id }) => planningPhotoFileNames(id))
 	);
 	return apiSuccess({ deleted: result.changes > 0 });
 }

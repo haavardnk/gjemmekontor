@@ -6,10 +6,11 @@ import type {
 	PlanningChecklistItem,
 	PlanningLink,
 	PlanningPageData,
-	PlanningPerson
+	PlanningPerson,
+	PlanningPhoto
 } from '../domain/planning';
 
-type CardRow = Omit<PlanningCard, 'place' | 'checklist' | 'links'> & {
+type CardRow = Omit<PlanningCard, 'place' | 'checklist' | 'links' | 'photos'> & {
 	placeLabel: string | null;
 	placeLat: number | null;
 	placeLng: number | null;
@@ -17,6 +18,7 @@ type CardRow = Omit<PlanningCard, 'place' | 'checklist' | 'links'> & {
 };
 type ChecklistRow = Omit<PlanningChecklistItem, 'checked'> & { cardId: string; checked: number };
 type LinkRow = Omit<PlanningLink, 'hasImage'> & { cardId: string; hasImage: number };
+type PhotoRow = PlanningPhoto & { cardId: string };
 
 export function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
 	const groups = new Map<K, T[]>();
@@ -83,6 +85,15 @@ export function loadPlanningPageData(db: Database.Database, tripId: string): Pla
 			.all(tripId) as LinkRow[],
 		(row) => row.cardId
 	);
+	const photos = groupBy(
+		db
+			.prepare(
+				`SELECT id, card_id AS cardId, width, height
+				 FROM planning_card_photos WHERE trip_id = ? ORDER BY position, id`
+			)
+			.all(tripId) as PhotoRow[],
+		(row) => row.cardId
+	);
 	return {
 		people: loadPlanningPeople(db, tripId),
 		categories,
@@ -105,7 +116,8 @@ export function loadPlanningPageData(db: Database.Database, tripId: string): Pla
 				description: link.description,
 				siteName: link.siteName,
 				hasImage: Boolean(link.hasImage)
-			}))
+			})),
+			photos: (photos.get(card.id) ?? []).map(({ id, width, height }) => ({ id, width, height }))
 		}))
 	};
 }

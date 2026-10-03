@@ -1,13 +1,18 @@
 import { type ClientDatabaseSource, resolveClientDatabase } from '$lib/client/database';
 
-import { planningLinkImagePath, type PlanningPageData } from '../domain/planning';
+import {
+	planningLinkImagePath,
+	type PlanningPageData,
+	planningPhotoPath
+} from '../domain/planning';
 
 const imagePrefix = 'planning:image:';
 
 export function planningImagePaths(data: PlanningPageData): string[] {
-	return data.cards.flatMap((card) =>
-		card.links.filter(({ hasImage }) => hasImage).map(({ id }) => planningLinkImagePath(id))
-	);
+	return data.cards.flatMap((card) => [
+		...card.photos.map(({ id }) => planningPhotoPath(id, 'thumb')),
+		...card.links.filter(({ hasImage }) => hasImage).map(({ id }) => planningLinkImagePath(id))
+	]);
 }
 
 export async function cachePlanningImages(
