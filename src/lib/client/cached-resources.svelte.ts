@@ -13,8 +13,7 @@ export type CachedResourceStatus = {
 export type CachedResourceRequest = {
 	path: string;
 	method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-	body?: JsonValue;
-};
+} & ({ body?: JsonValue; form?: never } | { form: FormData; body?: never });
 
 type CachedResourcesOptions = {
 	fetcher?: typeof fetch;
@@ -153,7 +152,8 @@ export class CachedResources {
 						'x-idempotency-key': this.randomId(),
 						...(request.body === undefined ? {} : { 'content-type': 'application/json' })
 					},
-					body: request.body === undefined ? undefined : JSON.stringify(request.body)
+					body:
+						request.form ?? (request.body === undefined ? undefined : JSON.stringify(request.body))
 				});
 				if (response.ok) continue;
 				const body = await response.json().catch(() => undefined);
