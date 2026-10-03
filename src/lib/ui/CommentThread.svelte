@@ -1,9 +1,15 @@
 <script lang="ts">
 	import { Edit3, MessageCircle, Send, Trash2 } from '@lucide/svelte';
 
-	import LinkedText from '$lib/ui/LinkedText.svelte';
+	import LinkedText from './LinkedText.svelte';
 
-	import type { NextTripComment } from '../domain/next-trip';
+	type ThreadComment = {
+		id: string;
+		personName: string;
+		body: string;
+		createdAt: string;
+		updatedAt: string;
+	};
 
 	let {
 		comments,
@@ -13,7 +19,7 @@
 		onupdate,
 		ondelete
 	}: {
-		comments: NextTripComment[];
+		comments: ThreadComment[];
 		canComment: boolean;
 		online: boolean;
 		onadd: (body: string) => Promise<void>;
@@ -38,7 +44,7 @@
 		}
 	}
 
-	function startEditing(comment: NextTripComment): void {
+	function startEditing(comment: ThreadComment): void {
 		editingId = comment.id;
 		editingBody = comment.body;
 	}
@@ -55,7 +61,7 @@
 		}
 	}
 
-	async function remove(comment: NextTripComment): Promise<void> {
+	async function remove(comment: ThreadComment): Promise<void> {
 		if (!window.confirm(`Slette kommentaren fra ${comment.personName}?`)) return;
 		saving = true;
 		try {
