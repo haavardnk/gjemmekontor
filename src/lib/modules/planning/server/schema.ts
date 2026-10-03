@@ -54,5 +54,26 @@ export function createPlanningSchema(db: Database.Database): void {
 			);
 			CREATE INDEX planning_checklist_items_card
 				ON planning_checklist_items(trip_id, card_id, position);
+
+			CREATE TABLE planning_card_links (
+				id TEXT PRIMARY KEY,
+				trip_id TEXT NOT NULL,
+				card_id TEXT NOT NULL,
+				position INTEGER NOT NULL CHECK (position >= 0),
+				url TEXT NOT NULL CHECK (length(url) BETWEEN 1 AND 2048),
+				status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'failed')),
+				title TEXT CHECK (title IS NULL OR length(title) <= 300),
+				description TEXT CHECK (description IS NULL OR length(description) <= 500),
+				site_name TEXT CHECK (site_name IS NULL OR length(site_name) <= 100),
+				image_type TEXT CHECK (
+					image_type IS NULL
+					OR image_type IN ('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif')
+				),
+				fetched_at TEXT,
+				CHECK (status = 'ready' OR image_type IS NULL),
+				FOREIGN KEY (trip_id, card_id) REFERENCES planning_cards(trip_id, id) ON DELETE CASCADE
+			);
+			CREATE INDEX planning_card_links_card ON planning_card_links(trip_id, card_id, position);
+			CREATE INDEX planning_card_links_pending ON planning_card_links(trip_id, status);
 		`);
 }

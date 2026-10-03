@@ -74,6 +74,7 @@ test('collects ideas in categories and keeps them readable offline', async ({ co
 
 	await page.getByRole('button', { name: 'Nytt kort', exact: true }).click();
 	await editor.getByLabel('Tittel').fill('Kajakktur');
+	await editor.getByLabel('Ny lenke').fill('example.invalid/kajakk');
 	await editor.getByRole('button', { name: 'Lagre' }).click();
 	await expect(page.getByRole('heading', { name: 'Usortert', level: 2 })).toBeVisible();
 
@@ -97,6 +98,13 @@ test('collects ideas in categories and keeps them readable offline', async ({ co
 
 	await page.getByRole('button', { name: 'Kajakktur', exact: true }).click();
 	const kayakDetail = page.getByRole('dialog', { name: 'Kajakktur' });
+	await expect(kayakDetail.getByRole('link', { name: 'example.invalid' })).toHaveAttribute(
+		'href',
+		'https://example.invalid/kajakk'
+	);
+	const retryPreview = kayakDetail.getByRole('button', { name: 'Prøv igjen' });
+	await retryPreview.click();
+	await expect(retryPreview).toBeVisible();
 	await kayakDetail.getByLabel('Kategori').selectOption({ label: 'Mat' });
 	await expect(page.getByRole('heading', { name: 'Usortert', level: 2 })).toHaveCount(0);
 	await kayakDetail.getByRole('button', { name: 'Flytt kortet opp' }).click();

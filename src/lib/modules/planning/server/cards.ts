@@ -10,6 +10,7 @@ import {
 	planningChecklistToggleInputSchema
 } from '../domain/inputs';
 import { moveInList, planningLimits } from '../domain/planning';
+import { type PlanningFiles, removePlanningFiles } from './files';
 import {
 	isActivePlanningMember,
 	planningCardCategory,
@@ -39,6 +40,14 @@ function cardInputError(
 		)
 		.get(JSON.stringify(input.checklist.map((item) => item.id)), tripId, cardId);
 	if (foreignItem) return apiError('INVALID_PLANNING_CARD', 400);
+	const foreignLink = db
+		.prepare(
+			`SELECT 1 FROM planning_card_links link
+			 JOIN json_each(?) entry ON link.id = json_extract(entry.value, '$.id')
+			 WHERE link.trip_id != ? OR link.card_id != ? OR link.url != json_extract(entry.value, '$.url')`
+		)
+		.get(JSON.stringify(input.links), tripId, cardId);
+	if (foreignLink) return apiError('INVALID_PLANNING_CARD', 400);
 	return undefined;
 }
 
@@ -93,6 +102,34 @@ function writeChecklist(
 	}
 }
 
+function writeLinks(
+	db: Database.Database,
+	tripId: string,
+	cardId: string,
+	input: PlanningCardInput
+): string[] {
+	const kept = new Set(input.links.map((link) => link.id));
+	const removed = (
+		db
+			.prepare(
+				`SELECT id, image_type IS NOT NULL AS hasImage
+				 FROM planning_card_links WHERE trip_id = ? AND card_id = ?`
+			)
+			.all(tripId, cardId) as Array<{ id: string; hasImage: number }>
+	).filter((link) => !kept.has(link.id));
+	const remove = db.prepare('DELETE FROM planning_card_links WHERE id = ?');
+	for (const link of removed) remove.run(link.id);
+	const upsert = db.prepare(
+		`INSERT INTO planning_card_links (id, trip_id, card_id, position, url, status)
+		 VALUES (?, ?, ?, ?, ?, 'pending')
+		 ON CONFLICT(id) DO UPDATE SET position = excluded.position`
+	);
+	for (const [position, link] of input.links.entries()) {
+		upsert.run(link.id, tripId, cardId, position, link.url);
+	}
+	return removed.filter((link) => link.hasImage).map((link) => link.id);
+}
+
 export async function handleCreatePlanningCard(
 	request: Request,
 	db: Database.Database,
@@ -131,6 +168,7 @@ export async function handleCreatePlanningCard(
 			timestamp
 		);
 		writeChecklist(db, tripId, id, input, timestamp);
+		writeLinks(db, tripId, id, input);
 	})();
 	return apiSuccess({ id });
 }
@@ -140,6 +178,7 @@ export async function handleUpdatePlanningCard(
 	db: Database.Database,
 	tripId: string,
 	cardId: string,
+	files: PlanningFiles,
 	now: () => Date = () => new Date()
 ): Promise<Response> {
 	const parsed = await parseJsonRequest(request, planningCardInputSchema);
@@ -150,7 +189,7 @@ export async function handleUpdatePlanningCard(
 	const error = cardInputError(db, tripId, cardId, input);
 	if (error) return error;
 	const timestamp = now().toISOString();
-	db.transaction((): void => {
+	const removedImages = db.transaction((): string[] => {
 		if (current.categoryId !== input.categoryId) {
 			writePlanningSection(
 				db,
@@ -178,7 +217,9 @@ export async function handleUpdatePlanningCard(
 			cardId
 		);
 		writeChecklist(db, tripId, cardId, input, timestamp);
+		return writeLinks(db, tripId, cardId, input);
 	})();
+	removePlanningFiles(files.links, removedImages);
 	return apiSuccess({ updated: true });
 }
 
@@ -216,11 +257,22 @@ export async function handlePlacePlanningCard(
 export function handleDeletePlanningCard(
 	db: Database.Database,
 	tripId: string,
-	cardId: string
+	cardId: string,
+	files: PlanningFiles
 ): Response {
+	const linkImages = db
+		.prepare(
+			`SELECT id FROM planning_card_links
+			 WHERE trip_id = ? AND card_id = ? AND image_type IS NOT NULL`
+		)
+		.all(tripId, cardId) as Array<{ id: string }>;
 	const result = db
 		.prepare('DELETE FROM planning_cards WHERE trip_id = ? AND id = ?')
 		.run(tripId, cardId);
+	removePlanningFiles(
+		files.links,
+		linkImages.map(({ id }) => id)
+	);
 	return apiSuccess({ deleted: result.changes > 0 });
 }
 

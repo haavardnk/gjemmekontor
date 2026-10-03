@@ -18,8 +18,12 @@ export const planningLimits = {
 	body: 5000,
 	placeLabel: 300,
 	checklistItems: 50,
-	checklistText: 200
+	checklistText: 200,
+	links: 10,
+	url: 2048
 } as const;
+
+export const planningLinkStatuses = ['pending', 'ready', 'failed'] as const;
 
 const personSchema = z.object({ id: z.uuid(), name: z.string() }).strict();
 
@@ -49,6 +53,18 @@ const checklistItemSchema = z
 	})
 	.strict();
 
+const linkSchema = z
+	.object({
+		id: z.uuid(),
+		url: z.string().min(1),
+		status: z.enum(planningLinkStatuses),
+		title: z.string().nullable(),
+		description: z.string().nullable(),
+		siteName: z.string().nullable(),
+		hasImage: z.boolean()
+	})
+	.strict();
+
 const cardSchema = z
 	.object({
 		id: z.uuid(),
@@ -57,6 +73,7 @@ const cardSchema = z
 		body: z.string(),
 		place: placeSchema.nullable(),
 		checklist: z.array(checklistItemSchema),
+		links: z.array(linkSchema),
 		createdByPersonId: z.uuid(),
 		createdByName: z.string(),
 		createdAt: z.iso.datetime(),
@@ -76,6 +93,7 @@ export type PlanningPerson = z.infer<typeof personSchema>;
 export type PlanningCategory = z.infer<typeof categorySchema>;
 export type PlanningPlace = z.infer<typeof placeSchema>;
 export type PlanningChecklistItem = z.infer<typeof checklistItemSchema>;
+export type PlanningLink = z.infer<typeof linkSchema>;
 export type PlanningCard = z.infer<typeof cardSchema>;
 export type PlanningPageData = z.infer<typeof planningPageDataSchema>;
 
@@ -111,6 +129,18 @@ export function checklistProgress(card: PlanningCard): { checked: number; total:
 		checked: card.checklist.filter((item) => item.checked).length,
 		total: card.checklist.length
 	};
+}
+
+export function planningLinkImagePath(linkId: string): string {
+	return `/api/planning/links/${linkId}/image`;
+}
+
+export function planningLinkHost(url: string): string {
+	try {
+		return new URL(url).hostname.replace(/^www\./, '');
+	} catch {
+		return url;
+	}
 }
 
 export function googleMapsPlaceUrl(place: PlanningPlace): string {

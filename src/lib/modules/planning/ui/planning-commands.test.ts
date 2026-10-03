@@ -19,7 +19,20 @@ const itemIds = [
 	'00000000-0000-4000-8000-000000000041',
 	'00000000-0000-4000-8000-000000000042'
 ] as const;
+const linkIds = [
+	'00000000-0000-4000-8000-000000000051',
+	'00000000-0000-4000-8000-000000000052'
+] as const;
 const timestamp = '2026-01-01T00:00:00.000Z';
+const readyLink = {
+	id: linkIds[0],
+	url: 'https://example.com/',
+	status: 'ready' as const,
+	title: 'Eksempel',
+	description: null,
+	siteName: null,
+	hasImage: true
+};
 
 const data: PlanningPageData = {
 	people: [{ id: personId, name: 'Kari' }],
@@ -31,6 +44,7 @@ const data: PlanningPageData = {
 		body: '',
 		place: null,
 		checklist: [{ id: itemIds[index], text: 'Punkt', checked: false, checkedByPersonId: null }],
+		links: index === 1 ? [readyLink] : [],
 		createdByPersonId: personId,
 		createdByName: 'Kari',
 		createdAt: timestamp,
@@ -49,9 +63,13 @@ describe('planning commands', () => {
 			title: ' Middag ',
 			body: '',
 			place: null,
-			checklist: []
+			checklist: [],
+			links: [
+				{ id: linkIds[0], url: readyLink.url },
+				{ id: linkIds[1], url: 'https://example.org/' }
+			]
 		};
-		const created = savePlanningCard(data, null, draft, () => newCardId);
+		const created = savePlanningCard(data, newCardId, draft);
 		const edited = savePlanningCard(data, cardIds[1], draft);
 
 		expect(created.requests).toEqual([
@@ -69,6 +87,18 @@ describe('planning commands', () => {
 			}
 		]);
 		expect(sectionIds(edited.next, foodId)).toEqual([cardIds[0], cardIds[1]]);
+		expect(edited.next.cards.find(({ id }) => id === cardIds[1])?.links).toEqual([
+			readyLink,
+			{
+				id: linkIds[1],
+				url: 'https://example.org/',
+				status: 'pending',
+				title: null,
+				description: null,
+				siteName: null,
+				hasImage: false
+			}
+		]);
 	});
 
 	it('moves cards and sends cards of deleted categories to unsorted', () => {

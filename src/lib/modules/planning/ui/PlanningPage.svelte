@@ -2,11 +2,13 @@
 	import { FolderPlus, Lightbulb, Plus } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
+	import { page } from '$app/state';
 	import { createCachedResource } from '$lib/client/cached-resource';
 	import { connectivity } from '$lib/client/connectivity.svelte';
 	import SyncStatus from '$lib/ui/SyncStatus.svelte';
 
 	import { planningCache } from '../client/cache';
+	import { cachePlanningImages, planningImagePaths } from '../client/images';
 	import type { PlanningCardDraft, PlanningCategoryInput } from '../domain/inputs';
 	import {
 		type PlanningCard,
@@ -20,6 +22,7 @@
 		placePlanningCard,
 		placePlanningCategory,
 		type PlanningMutation,
+		retryPlanningLinkPreview,
 		savePlanningCard,
 		savePlanningCategory,
 		togglePlanningChecklistItem
@@ -54,6 +57,14 @@
 	const openSection = $derived(
 		sections.find((section) => section.cards.some(({ id }) => id === openCardId))
 	);
+	const imagePaths = $derived(planningImagePaths(planning).join('\n'));
+
+	$effect(() => {
+		const tripId = page.data.tripId;
+		const paths = imagePaths ? imagePaths.split('\n') : [];
+		if (!tripId || !connectivity.online) return;
+		void cachePlanningImages(tripId, paths).catch(() => undefined);
+	});
 
 	$effect(() => {
 		if (!planning.people.some((person) => person.id === selectedPersonId)) {
@@ -96,9 +107,9 @@
 		editingCard = null;
 	}
 
-	async function saveCard(draft: PlanningCardDraft): Promise<void> {
+	async function saveCard(cardId: string, draft: PlanningCardDraft): Promise<void> {
 		await save(
-			() => savePlanningCard(resource.current(), editingCard?.id ?? null, draft),
+			() => savePlanningCard(resource.current(), cardId, draft),
 			() => (editingCard = undefined)
 		);
 	}
@@ -243,6 +254,11 @@
 				sections.find((section) => (section.category?.id ?? null) === categoryId)?.cards.length ?? 0
 			)}
 		onmove={(index) => placeCard(openCard.id, openCard.categoryId, index)}
+		onretry={(linkId) =>
+			commit(
+				() => retryPlanningLinkPreview(resource.current(), linkId),
+				'Kunne ikke hente forhåndsvisningen på nytt.'
+			)}
 		onedit={() => {
 			editorErrorMessage = '';
 			editingCard = openCard;

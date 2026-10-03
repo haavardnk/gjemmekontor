@@ -4,17 +4,19 @@ import type {
 	PlanningCard,
 	PlanningCategory,
 	PlanningChecklistItem,
+	PlanningLink,
 	PlanningPageData,
 	PlanningPerson
 } from '../domain/planning';
 
-type CardRow = Omit<PlanningCard, 'place' | 'checklist'> & {
+type CardRow = Omit<PlanningCard, 'place' | 'checklist' | 'links'> & {
 	placeLabel: string | null;
 	placeLat: number | null;
 	placeLng: number | null;
 	placeGoogleId: string | null;
 };
 type ChecklistRow = Omit<PlanningChecklistItem, 'checked'> & { cardId: string; checked: number };
+type LinkRow = Omit<PlanningLink, 'hasImage'> & { cardId: string; hasImage: number };
 
 export function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
 	const groups = new Map<K, T[]>();
@@ -71,6 +73,16 @@ export function loadPlanningPageData(db: Database.Database, tripId: string): Pla
 			.all(tripId) as ChecklistRow[],
 		(row) => row.cardId
 	);
+	const links = groupBy(
+		db
+			.prepare(
+				`SELECT id, card_id AS cardId, url, status, title, description, site_name AS siteName,
+				        image_type IS NOT NULL AS hasImage
+				 FROM planning_card_links WHERE trip_id = ? ORDER BY position, id`
+			)
+			.all(tripId) as LinkRow[],
+		(row) => row.cardId
+	);
 	return {
 		people: loadPlanningPeople(db, tripId),
 		categories,
@@ -84,6 +96,15 @@ export function loadPlanningPageData(db: Database.Database, tripId: string): Pla
 				text: item.text,
 				checked: Boolean(item.checked),
 				checkedByPersonId: item.checkedByPersonId
+			})),
+			links: (links.get(card.id) ?? []).map((link) => ({
+				id: link.id,
+				url: link.url,
+				status: link.status,
+				title: link.title,
+				description: link.description,
+				siteName: link.siteName,
+				hasImage: Boolean(link.hasImage)
 			}))
 		}))
 	};

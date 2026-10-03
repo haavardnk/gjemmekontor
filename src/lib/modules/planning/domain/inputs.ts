@@ -42,6 +42,13 @@ export const planningChecklistItemInputSchema = z
 	})
 	.strict();
 
+export const planningLinkInputSchema = z
+	.object({
+		id: z.uuid(),
+		url: z.url({ protocol: /^https?$/, normalize: true }).max(planningLimits.url)
+	})
+	.strict();
+
 export const planningCardInputSchema = z
 	.object({
 		personId: z.uuid(),
@@ -52,7 +59,8 @@ export const planningCardInputSchema = z
 		checklist: z
 			.array(planningChecklistItemInputSchema)
 			.max(planningLimits.checklistItems)
-			.refine(uniqueIds)
+			.refine(uniqueIds),
+		links: z.array(planningLinkInputSchema).max(planningLimits.links).refine(uniqueIds)
 	})
 	.strict();
 

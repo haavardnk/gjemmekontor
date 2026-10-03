@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,13 +9,18 @@ import { createApplicationDatabase } from '$lib/app/server/database';
 import {
 	handleCreatePlanningCard,
 	handleCreatePlanningCategory,
+	handleDeletePlanningCard,
 	handleDeletePlanningCategory,
 	handlePlacePlanningCard,
 	handlePlacePlanningCategory,
+	handlePlanningLinkImage,
+	handleRetryPlanningLinkPreview,
 	handleTogglePlanningChecklistItem,
 	handleUpdatePlanningCard,
 	loadPlanningPageData
 } from '.';
+import { type PlanningFiles, planningFiles } from './files';
+import { refreshPlanningLinkPreviews } from './link-previews';
 
 const tripId = '00000000-0000-4000-8000-000000000001';
 const otherTripId = '00000000-0000-4000-8000-000000000002';
@@ -34,6 +39,11 @@ const itemIds = [
 	'00000000-0000-4000-8000-000000000041',
 	'00000000-0000-4000-8000-000000000042'
 ] as const;
+const linkIds = [
+	'00000000-0000-4000-8000-000000000051',
+	'00000000-0000-4000-8000-000000000052'
+] as const;
+const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
 const timestamp = '2026-01-01T00:00:00.000Z';
 
 type Db = ReturnType<typeof createApplicationDatabase>;
@@ -54,6 +64,7 @@ function card(overrides: Record<string, unknown> = {}): Record<string, unknown> 
 		body: '',
 		place: null,
 		checklist: [],
+		links: [],
 		...overrides
 	};
 }
@@ -89,10 +100,12 @@ function sectionTitles(db: Db): Record<string, string[]> {
 describe('planning server', () => {
 	let dataDir: string;
 	let db: Db;
+	let files: PlanningFiles;
 
 	beforeEach(async () => {
 		dataDir = mkdtempSync(join(tmpdir(), 'gjemmekontor-planning-'));
 		db = createApplicationDatabase(dataDir);
+		files = planningFiles(dataDir, tripId);
 		seedTrip(db, tripId, 'trip-a', [personId, otherPersonId, inactivePersonId]);
 		seedTrip(db, otherTripId, 'trip-b', [personId]);
 		for (const [id, name] of [
@@ -175,7 +188,8 @@ describe('planning server', () => {
 			),
 			db,
 			tripId,
-			cardIds[0]
+			cardIds[0],
+			files
 		);
 
 		expect(response.status).toBe(200);
@@ -224,5 +238,101 @@ describe('planning server', () => {
 		);
 		expect(response.status).toBe(400);
 		expect(loadPlanningPageData(db, tripId).cards).toHaveLength(1);
+	});
+
+	it('rejects links owned by another card or with a changed address', async () => {
+		const link = { id: linkIds[0], url: 'https://example.com/a' };
+		await handleCreatePlanningCard(request(card({ id: cardIds[0], links: [link] })), db, tripId);
+
+		const foreign = await handleCreatePlanningCard(
+			request(card({ id: cardIds[1], links: [link] })),
+			db,
+			tripId
+		);
+		const changed = await handleUpdatePlanningCard(
+			request(card({ links: [{ ...link, url: 'https://example.com/b' }] })),
+			db,
+			tripId,
+			cardIds[0],
+			files
+		);
+
+		expect([foreign.status, changed.status]).toEqual([400, 400]);
+		expect(loadPlanningPageData(db, tripId).cards[0]?.links).toMatchObject([link]);
+	});
+
+	it('stores fetched previews and removes images with their link', async () => {
+		const links = [
+			{ id: linkIds[0], url: 'https://example.com/a' },
+			{ id: linkIds[1], url: 'https://example.com/b' }
+		];
+		await handleCreatePlanningCard(request(card({ id: cardIds[0], links })), db, tripId);
+
+		const changed = await refreshPlanningLinkPreviews(db, tripId, files, async (url) => {
+			if (url.endsWith('/b')) throw new Error('REMOTE_FETCH_FAILED');
+			return {
+				title: 'Hytte ved sjøen',
+				description: 'Fire sengeplasser',
+				siteName: 'Example',
+				image: { type: 'image/jpeg', body: jpeg }
+			};
+		});
+
+		expect(changed).toBe(true);
+		expect(loadPlanningPageData(db, tripId).cards[0]?.links).toEqual([
+			{
+				...links[0],
+				status: 'ready',
+				title: 'Hytte ved sjøen',
+				description: 'Fire sengeplasser',
+				siteName: 'Example',
+				hasImage: true
+			},
+			{
+				...links[1],
+				status: 'failed',
+				title: null,
+				description: null,
+				siteName: null,
+				hasImage: false
+			}
+		]);
+		const image = handlePlanningLinkImage(db, tripId, linkIds[0], files);
+		expect(image.headers.get('content-type')).toBe('image/jpeg');
+		expect(new Uint8Array(await image.arrayBuffer())).toEqual(jpeg);
+		expect(
+			handlePlanningLinkImage(db, otherTripId, linkIds[0], planningFiles(dataDir, otherTripId))
+				.status
+		).toBe(404);
+
+		handleRetryPlanningLinkPreview(db, tripId, linkIds[1]);
+		expect(loadPlanningPageData(db, tripId).cards[0]?.links[1]?.status).toBe('pending');
+
+		await handleUpdatePlanningCard(
+			request(card({ links: [links[1]] })),
+			db,
+			tripId,
+			cardIds[0],
+			files
+		);
+		expect(existsSync(join(files.links, linkIds[0]))).toBe(false);
+	});
+
+	it('discards previews for cards deleted while fetching', async () => {
+		const links = [{ id: linkIds[0], url: 'https://example.com/a' }];
+		await handleCreatePlanningCard(request(card({ id: cardIds[0], links })), db, tripId);
+
+		const changed = await refreshPlanningLinkPreviews(db, tripId, files, async () => {
+			handleDeletePlanningCard(db, tripId, cardIds[0], files);
+			return {
+				title: 'X',
+				description: null,
+				siteName: null,
+				image: { type: 'image/jpeg', body: jpeg }
+			};
+		});
+
+		expect(changed).toBe(false);
+		expect(existsSync(join(files.links, linkIds[0]))).toBe(false);
 	});
 });

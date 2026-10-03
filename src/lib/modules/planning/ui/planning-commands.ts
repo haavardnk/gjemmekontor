@@ -3,7 +3,6 @@ import type { CachedResourceMutation } from '$lib/client/cached-resource';
 import {
 	planningCardCreateInputSchema,
 	type PlanningCardDraft,
-	planningCardInputSchema,
 	planningCategoryCreateInputSchema,
 	type PlanningCategoryInput,
 	planningCategoryInputSchema,
@@ -100,17 +99,13 @@ export function placePlanningCategory(
 
 export function savePlanningCard(
 	data: PlanningPageData,
-	cardId: string | null,
-	draft: PlanningCardDraft,
-	randomId: () => string = () => crypto.randomUUID()
+	cardId: string,
+	draft: PlanningCardDraft
 ): PlanningMutation {
 	const person = data.people.find(({ id }) => id === draft.personId);
 	if (!person) throw new Error('PLANNING_MEMBER_REQUIRED');
 	const existing = data.cards.find(({ id }) => id === cardId);
-	if (cardId && !existing) throw new Error('PLANNING_CARD_NOT_FOUND');
-	const input = existing
-		? { ...planningCardInputSchema.parse(draft), id: existing.id }
-		: planningCardCreateInputSchema.parse({ ...draft, id: randomId() });
+	const input = planningCardCreateInputSchema.parse({ ...draft, id: cardId });
 	const now = new Date().toISOString();
 	const { personId, ...fields } = input;
 	const card: PlanningCard = {
@@ -121,6 +116,17 @@ export function savePlanningCard(
 				? (existing?.checklist.find(({ id }) => id === item.id)?.checkedByPersonId ?? personId)
 				: null
 		})),
+		links: input.links.map(
+			(link) =>
+				existing?.links.find(({ id }) => id === link.id) ?? {
+					...link,
+					status: 'pending' as const,
+					title: null,
+					description: null,
+					siteName: null,
+					hasImage: false
+				}
+		),
 		createdByPersonId: existing?.createdByPersonId ?? person.id,
 		createdByName: existing?.createdByName ?? person.name,
 		createdAt: existing?.createdAt ?? now,
@@ -145,6 +151,21 @@ export function deletePlanningCard(data: PlanningPageData, cardId: string): Plan
 	return {
 		next: { ...data, cards: data.cards.filter(({ id }) => id !== cardId) },
 		requests: [{ path: `/api/planning/cards/${cardId}`, method: 'DELETE' }]
+	};
+}
+
+export function retryPlanningLinkPreview(data: PlanningPageData, linkId: string): PlanningMutation {
+	return {
+		next: {
+			...data,
+			cards: data.cards.map((card) => ({
+				...card,
+				links: card.links.map((link) =>
+					link.id === linkId ? { ...link, status: 'pending' as const } : link
+				)
+			}))
+		},
+		requests: [{ path: `/api/planning/links/${linkId}/preview`, method: 'POST' }]
 	};
 }
 

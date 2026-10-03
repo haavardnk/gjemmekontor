@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { GripVertical, ListChecks, MapPin } from '@lucide/svelte';
+	import { GripVertical, Link2, ListChecks, MapPin } from '@lucide/svelte';
 
-	import { checklistProgress, type PlanningCard } from '../domain/planning';
+	import { checklistProgress, type PlanningCard, planningLinkImagePath } from '../domain/planning';
+	import PlanningImage from './PlanningImage.svelte';
 
 	let {
 		card,
@@ -20,6 +21,7 @@
 	} = $props();
 
 	const progress = $derived(checklistProgress(card));
+	const coverLink = $derived(card.links.find(({ hasImage }) => hasImage));
 </script>
 
 <article
@@ -36,6 +38,13 @@
 		>
 	{/if}
 	<div class="min-w-0 flex-1 space-y-1.5 p-3">
+		{#if coverLink}
+			<PlanningImage
+				src={planningLinkImagePath(coverLink.id)}
+				alt=""
+				class="mb-2 aspect-video w-full rounded-field bg-base-200 object-cover"
+			/>
+		{/if}
 		<h3 class="font-semibold wrap-break-word">
 			<button
 				class="text-left after:absolute after:inset-0 after:rounded-box focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-primary"
@@ -48,7 +57,7 @@
 				{card.body}
 			</p>
 		{/if}
-		{#if card.place || progress.total}
+		{#if card.place || progress.total || card.links.length}
 			<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-base-content/60">
 				{#if card.place}
 					<span class="flex min-w-0 items-center gap-1">
@@ -60,6 +69,12 @@
 					<span class="flex items-center gap-1">
 						<ListChecks size={13} aria-hidden="true" />
 						{progress.checked}/{progress.total}
+					</span>
+				{/if}
+				{#if card.links.length}
+					<span class="flex items-center gap-1">
+						<Link2 size={13} aria-hidden="true" />
+						{card.links.length}
 					</span>
 				{/if}
 			</div>

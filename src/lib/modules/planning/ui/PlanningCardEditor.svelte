@@ -1,11 +1,16 @@
 <script lang="ts">
-	import { Plus, Trash2, X } from '@lucide/svelte';
+	import { Link2, Plus, Trash2, X } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 
 	import { PlaceInput, type PlaceSelection } from '$lib/modules/map/public';
 
-	import type { PlanningCardDraft } from '../domain/inputs';
-	import { type PlanningCard, type PlanningCategory, planningLimits } from '../domain/planning';
+	import { type PlanningCardDraft, planningLinkInputSchema } from '../domain/inputs';
+	import {
+		type PlanningCard,
+		type PlanningCategory,
+		planningLimits,
+		planningLinkHost
+	} from '../domain/planning';
 
 	let {
 		card,
@@ -27,7 +32,7 @@
 		online: boolean;
 		saving: boolean;
 		errorMessage: string;
-		onsave: (draft: PlanningCardDraft) => Promise<void>;
+		onsave: (cardId: string, draft: PlanningCardDraft) => Promise<void>;
 		onclose: () => void;
 	} = $props();
 
@@ -35,6 +40,7 @@
 		card: $state.snapshot(card),
 		categoryId: defaultCategoryId
 	}));
+	const cardId = seed.card?.id ?? crypto.randomUUID();
 	let title = $state(seed.card?.title ?? '');
 	let body = $state(seed.card?.body ?? '');
 	let categoryId = $state(seed.card ? (seed.card.categoryId ?? '') : (seed.categoryId ?? ''));
@@ -53,6 +59,33 @@
 		(seed.card?.checklist ?? []).map(({ id, text, checked }) => ({ id, text, checked }))
 	);
 	let newItemText = $state('');
+	let links = $state((seed.card?.links ?? []).map(({ id, url }) => ({ id, url })));
+	let newLinkUrl = $state('');
+	let linkError = $state('');
+
+	function parseLink(value: string): string | undefined {
+		const text = value.trim();
+		if (!text) return undefined;
+		const parsed = planningLinkInputSchema.shape.url.safeParse(
+			/^[a-z][a-z\d+.-]*:/i.test(text) ? text : `https://${text}`
+		);
+		return parsed.success ? parsed.data : undefined;
+	}
+
+	function addLink(): boolean {
+		if (!newLinkUrl.trim()) return true;
+		const url = parseLink(newLinkUrl);
+		if (!url) {
+			linkError = 'Lenken må være en nettadresse.';
+			return false;
+		}
+		linkError = '';
+		if (!links.some((link) => link.url === url) && links.length < planningLimits.links) {
+			links = [...links, { id: crypto.randomUUID(), url }];
+		}
+		newLinkUrl = '';
+		return true;
+	}
 
 	function addItem(): void {
 		const text = newItemText.trim();
@@ -63,6 +96,7 @@
 
 	async function submit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
+		if (!addLink()) return;
 		const label = placeLabel.trim();
 		const place = label
 			? selectedPlace?.label === placeLabel
@@ -74,13 +108,14 @@
 					}
 				: { label, lat: null, lng: null, googlePlaceId: null }
 			: null;
-		await onsave({
+		await onsave(cardId, {
 			personId,
 			categoryId: categoryId || null,
 			title,
 			body,
 			place,
-			checklist: checklist.filter((item) => item.text.trim())
+			checklist: checklist.filter((item) => item.text.trim()),
+			links
 		});
 	}
 </script>
@@ -196,6 +231,51 @@
 						aria-label="Legg til punkt"><Plus size={18} /></button
 					>
 				</div>
+			</fieldset>
+			<fieldset class="space-y-2">
+				<legend class="label-text mb-1 font-semibold">Lenker</legend>
+				{#each links as link (link.id)}
+					<div class="flex items-center gap-2">
+						<Link2 class="shrink-0 text-base-content/50" size={16} aria-hidden="true" />
+						<span class="min-w-0 flex-1 truncate text-sm">{link.url}</span>
+						<button
+							class="btn btn-square btn-ghost btn-sm"
+							type="button"
+							onclick={() => {
+								links = links.filter(({ id }) => id !== link.id);
+							}}
+							aria-label={`Fjern lenken ${planningLinkHost(link.url)}`}><Trash2 size={16} /></button
+						>
+					</div>
+				{/each}
+				{#if links.length < planningLimits.links}
+					<div class="flex items-center gap-2">
+						<input
+							class="input-bordered input min-w-0 flex-1 input-sm"
+							bind:value={newLinkUrl}
+							maxlength={planningLimits.url}
+							inputmode="url"
+							autocomplete="off"
+							placeholder="https://"
+							aria-label="Ny lenke"
+							aria-invalid={Boolean(linkError)}
+							oninput={() => (linkError = '')}
+							onkeydown={(event) => {
+								if (event.key !== 'Enter') return;
+								event.preventDefault();
+								addLink();
+							}}
+						/>
+						<button
+							class="btn btn-square btn-ghost btn-sm"
+							type="button"
+							disabled={!newLinkUrl.trim()}
+							onclick={addLink}
+							aria-label="Legg til lenke"><Plus size={18} /></button
+						>
+					</div>
+				{/if}
+				{#if linkError}<p class="text-sm text-error" role="alert">{linkError}</p>{/if}
 			</fieldset>
 			{#if errorMessage}<p class="text-sm text-error" role="alert">{errorMessage}</p>{/if}
 		</div>

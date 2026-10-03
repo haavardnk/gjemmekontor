@@ -13,6 +13,7 @@
 		type PlanningPerson
 	} from '../domain/planning';
 	import { planningColorStyles } from './planning-colors';
+	import PlanningLinkPreview from './PlanningLinkPreview.svelte';
 
 	let {
 		card,
@@ -24,6 +25,7 @@
 		ontoggle,
 		oncategory,
 		onmove,
+		onretry,
 		onedit,
 		ondelete,
 		onclose
@@ -37,6 +39,7 @@
 		ontoggle: (itemId: string, checked: boolean) => Promise<void>;
 		oncategory: (categoryId: string | null) => Promise<void>;
 		onmove: (index: number) => Promise<void>;
+		onretry: (linkId: string) => Promise<void>;
 		onedit: () => void;
 		ondelete: () => Promise<void>;
 		onclose: () => void;
@@ -98,6 +101,16 @@
 					<MapPin class="shrink-0" size={17} aria-hidden="true" />
 					<span class="wrap-break-word">{card.place.label}</span>
 				</a>
+			{/if}
+			{#if card.links.length}
+				<section aria-labelledby="planning-card-links" class="space-y-2">
+					<h3 id="planning-card-links" class="font-bold">Lenker</h3>
+					<ul class="space-y-2">
+						{#each card.links as link (link.id)}
+							<li><PlanningLinkPreview {link} {canWrite} onretry={() => onretry(link.id)} /></li>
+						{/each}
+					</ul>
+				</section>
 			{/if}
 			{#if card.checklist.length}
 				<section aria-labelledby="planning-card-checklist" class="space-y-2">
