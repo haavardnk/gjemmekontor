@@ -1,0 +1,7 @@
+import { handlePlacePlanningCard } from '$lib/modules/planning/server';
+import { requireTrip } from '$lib/server/request';
+
+import type { RequestHandler } from './$types';
+
+export const PUT: RequestHandler = ({ request, locals, params }) =>
+	handlePlacePlanningCard(request, locals.db, requireTrip(locals).id, params.cardId);
