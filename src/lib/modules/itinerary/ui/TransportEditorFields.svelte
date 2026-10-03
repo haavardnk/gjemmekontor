@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { PlaceInput } from '$lib/modules/map/public';
+
 	import EndpointFields from './EndpointFields.svelte';
 	import type {
 		EditableItineraryLeg,
 		ItineraryEntryType,
 		TransportEntryType
 	} from './itinerary-editor';
-	import PlaceInput from './PlaceInput.svelte';
 	import TimeZoneSelect from './TimeZoneSelect.svelte';
 
 	let {

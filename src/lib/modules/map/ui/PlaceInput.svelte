@@ -1,12 +1,23 @@
+<script module lang="ts">
+	export type PlaceSelection = {
+		label: string;
+		lat: number;
+		lng: number;
+		placeId: string;
+	};
+</script>
+
 <script lang="ts">
 	import { LoaderCircle, MapPin } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 
-	import { loadGooglePlacesLibrary } from '$lib/modules/map/public';
+	import { loadGooglePlacesLibrary } from '../client/google-places-loader';
 
 	type GooglePlace = {
+		id?: string;
 		displayName?: string;
 		formattedAddress?: string;
+		location?: { lat: () => number; lng: () => number };
 		fetchFields: (request: { fields: string[] }) => Promise<unknown>;
 	};
 	type GooglePlacePrediction = {
@@ -35,7 +46,8 @@
 		apiKey = '',
 		placeholder = '',
 		compact = false,
-		required = true
+		required = true,
+		onselect
 	}: {
 		label: string;
 		value: string;
@@ -43,6 +55,7 @@
 		placeholder?: string;
 		compact?: boolean;
 		required?: boolean;
+		onselect?: (place: PlaceSelection) => void;
 	} = $props();
 
 	const listboxId = $props.id();
@@ -115,13 +128,21 @@
 		loading = true;
 		try {
 			const place = prediction.toPlace();
-			await place.fetchFields({ fields: ['displayName', 'formattedAddress'] });
+			await place.fetchFields({ fields: ['id', 'displayName', 'formattedAddress', 'location'] });
 			const displayName = place.displayName?.trim() ?? '';
 			const formattedAddress = place.formattedAddress?.trim() ?? '';
 			value =
 				displayName && formattedAddress && !formattedAddress.startsWith(displayName)
 					? `${displayName}, ${formattedAddress}`
 					: formattedAddress || displayName || prediction.text.toString();
+			if (onselect && place.id && place.location) {
+				onselect({
+					label: value,
+					lat: place.location.lat(),
+					lng: place.location.lng(),
+					placeId: place.id
+				});
+			}
 		} catch {
 			value = prediction.text.toString();
 		} finally {

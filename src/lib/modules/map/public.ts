@@ -29,3 +29,5 @@ export {
 	mapPointCategories,
 	mapPointCategory
 } from './domain/types';
+export type { PlaceSelection } from './ui/PlaceInput.svelte';
+export { default as PlaceInput } from './ui/PlaceInput.svelte';

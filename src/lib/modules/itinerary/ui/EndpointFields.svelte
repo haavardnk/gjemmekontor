@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { ChevronDown } from '@lucide/svelte';
 
+	import { PlaceInput } from '$lib/modules/map/public';
+
 	import type { EditableItineraryEndpoint } from '../domain/itinerary';
-	import PlaceInput from './PlaceInput.svelte';
 	import TimeZoneSelect from './TimeZoneSelect.svelte';
 
 	let {
