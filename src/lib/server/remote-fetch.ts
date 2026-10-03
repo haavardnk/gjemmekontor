@@ -140,7 +140,7 @@ export async function fetchRemoteResource(
 				bodyTimeout: 8_000,
 				headers: {
 					accept: options.accept,
-					'user-agent': 'Gjemmekontor Menu/1.0'
+					'user-agent': 'Gjemmekontor/1.0'
 				}
 			});
 			if ([301, 302, 303, 307, 308].includes(response.statusCode)) {

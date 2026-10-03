@@ -7,7 +7,7 @@ import {
 	validateRemoteUrl
 } from './remote-fetch';
 
-describe('Menu remote fetch validation', (): void => {
+describe('remote fetch validation', (): void => {
 	test.each([
 		'127.0.0.1',
 		'10.0.0.1',
